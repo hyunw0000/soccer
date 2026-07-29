@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>축구 선수 움직임 시뮬레이터 — Steering Behaviors + FSM 프로토타입</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: #0e1116; color: #e6edf3;
+    font-family: "Segoe UI", system-ui, sans-serif;
+    display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 16px;
+  }
+  h1 { font-size: 18px; margin: 4px 0 0; font-weight: 600; }
+  .sub { font-size: 12px; color: #8b949e; margin: 0; }
+  .wrap { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; justify-content: center; }
+  canvas { background: #1a6b34; border-radius: 8px; box-shadow: 0 6px 24px rgba(0,0,0,.4); }
+  .panel { width: 300px; background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 14px; font-size: 13px; }
+  .panel h2 { font-size: 13px; margin: 0 0 8px; text-transform: uppercase; letter-spacing: .5px; color: #58a6ff; }
+  .row { display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px solid #21262d; }
+  .row b { color: #e6edf3; }
+  .controls { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+  button {
+    background: #21262d; color: #e6edf3; border: 1px solid #30363d; border-radius: 6px;
+    padding: 7px 12px; cursor: pointer; font-size: 12px;
+  }
+  button:hover { background: #30363d; }
+  button.on { background: #1f6feb; border-color: #1f6feb; }
+  .score { font-size: 26px; font-weight: 700; text-align: center; letter-spacing: 2px; }
+  .hint { font-size: 11px; color: #8b949e; line-height: 1.5; margin-top: 8px; }
+  code { background: #21262d; padding: 1px 5px; border-radius: 4px; font-size: 11px; }
+</style>
+</head>
+<body>
+  <h1>축구 선수 움직임 시뮬레이터</h1>
+  <p class="sub">Craig Reynolds <b>Steering Behaviors</b> + <b>Finite State Machine</b> (Buckland "SimpleSoccer" 방식) · 순수 JS/Canvas · 외부 라이브러리 0</p>
+
+  <div class="wrap">
+    <canvas id="pitch" width="820" height="540"></canvas>
+    <div class="panel">
+      <div class="score" id="score">KOR 0 : 0 WLD</div>
+      <h2>상태</h2>
+      <div class="row"><span>공 소유</span><b id="poss">-</b></div>
+      <div class="row"><span>시뮬 틱</span><b id="tick">0</b></div>
+      <div class="row"><span>기록 프레임(되감기용)</span><b id="buf">0</b></div>
+      <div class="controls">
+        <button id="pause">⏸ 일시정지</button>
+        <button id="rewind">⏪ 되감기(3초)</button>
+        <button id="reset">↺ 킥오프</button>
+        <button id="dbg" class="on">🧭 벡터표시</button>
+      </div>
+      <h2 style="margin-top:14px;">이게 뭔가요</h2>
+      <div class="hint">
+        각 선수는 매 틱마다 <b>steering force</b>(Seek·Arrive·Pursuit·Interpose·Separation)를 합산해 움직입니다.
+        팀 <b>FSM</b>이 "공에 제일 가까운 선수는 추격, 나머지는 포메이션 슬롯 유지(공 위치에 따라 공/수 시프트)"를 결정합니다.<br><br>
+        파라미터는 <code>PARAMS</code> 객체에 Buckland 기본값 기준으로 들어있고, 선수 스탯(pace/stamina)이 개인 최대속도·체력에 반영됩니다.<br><br>
+        <b>결정론적 고정 타임스텝</b>이라 매 프레임 상태를 링버퍼에 기록 → <b>되감기</b>가 그대로 됩니다(기획서의 리와인드 기능).
+      </div>
+    </div>
+  </div>
+
+<script>
+"use strict";
+/* =========================================================================
+   0. 유틸 & 벡터 (Vec2)
+   ========================================================================= */
+const V = {
+  add:(a,b)=>({x:a.x+b.x, y:a.y+b.y}),
+  sub:(a,b)=>({x:a.x-b.x, y:a.y-b.y}),
+  mul:(a,s)=>({x:a.x*s, y:a.y*s}),
+  len:(a)=>Math.hypot(a.x,a.y),
+  lenSq:(a)=>a.x*a.x+a.y*a.y,
+  norm:(a)=>{ const l=Math.hypot(a.x,a.y)||1; return {x:a.x/l, y:a.y/l}; },
+  dist:(a,b)=>Math.hypot(a.x-b.x, a.y-b.y),
+  distSq:(a,b)=>{const dx=a.x-b.x,dy=a.y-b.y; return dx*dx+dy*dy;},
+  trunc:(a,max)=>{ const l=Math.hypot(a.x,a.y); return l>max ? {x:a.x/l*max, y:a.y/l*max} : {x:a.x,y:a.y}; },
+  zero:()=>({x:0,y:0}),
+};
+// 결정론적 RNG (되감기/재현성 위해 Math.random 대신 사용) — mulberry32
+function makeRng(seed){ return function(){ seed|=0; seed=seed+0x6D2B79F5|0; let t=Math.imul(seed^seed>>>15,1|seed); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+
+/* =========================================================================
+   1. PARAMETERS  (Mat Buckland "SimpleSoccer" Params.ini 기준값)
+      * 원본 pitch보다 큰 픽셀 필드라 속도/힘은 비율 유지하며 스케일업.
+      * 각 값 옆에 원본 기본값을 주석으로 표기.
+   ========================================================================= */
+const PARAMS = {
+  // --- 선수 이동 ---
+  PlayerMass:                 1,      // Buckland: 3 (여기선 힘을 이미 스케일해 1로)
+  PlayerMaxForce:             90,     // MaxForce (조향력 상한)         Buckland: 1.0
+  PlayerMaxSpeed:             170,    // WithoutBall (px/s)             Buckland: 1.6
+  PlayerMaxSpeedWithBall:     130,    // WithBall                       Buckland: 1.2
+  PlayerComfortZone:          60,     // 홈 슬롯 근처 이 안이면 정지     Buckland: InComfortZone
+  // --- steering 가중치 ---
+  SeparationWeight:           2.0,    // 팀동료끼리 겹침 방지           Buckland: 1.0
+  SeparationRadius:           40,     // ViewDistance 축소판            Buckland: ViewDistance 30
+  // --- 킥/패스/슛 ---
+  KickingDistance:            22,     // 공에 이만큼 붙으면 찰 수 있음   Buckland: 6 (+BallSize)
+  KickFrequencyTicks:         8,      // 몇 틱마다 한 번 찰 수 있나       Buckland: PlayerKickFrequency 8
+  MaxPassingForce:            320,    //                                Buckland: 3.0
+  MaxShootingForce:           520,    //                                Buckland: 6.0
+  MaxDribbleForce:            140,    //                                Buckland: 1.5
+  PotShotChance:              0.06,   // 슛 시도 확률(틱당)             Buckland: 0.005
+  MinPassDist:                90,     // 이보다 가까운 동료엔 패스 안 함
+  MaxPassDist:                340,
+  // --- 공 물리 ---
+  Friction:                   -0.55,  // 초당 감속 비율(마찰)           Buckland: -0.015/step
+  BallRadius:                 7,      //                                Buckland: BallSize 5
+  BallMaxSpeed:               620,
+  // --- 시뮬 ---
+  DT:                         1/60,   // 고정 타임스텝(결정론)
+  StaminaDrainPerSec:         0.8,    // 스프린트 시 체력 소모
+  RewindSeconds:              3,
+};
+
+/* =========================================================================
+   2. 필드 좌표 & 포메이션 (4-3-3)
+   ========================================================================= */
+const FIELD = { x:20, y:20, w:780, h:500 }; // 골대는 좌우 끝 중앙
+FIELD.cx = FIELD.x + FIELD.w/2;
+FIELD.cy = FIELD.y + FIELD.h/2;
+const GOAL = {
+  home: {x: FIELD.x,          y: FIELD.cy}, // KOR 진영(왼쪽) → 오른쪽 골 공격
+  away: {x: FIELD.x+FIELD.w,  y: FIELD.cy},
+};
+// 홈팀 기준(왼→오 공격) 4-3-3 상대좌표 (0~1). away는 x 미러링.
+const FORMATION_433 = [
+  {role:'GK', x:0.05, y:0.50},
+  {role:'DF', x:0.20, y:0.20}, {role:'DF', x:0.20, y:0.40},
+  {role:'DF', x:0.20, y:0.60}, {role:'DF', x:0.20, y:0.80},
+  {role:'MF', x:0.42, y:0.30}, {role:'MF', x:0.42, y:0.50}, {role:'MF', x:0.42, y:0.70},
+  {role:'FW', x:0.68, y:0.22}, {role:'FW', x:0.70, y:0.50}, {role:'FW', x:0.68, y:0.78},
+];
+// 홈팀: 한국 데이터에서 뽑은 대표 11인(번호/이름/스탯). away는 제너릭.
+const KOR_XI = [
+  {n:1,  name:'조현우', pace:60, stam:80},
+  {n:20, name:'김민재', pace:78, stam:85}, {n:4,  name:'김영권', pace:70, stam:80},
+  {n:3,  name:'이한범', pace:75, stam:82}, {n:2,  name:'설영우', pace:84, stam:86},
+  {n:18, name:'이강인', pace:78, stam:80}, {n:6,  name:'황인범', pace:80, stam:88},
+  {n:15, name:'박용우', pace:72, stam:85},
+  {n:7,  name:'손흥민', pace:86, stam:82}, {n:9,  name:'오현규', pace:85, stam:84}, {n:11,name:'황희찬', pace:88, stam:83},
+];
+
+function formationSlot(idx, side){
+  const f = FORMATION_433[idx];
+  const fx = side==='home' ? f.x : 1-f.x;
+  return { x: FIELD.x + fx*FIELD.w, y: FIELD.y + f.y*FIELD.h, role:f.role };
+}
+
+/* =========================================================================
+   3. 엔티티: Ball, Player
+   ========================================================================= */
+class Ball {
+  constructor(){ this.reset(); }
+  reset(){ this.pos={x:FIELD.cx, y:FIELD.cy}; this.vel=V.zero(); this.owner=null; }
+  kick(dir, force){ this.vel = V.mul(V.norm(dir), force); this.owner=null; }
+  update(dt){
+    // 마찰: v += friction * v (Buckland Ball::Update)
+    this.vel = V.add(this.vel, V.mul(this.vel, PARAMS.Friction*dt));
+    if (V.lenSq(this.vel) < 4) this.vel = V.zero();
+    this.vel = V.trunc(this.vel, PARAMS.BallMaxSpeed);
+    this.pos = V.add(this.pos, V.mul(this.vel, dt));
+    // 벽(터치라인) 반사 — 골 라인 제외 단순 처리
+    if (this.pos.y < FIELD.y+PARAMS.BallRadius){ this.pos.y=FIELD.y+PARAMS.BallRadius; this.vel.y*=-0.6; }
+    if (this.pos.y > FIELD.y+FIELD.h-PARAMS.BallRadius){ this.pos.y=FIELD.y+FIELD.h-PARAMS.BallRadius; this.vel.y*=-0.6; }
+  }
+  // 미래 위치 예측(패스 리시브/pursuit용)
+  futurePos(t){
+    // 마찰 하 등속감속 근사
+    return V.add(this.pos, V.mul(this.vel, t*0.5));
+  }
+}
+
+class Player {
+  constructor(team, idx, meta){
+    this.team=team;            // 'home' | 'away'
+    this.idx=idx;              // 포메이션 슬롯 인덱스
+    this.num=meta.n; this.name=meta.name;
+    this.maxSpeed = PARAMS.PlayerMaxSpeed * (0.8 + meta.pace/100*0.4); // pace 반영
+    this.maxStamina = meta.stam; this.stamina = meta.stam;
+    const slot = formationSlot(idx, team);
+    this.home = {x:slot.x, y:slot.y}; this.role = slot.role;
+    this.pos = {x:slot.x, y:slot.y}; this.vel=V.zero();
+    this.state='ReturnToHome'; // FSM 상태
+    this.kickCooldown=0;
+    this.heading={x: team==='home'?1:-1, y:0};
+  }
+  get attackGoal(){ return this.team==='home' ? GOAL.away : GOAL.home; }
+  get ownGoal(){ return this.team==='home' ? GOAL.home : GOAL.away; }
+}
+
+/* =========================================================================
+   4. STEERING BEHAVIORS (Reynolds)
+   ========================================================================= */
+const Steering = {
+  seek(p, target){
+    const desired = V.mul(V.norm(V.sub(target, p.pos)), p.maxSpeed);
+    return V.sub(desired, p.vel);
+  },
+  arrive(p, target, deceleration=1.0){
+    const toTarget = V.sub(target, p.pos);
+    const d = V.len(toTarget);
+    if (d < 1) return V.zero();
+    const speed = Math.min(d / (deceleration*0.4), p.maxSpeed);
+    const desired = V.mul(toTarget, speed/d);
+    return V.sub(desired, p.vel);
+  },
+  pursuit(p, ball){
+    // 공까지 도달 시간 예측 후 그 지점으로 seek (Buckland Pursuit)
+    const toBall = V.sub(ball.pos, p.pos);
+    const t = V.len(toBall) / (p.maxSpeed + V.len(ball.vel) + 1);
+    return Steering.arrive(p, ball.futurePos(t), 0.9);
+  },
+  interpose(p, ball, target){
+    // 공과 목표(보통 자기 골) 사이를 막아서기 — 수비 위치
+    const mid = V.mul(V.add(ball.pos, target), 0.5);
+    return Steering.arrive(p, mid, 1.0);
+  },
+  separation(p, mates){
+    let steer = V.zero(), r2 = PARAMS.SeparationRadius*PARAMS.SeparationRadius;
+    for (const m of mates){
+      if (m===p) continue;
+      const d = V.distSq(p.pos, m.pos);
+      if (d>0 && d<r2){
+        const push = V.norm(V.sub(p.pos, m.pos));
+        steer = V.add(steer, V.mul(push, 1/Math.sqrt(d))); // 가까울수록 강함
+      }
+    }
+    return V.mul(steer, PARAMS.PlayerMaxSpeed);
+  }
+};
+
+/* =========================================================================
+   5. 팀 FSM: 매 틱 각 선수의 목표 상태 결정 + steering 합산
+   ========================================================================= */
+function closestToBall(players, ball){
+  let best=null, bd=Infinity;
+  for (const p of players){
+    if (p.role==='GK') continue;
+    const d=V.distSq(p.pos, ball.pos);
+    if (d<bd){bd=d; best=p;}
+  }
+  return best;
+}
+
+function decideStates(team, ball, chaser){
+  const ballX = ball.pos.x;
+  for (const p of team){
+    if (p.role==='GK'){ p.state='Goalkeep'; continue; }
+    if (p===chaser){ p.state='ChaseBall'; continue; }
+    // 공 위치에 따라 홈 슬롯을 공/수 방향으로 시프트 (라인 전체 이동 효과)
+    p.state='SupportHome';
+  }
+}
+
+function computeSupportTarget(p, ball){
+  // 홈 슬롯 + 공 x좌표에 비례한 전/후진 시프트 (공격/수비 라인 이동)
+  const shift = ((ball.pos.x - FIELD.cx)/FIELD.w) * 140 * (p.team==='home'?1:-1);
+  return { x: p.home.x + shift, y: p.home.y + (ball.pos.y-p.home.y)*0.12 };
+}
+
+function steerPlayer(p, ball, mates, rng){
+  let force = V.zero();
+  if (p.state==='ChaseBall'){
+    force = Steering.pursuit(p, ball);
+  } else if (p.state==='Goalkeep'){
+    // 골키퍼: 자기 골 앞 + 공의 y를 따라감
+    const gline = p.ownGoal.x + (p.team==='home'? 24 : -24);
+    const gy = FIELD.cy + (ball.pos.y - FIELD.cy)*0.5;
+    force = Steering.arrive(p, {x:gline, y:gy}, 1.0);
+  } else { // SupportHome
+    const tgt = computeSupportTarget(p, ball);
+    if (V.dist(p.pos, tgt) > PARAMS.PlayerComfortZone) force = Steering.arrive(p, tgt, 1.0);
+  }
+  // Separation은 항상 가산
+  force = V.add(force, V.mul(Steering.separation(p, mates), PARAMS.SeparationWeight));
+  force = V.trunc(force, PARAMS.PlayerMaxForce * 60); // MaxForce 스케일
+  return force;
+}
+
+/* =========================================================================
+   6. 킥 로직 (패스 / 슛 / 드리블)
+   ========================================================================= */
+function tryKick(p, ball, mates, rng, sim){
+  if (p.kickCooldown>0) return;
+  if (V.dist(p.pos, ball.pos) > PARAMS.KickingDistance) return;
+  p.kickCooldown = PARAMS.KickFrequencyTicks;
+  ball.owner = p;
+
+  const toGoal = V.sub(p.attackGoal, p.pos);
+  const goalDist = V.len(toGoal);
+
+  // 1) 골에 가깝고 확률 성공 → 슛
+  if (goalDist < 260 && rng() < 0.35 + PARAMS.PotShotChance){
+    const aim = { x: p.attackGoal.x, y: p.attackGoal.y + (rng()-0.5)*80 };
+    ball.kick(V.sub(aim, p.pos), PARAMS.MaxShootingForce);
+    return;
+  }
+  // 2) 전방의 열린 동료에게 패스
+  let best=null, bestScore=-Infinity;
+  for (const m of mates){
+    if (m===p || m.role==='GK') continue;
+    const d = V.dist(p.pos, m.pos);
+    if (d < PARAMS.MinPassDist || d > PARAMS.MaxPassDist) continue;
+    const forwardness = (m.pos.x - p.pos.x) * (p.team==='home'?1:-1); // 전진 패스 선호
+    const score = forwardness - d*0.15;
+    if (score>bestScore){ bestScore=score; best=m; }
+  }
+  if (best){
+    const lead = best.futurePosGuess ? best.futurePosGuess : best.pos;
+    ball.kick(V.sub(best.pos, p.pos), PARAMS.MaxPassingForce);
+    return;
+  }
+  // 3) 마땅치 않으면 골 방향 드리블 터치
+  ball.kick(toGoal, PARAMS.MaxDribbleForce);
+}
+
+/* =========================================================================
+   7. 시뮬레이션 (결정론 고정 스텝 + 되감기 링버퍼)
+   ========================================================================= */
+class Sim {
+  constructor(){
+    this.rng = makeRng(12345);
+    this.reset();
+    this.buffer = [];
+    this.bufMax = Math.round(PARAMS.RewindSeconds / PARAMS.DT);
+  }
+  reset(){
+    this.tick=0; this.score={home:0, away:0};
+    this.ball = new Ball();
+    this.home = KOR_XI.map((m,i)=> new Player('home', i, m));
+    this.away = FORMATION_433.map((_,i)=> new Player('away', i, {n:i+1, name:'WLD', pace:78, stam:82}));
+    this.all = [...this.home, ...this.away];
+    this.buffer = [];
+  }
+  snapshot(){
+    return {
+      tick:this.tick, score:{...this.score},
+      ball:{pos:{...this.ball.pos}, vel:{...this.ball.vel}, owner: this.ball.owner? this.ball.owner.team+this.ball.owner.num : null},
+      players: this.all.map(p=>({pos:{...p.pos}, vel:{...p.vel}, state:p.state, stamina:p.stamina, kc:p.kickCooldown})),
+    };
+  }
+  restore(s){
+    this.tick=s.tick; this.score={...s.score};
+    this.ball.pos={...s.ball.pos}; this.ball.vel={...s.ball.vel}; this.ball.owner=null;
+    s.players.forEach((ps,i)=>{ const p=this.all[i]; p.pos={...ps.pos}; p.vel={...ps.vel}; p.state=ps.state; p.stamina=ps.stamina; p.kickCooldown=ps.kc; });
+  }
+  step(){
+    const dt = PARAMS.DT;
+    // FSM 상태 결정 (팀별)
+    const homeChaser = closestToBall(this.home, this.ball);
+    const awayChaser = closestToBall(this.away, this.ball);
+    decideStates(this.home, this.ball, homeChaser);
+    decideStates(this.away, this.ball, awayChaser);
+
+    // steering → 속도/위치 갱신
+    for (const p of this.all){
+      const mates = p.team==='home'? this.home : this.away;
+      const force = steerPlayer(p, this.ball, mates, this.rng);
+      const accel = V.mul(force, 1/PARAMS.PlayerMass);
+      p.vel = V.trunc(V.add(p.vel, V.mul(accel, dt)), p.maxSpeed);
+      // 체력 반영: 지치면 느려짐
+      const fatigue = 0.6 + 0.4*(p.stamina/p.maxStamina);
+      p.pos = V.add(p.pos, V.mul(p.vel, dt*fatigue));
+      // 체력: 빠르게 움직일수록 소모, 아니면 회복
+      const speedFrac = V.len(p.vel)/p.maxSpeed;
+      p.stamina = Math.max(0, Math.min(p.maxStamina, p.stamina - (speedFrac>0.7? PARAMS.StaminaDrainPerSec: -0.3)*dt));
+      // 필드 안으로 클램프
+      p.pos.x = Math.max(FIELD.x, Math.min(FIELD.x+FIELD.w, p.pos.x));
+      p.pos.y = Math.max(FIELD.y, Math.min(FIELD.y+FIELD.h, p.pos.y));
+      if (V.lenSq(p.vel)>1) p.heading = V.norm(p.vel);
+      if (p.kickCooldown>0) p.kickCooldown--;
+    }
+
+    // 킥 시도 (공에 붙은 선수들)
+    for (const p of this.all) tryKick(p, this.ball, (p.team==='home'?this.home:this.away), this.rng, this);
+
+    this.ball.update(dt);
+    this.checkGoal();
+
+    // 되감기용 스냅샷 기록
+    this.buffer.push(this.snapshot());
+    if (this.buffer.length > this.bufMax) this.buffer.shift();
+    this.tick++;
+  }
+  checkGoal(){
+    const b=this.ball, gy1=FIELD.cy-45, gy2=FIELD.cy+45;
+    if (b.pos.x <= FIELD.x+4 && b.pos.y>gy1 && b.pos.y<gy2){ this.score.away++; this.kickoff('away'); }
+    else if (b.pos.x >= FIELD.x+FIELD.w-4 && b.pos.y>gy1 && b.pos.y<gy2){ this.score.home++; this.kickoff('home'); }
+  }
+  kickoff(){ this.ball.reset(); for(const p of this.all){ p.pos={...p.home}; p.vel=V.zero(); } }
+  rewind(){
+    const back = this.buffer.length-1;
+    if (back<=0) return;
+    const s = this.buffer[0];
+    this.restore(s);
+    this.buffer = [this.snapshot()];
+  }
+}
+
+/* =========================================================================
+   8. 렌더링
+   ========================================================================= */
+const cv = document.getElementById('pitch'), ctx = cv.getContext('2d');
+let showDebug = true;
+
+function drawPitch(){
+  ctx.fillStyle='#1a6b34'; ctx.fillRect(0,0,cv.width,cv.height);
+  // 잔디 줄무늬
+  ctx.fillStyle='rgba(255,255,255,0.03)';
+  for(let i=0;i<10;i++){ if(i%2) ctx.fillRect(FIELD.x+i*FIELD.w/10, FIELD.y, FIELD.w/10, FIELD.h); }
+  ctx.strokeStyle='rgba(255,255,255,0.7)'; ctx.lineWidth=2;
+  ctx.strokeRect(FIELD.x, FIELD.y, FIELD.w, FIELD.h);
+  ctx.beginPath(); ctx.moveTo(FIELD.cx,FIELD.y); ctx.lineTo(FIELD.cx,FIELD.y+FIELD.h); ctx.stroke();
+  ctx.beginPath(); ctx.arc(FIELD.cx,FIELD.cy,55,0,Math.PI*2); ctx.stroke();
+  // 골대 & 페널티박스
+  [[FIELD.x,1],[FIELD.x+FIELD.w,-1]].forEach(([gx,dir])=>{
+    ctx.strokeRect(gx - (dir<0?90:0), FIELD.cy-70, 90, 140);
+    ctx.fillStyle='rgba(255,255,255,0.9)';
+    ctx.fillRect(gx-(dir<0?4:0), FIELD.cy-45, 4, 90);
+  });
+}
+
+function drawPlayer(p){
+  const R=12;
+  ctx.beginPath(); ctx.arc(p.pos.x,p.pos.y,R,0,Math.PI*2);
+  ctx.fillStyle = p.team==='home' ? '#c8102e' : '#1f6feb';
+  ctx.fill(); ctx.lineWidth=2; ctx.strokeStyle='rgba(0,0,0,.4)'; ctx.stroke();
+  // 체력 링
+  const frac=p.stamina/p.maxStamina;
+  ctx.beginPath(); ctx.arc(p.pos.x,p.pos.y,R+3,-Math.PI/2,-Math.PI/2+Math.PI*2*frac);
+  ctx.strokeStyle = frac>0.5?'#3fb950':(frac>0.25?'#d29922':'#f85149'); ctx.lineWidth=3; ctx.stroke();
+  // 등번호
+  ctx.fillStyle='#fff'; ctx.font='bold 11px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText(p.num, p.pos.x, p.pos.y);
+  // 방향/속도 벡터
+  if (showDebug){
+    ctx.strokeStyle = p.state==='ChaseBall'? '#ffd33d' : 'rgba(255,255,255,.35)';
+    ctx.lineWidth = p.state==='ChaseBall'?2:1;
+    ctx.beginPath(); ctx.moveTo(p.pos.x,p.pos.y);
+    ctx.lineTo(p.pos.x+p.vel.x*0.12, p.pos.y+p.vel.y*0.12); ctx.stroke();
+  }
+}
+
+function drawBall(b){
+  ctx.beginPath(); ctx.arc(b.pos.x,b.pos.y,PARAMS.BallRadius,0,Math.PI*2);
+  ctx.fillStyle='#fff'; ctx.fill(); ctx.strokeStyle='#333'; ctx.lineWidth=1.5; ctx.stroke();
+}
+
+/* =========================================================================
+   9. 루프 & UI
+   ========================================================================= */
+const sim = new Sim();
+let paused=false, acc=0, last=performance.now();
+
+function frame(now){
+  const real=(now-last)/1000; last=now;
+  if(!paused){
+    acc+=Math.min(real,0.1);
+    while(acc>=PARAMS.DT){ sim.step(); acc-=PARAMS.DT; }
+  }
+  drawPitch();
+  drawBall(sim.ball);
+  for(const p of sim.all) drawPlayer(p);
+  // UI
+  document.getElementById('score').textContent = `KOR ${sim.score.home} : ${sim.score.away} WLD`;
+  document.getElementById('tick').textContent = sim.tick;
+  document.getElementById('buf').textContent = sim.buffer.length;
+  const own = sim.ball.owner;
+  document.getElementById('poss').textContent = own ? `${own.team==='home'?'KOR':'WLD'} #${own.num} ${own.name}` : '경합/이동중';
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+document.getElementById('pause').onclick = (e)=>{ paused=!paused; e.target.classList.toggle('on',paused); e.target.textContent = paused?'▶ 재생':'⏸ 일시정지'; };
+document.getElementById('reset').onclick = ()=>{ sim.reset(); };
+document.getElementById('rewind').onclick = ()=>{ sim.rewind(); paused=true; document.getElementById('pause').textContent='▶ 재생'; document.getElementById('pause').classList.add('on'); };
+document.getElementById('dbg').onclick = (e)=>{ showDebug=!showDebug; e.target.classList.toggle('on',showDebug); };
+</script>
+</body>
+</html>

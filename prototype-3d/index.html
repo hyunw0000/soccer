@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>3D 축구 시뮬레이터 (Three.js) — 선수가 실제로 뛰는 POC</title>
+<style>
+  :root{color-scheme:dark;}
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{height:100%;background:#0b0f14;overflow:hidden;font-family:"Segoe UI",system-ui,sans-serif;color:#e6edf3;}
+  #app{position:fixed;inset:0;}
+  #hud{position:fixed;top:14px;left:14px;background:rgba(13,17,23,.78);border:1px solid #30363d;border-radius:10px;padding:12px 14px;font-size:13px;backdrop-filter:blur(6px);min-width:210px;}
+  #hud .score{font-size:22px;font-weight:700;letter-spacing:1px;margin-bottom:6px;}
+  #hud .row{display:flex;justify-content:space-between;gap:16px;padding:2px 0;color:#8b949e;}
+  #hud .row b{color:#e6edf3;}
+  #controls{position:fixed;bottom:14px;left:50%;transform:translateX(-50%);display:flex;gap:8px;background:rgba(13,17,23,.78);border:1px solid #30363d;border-radius:10px;padding:8px;backdrop-filter:blur(6px);}
+  button{background:#21262d;color:#e6edf3;border:1px solid #30363d;border-radius:7px;padding:8px 12px;cursor:pointer;font-size:12px;}
+  button:hover{background:#30363d;}
+  button.on{background:#1f6feb;border-color:#1f6feb;}
+  #hint{position:fixed;top:14px;right:14px;background:rgba(13,17,23,.78);border:1px solid #30363d;border-radius:10px;padding:10px 12px;font-size:11px;color:#8b949e;max-width:230px;line-height:1.5;}
+  #loading{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;font-size:16px;color:#8b949e;}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="loading">3D 엔진 로딩 중…</div>
+<div id="hud" style="display:none">
+  <div class="score" id="score">KOR 0 : 0 WLD</div>
+  <div class="row"><span>공 소유</span><b id="poss">-</b></div>
+  <div class="row"><span>카메라</span><b id="cam">방송</b></div>
+  <div class="row"><span>FPS</span><b id="fps">-</b></div>
+</div>
+<div id="hint">
+  마우스 드래그=회전 · 휠=줌<br>
+  선수 = Three.js 관절 피규어(허벅지·정강이·팔 스윙).<br>
+  움직임 두뇌는 2D판과 동일한 <b>Steering + FSM</b> 엔진.
+</div>
+<div id="controls" style="display:none">
+  <button id="camBroadcast" class="on">📺 방송캠</button>
+  <button id="camTop">🛰 탑뷰</button>
+  <button id="camBall">⚽ 공추적</button>
+  <button id="pause">⏸ 일시정지</button>
+  <button id="reset">↺ 킥오프</button>
+</div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+}}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+/* ===================== 필드 & 파라미터 ===================== */
+// 월드 단위 = 미터. 실제 비율 105 x 68.
+const F = { L:105, W:68 };
+const HALF = { L:F.L/2, W:F.W/2 };
+const GOAL_W = 12; // 골 너비(관대하게)
+const PARAMS = {
+  maxSpeed: 7.2,          // m/s (스프린트)
+  maxForce: 40,
+  comfortZone: 4,
+  sepWeight: 2.2, sepRadius: 3.2,
+  kickDist: 1.6, kickCooldownTicks: 8,
+  passForce: 22, shootForce: 34, dribbleForce: 10,
+  minPass: 8, maxPass: 32,
+  ballFriction: -0.9, ballMaxSpeed: 40, ballRadius: 0.35,
+  dt: 1/60,
+};
+
+/* ===================== 벡터(x,z 평면) ===================== */
+const vlen=(x,z)=>Math.hypot(x,z);
+function makeRng(seed){return()=>{seed|=0;seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+const rng = makeRng(2026);
+
+/* ===================== 포메이션 4-3-3 ===================== */
+// 홈(왼쪽, -x 진영 → +x 공격). x:[-.5,.5]*L, z:[-.5,.5]*W
+const FORM = [
+  {role:'GK',x:-0.46,z:0}, {role:'DF',x:-0.30,z:-0.28},{role:'DF',x:-0.32,z:-0.09},
+  {role:'DF',x:-0.32,z:0.09},{role:'DF',x:-0.30,z:0.28},
+  {role:'MF',x:-0.12,z:-0.22},{role:'MF',x:-0.14,z:0},{role:'MF',x:-0.12,z:0.22},
+  {role:'FW',x:0.14,z:-0.26},{role:'FW',x:0.18,z:0},{role:'FW',x:0.14,z:0.26},
+];
+const KOR = [
+  {n:1,name:'조현우',pace:60},{n:20,name:'김민재',pace:78},{n:4,name:'김영권',pace:70},
+  {n:3,name:'이한범',pace:75},{n:2,name:'설영우',pace:84},{n:18,name:'이강인',pace:78},
+  {n:6,name:'황인범',pace:80},{n:15,name:'박용우',pace:72},{n:7,name:'손흥민',pace:86},
+  {n:9,name:'오현규',pace:85},{n:11,name:'황희찬',pace:88},
+];
+function slot(i, side){
+  const f=FORM[i]; const sgn = side==='home'?1:-1;
+  return { x:f.x*F.L*sgn, z:f.z*F.W*sgn, role:f.role };
+}
+
+/* ===================== Three.js 셋업 ===================== */
+const app=document.getElementById('app');
+const renderer=new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setSize(innerWidth,innerHeight);
+renderer.shadowMap.enabled=true;
+renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+app.appendChild(renderer.domElement);
+
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x0b141f);
+scene.fog=new THREE.Fog(0x0b141f, 120, 260);
+
+const camera=new THREE.PerspectiveCamera(50,innerWidth/innerHeight,0.1,600);
+camera.position.set(0,55,90);
+const controls=new OrbitControls(camera,renderer.domElement);
+controls.target.set(0,0,0);
+controls.enableDamping=true; controls.maxPolarAngle=Math.PI*0.49;
+
+// 조명
+scene.add(new THREE.HemisphereLight(0xbfd4ff,0x2a3b25,0.9));
+const sun=new THREE.DirectionalLight(0xffffff,1.6);
+sun.position.set(40,80,30); sun.castShadow=true;
+sun.shadow.mapSize.set(2048,2048);
+const s=90; Object.assign(sun.shadow.camera,{left:-s,right:s,top:s,bottom:-s,near:1,far:250});
+scene.add(sun);
+
+/* ---- 피치(라인 텍스처를 캔버스로 그림) ---- */
+function pitchTexture(){
+  const c=document.createElement('canvas'); c.width=2100; c.height=1360;
+  const g=c.getContext('2d');
+  // 잔디 줄무늬
+  for(let i=0;i<14;i++){ g.fillStyle=i%2?'#2a8f43':'#238a3d'; g.fillRect(i*c.width/14,0,c.width/14,c.height); }
+  g.strokeStyle='rgba(255,255,255,0.85)'; g.lineWidth=6;
+  const m=40;
+  g.strokeRect(m,m,c.width-2*m,c.height-2*m);
+  g.beginPath(); g.moveTo(c.width/2,m); g.lineTo(c.width/2,c.height-m); g.stroke();
+  g.beginPath(); g.arc(c.width/2,c.height/2,150,0,Math.PI*2); g.stroke();
+  g.beginPath(); g.arc(c.width/2,c.height/2,6,0,Math.PI*2); g.fillStyle='#fff'; g.fill();
+  // 페널티 박스
+  const boxW=330,boxH=560;
+  g.strokeRect(m,(c.height-boxH)/2,boxW,boxH);
+  g.strokeRect(c.width-m-boxW,(c.height-boxH)/2,boxW,boxH);
+  const t=new THREE.CanvasTexture(c); t.anisotropy=8; return t;
+}
+const pitch=new THREE.Mesh(
+  new THREE.PlaneGeometry(F.L,F.W),
+  new THREE.MeshStandardMaterial({map:pitchTexture(),roughness:0.95})
+);
+pitch.rotation.x=-Math.PI/2; pitch.receiveShadow=true; scene.add(pitch);
+// 잔디 여백(외곽)
+const surround=new THREE.Mesh(new THREE.PlaneGeometry(F.L+40,F.W+40),new THREE.MeshStandardMaterial({color:0x18632b,roughness:1}));
+surround.rotation.x=-Math.PI/2; surround.position.y=-0.02; surround.receiveShadow=true; scene.add(surround);
+
+// 골대
+function goal(xSign){
+  const grp=new THREE.Group();
+  const mat=new THREE.MeshStandardMaterial({color:0xffffff,roughness:0.4,metalness:0.1});
+  const post=new THREE.CylinderGeometry(0.18,0.18,2.6,10);
+  const p1=new THREE.Mesh(post,mat); p1.position.set(0,1.3,-GOAL_W/2);
+  const p2=new THREE.Mesh(post,mat); p2.position.set(0,1.3,GOAL_W/2);
+  const bar=new THREE.Mesh(new THREE.CylinderGeometry(0.18,0.18,GOAL_W,10),mat);
+  bar.rotation.x=Math.PI/2; bar.position.set(0,2.6,0);
+  [p1,p2,bar].forEach(o=>{o.castShadow=true;grp.add(o);});
+  grp.position.x=xSign*HALF.L; scene.add(grp); return grp;
+}
+goal(1); goal(-1);
+
+/* ===================== 관절 선수 피규어 ===================== */
+function numberSprite(num,color){
+  const c=document.createElement('canvas');c.width=c.height=128;const g=c.getContext('2d');
+  g.fillStyle=color;g.beginPath();g.arc(64,64,60,0,Math.PI*2);g.fill();
+  g.fillStyle='#fff';g.font='bold 74px sans-serif';g.textAlign='center';g.textBaseline='middle';
+  g.fillText(num,64,68);
+  const tex=new THREE.CanvasTexture(c);
+  const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:tex,depthTest:false}));
+  sp.scale.set(1.6,1.6,1); sp.position.y=4.0; return sp;
+}
+function makePlayer(color,skin,num){
+  const g=new THREE.Group();
+  const mBody=new THREE.MeshStandardMaterial({color,roughness:0.7});
+  const mSkin=new THREE.MeshStandardMaterial({color:skin,roughness:0.8});
+  const mShort=new THREE.MeshStandardMaterial({color:0x14181f,roughness:0.8});
+  // 몸통
+  const torso=new THREE.Mesh(new THREE.CapsuleGeometry(0.42,0.9,4,10),mBody);
+  torso.position.y=2.1; torso.castShadow=true; g.add(torso);
+  // 머리
+  const head=new THREE.Mesh(new THREE.SphereGeometry(0.34,16,16),mSkin);
+  head.position.y=3.0; head.castShadow=true; g.add(head);
+  // 팔(어깨 피벗) : 상완+전완
+  function arm(side){
+    const pivot=new THREE.Group(); pivot.position.set(0,2.55,side*0.55);
+    const upper=new THREE.Mesh(new THREE.CapsuleGeometry(0.15,0.6,4,8),mBody);
+    upper.position.y=-0.35; upper.castShadow=true; pivot.add(upper);
+    const fore=new THREE.Mesh(new THREE.CapsuleGeometry(0.13,0.55,4,8),mSkin);
+    fore.position.y=-0.95; fore.castShadow=true; pivot.add(fore);
+    g.add(pivot); return pivot;
+  }
+  // 다리(엉덩이 피벗) : 허벅지 + 정강이(무릎)
+  function leg(side){
+    const hip=new THREE.Group(); hip.position.set(0,1.55,side*0.22);
+    const thigh=new THREE.Mesh(new THREE.CapsuleGeometry(0.19,0.7,4,8),mShort);
+    thigh.position.y=-0.45; thigh.castShadow=true; hip.add(thigh);
+    const knee=new THREE.Group(); knee.position.y=-0.85; hip.add(knee);
+    const shin=new THREE.Mesh(new THREE.CapsuleGeometry(0.16,0.7,4,8),mSkin);
+    shin.position.y=-0.45; shin.castShadow=true; knee.add(shin);
+    const foot=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.16,0.28),mShort);
+    foot.position.set(0.15,-0.85,0); foot.castShadow=true; knee.add(foot);
+    g.add(hip); return {hip,knee};
+  }
+  const armL=arm(1),armR=arm(-1);
+  const legL=leg(1),legR=leg(-1);
+  g.add(numberSprite(num,color));
+  g.userData={armL,armR,legL,legR,torso,head,phase:Math.random()*6.28};
+  return g;
+}
+
+/* ===================== 게임 로직(Steering+FSM) ===================== */
+class Player{
+  constructor(team,idx,meta,mesh){
+    this.team=team;this.idx=idx;this.num=meta.n;this.name=meta.name;
+    this.maxSpeed=PARAMS.maxSpeed*(0.82+meta.pace/100*0.36);
+    const sl=slot(idx,team); this.role=sl.role;
+    this.home={x:sl.x,z:sl.z}; this.x=sl.x; this.z=sl.z; this.vx=0; this.vz=0;
+    this.state='home'; this.kc=0; this.hy=0; this.mesh=mesh;
+    this.heading=team==='home'?0:Math.PI;
+  }
+  get atkX(){ return this.team==='home'? HALF.L : -HALF.L; }
+}
+class Ball{
+  constructor(mesh){this.mesh=mesh;this.reset();}
+  reset(){this.x=0;this.z=0;this.vx=0;this.vz=0;this.owner=null;this.roll=0;}
+  kick(dx,dz,force){const l=vlen(dx,dz)||1;this.vx=dx/l*force;this.vz=dz/l*force;this.owner=null;}
+  update(dt){
+    this.vx+=this.vx*PARAMS.ballFriction*dt; this.vz+=this.vz*PARAMS.ballFriction*dt;
+    if(vlen(this.vx,this.vz)<0.15){this.vx=0;this.vz=0;}
+    const sp=vlen(this.vx,this.vz); if(sp>PARAMS.ballMaxSpeed){this.vx=this.vx/sp*PARAMS.ballMaxSpeed;this.vz=this.vz/sp*PARAMS.ballMaxSpeed;}
+    this.x+=this.vx*dt; this.z+=this.vz*dt;
+    if(this.z<-HALF.W+0.3){this.z=-HALF.W+0.3;this.vz*=-0.6;}
+    if(this.z>HALF.W-0.3){this.z=HALF.W-0.3;this.vz*=-0.6;}
+    this.roll+=sp*dt/PARAMS.ballRadius;
+  }
+}
+
+// steering helpers
+function arrive(p,tx,tz){
+  const dx=tx-p.x,dz=tz-p.z,d=vlen(dx,dz); if(d<0.3)return[0,0];
+  const speed=Math.min(d/0.35,p.maxSpeed);
+  return [dx/d*speed-p.vx, dz/d*speed-p.vz];
+}
+function pursuit(p,ball){
+  const dx=ball.x-p.x,dz=ball.z-p.z,d=vlen(dx,dz);
+  const t=d/(p.maxSpeed+vlen(ball.vx,ball.vz)+1);
+  return arrive(p,ball.x+ball.vx*t*0.5,ball.z+ball.vz*t*0.5);
+}
+function separation(p,mates){
+  let sx=0,sz=0,r2=PARAMS.sepRadius**2;
+  for(const m of mates){if(m===p)continue;const dx=p.x-m.x,dz=p.z-m.z,d=dx*dx+dz*dz;
+    if(d>0&&d<r2){const l=Math.sqrt(d);sx+=dx/l/l;sz+=dz/l/l;}}
+  return [sx*PARAMS.maxSpeed,sz*PARAMS.maxSpeed];
+}
+function closest(team,ball){let b=null,bd=1e9;for(const p of team){if(p.role==='GK')continue;const d=(p.x-ball.x)**2+(p.z-ball.z)**2;if(d<bd){bd=d;b=p;}}return b;}
+
+class Sim{
+  constructor(){this.build();}
+  build(){
+    this.tick=0;this.score={home:0,away:0};
+    // meshes
+    this.homeP=KOR.map((m,i)=>{const mesh=makePlayer(0xc8102e,0xf0c9a0,m.n);scene.add(mesh);return new Player('home',i,m,mesh);});
+    this.awayP=FORM.map((_,i)=>{const mesh=makePlayer(0x1f6feb,0xd8b48a,i+1);scene.add(mesh);return new Player('away',i,{n:i+1,name:'WLD',pace:78},mesh);});
+    this.all=[...this.homeP,...this.awayP];
+    const bm=new THREE.Mesh(new THREE.SphereGeometry(PARAMS.ballRadius,20,16),
+      new THREE.MeshStandardMaterial({color:0xffffff,roughness:0.4}));
+    bm.castShadow=true; scene.add(bm); this.ball=new Ball(bm);
+    this.syncMeshes();
+  }
+  kickoff(){this.ball.reset();for(const p of this.all){p.x=p.home.x;p.z=p.home.z;p.vx=p.vz=0;}}
+  step(){
+    const dt=PARAMS.dt;
+    const hc=closest(this.homeP,this.ball), ac=closest(this.awayP,this.ball);
+    for(const p of this.all){
+      const mates=p.team==='home'?this.homeP:this.awayP;
+      const chaser=p.team==='home'?hc:ac;
+      let fx=0,fz=0;
+      if(p.role==='GK'){
+        const gx=(p.team==='home'?-HALF.L:HALF.L)+(p.team==='home'?2:-2);
+        const gz=Math.max(-GOAL_W/2,Math.min(GOAL_W/2,(this.ball.z)*0.5));
+        [fx,fz]=arrive(p,gx,gz);
+      }else if(p===chaser){
+        [fx,fz]=pursuit(p,this.ball);
+      }else{
+        const shift=((this.ball.x)/F.L)*20*(p.team==='home'?1:-1);
+        const tx=p.home.x+shift, tz=p.home.z+(this.ball.z-p.home.z)*0.12;
+        if(vlen(tx-p.x,tz-p.z)>PARAMS.comfortZone)[fx,fz]=arrive(p,tx,tz);
+      }
+      const[sxx,szz]=separation(p,mates); fx+=sxx*PARAMS.sepWeight; fz+=szz*PARAMS.sepWeight;
+      const fl=vlen(fx,fz); if(fl>PARAMS.maxForce){fx=fx/fl*PARAMS.maxForce;fz=fz/fl*PARAMS.maxForce;}
+      p.vx+=fx*dt; p.vz+=fz*dt;
+      const sp=vlen(p.vx,p.vz); if(sp>p.maxSpeed){p.vx=p.vx/sp*p.maxSpeed;p.vz=p.vz/sp*p.maxSpeed;}
+      p.x+=p.vx*dt; p.z+=p.vz*dt;
+      p.x=Math.max(-HALF.L-1,Math.min(HALF.L+1,p.x)); p.z=Math.max(-HALF.W,Math.min(HALF.W,p.z));
+      if(sp>0.5)p.heading=Math.atan2(p.vx,p.vz);
+      if(p.kc>0)p.kc--;
+    }
+    for(const p of this.all)this.tryKick(p);
+    this.ball.update(dt);
+    this.checkGoal();
+    this.syncMeshes(dt);
+    this.tick++;
+  }
+  tryKick(p){
+    if(p.kc>0||vlen(p.x-this.ball.x,p.z-this.ball.z)>PARAMS.kickDist)return;
+    p.kc=PARAMS.kickCooldownTicks; this.ball.owner=p;
+    const gdx=p.atkX-p.x, gdz=0-p.z, gd=vlen(gdx,gdz);
+    if(gd<30 && rng()<0.4){ this.ball.kick(gdx,gdz+(rng()-0.5)*6,PARAMS.shootForce); return; }
+    let best=null,bs=-1e9,mates=p.team==='home'?this.homeP:this.awayP;
+    for(const m of mates){if(m===p||m.role==='GK')continue;const d=vlen(m.x-p.x,m.z-p.z);
+      if(d<PARAMS.minPass||d>PARAMS.maxPass)continue;
+      const fwd=(m.x-p.x)*(p.team==='home'?1:-1); const sc=fwd-d*0.15;
+      if(sc>bs){bs=sc;best=m;}}
+    if(best){this.ball.kick(best.x-p.x,best.z-p.z,PARAMS.passForce);return;}
+    this.ball.kick(gdx,gdz,PARAMS.dribbleForce);
+  }
+  checkGoal(){
+    const b=this.ball;
+    if(b.x<=-HALF.L && Math.abs(b.z)<GOAL_W/2){this.score.away++;this.kickoff();}
+    else if(b.x>=HALF.L && Math.abs(b.z)<GOAL_W/2){this.score.home++;this.kickoff();}
+  }
+  syncMeshes(dt=0){
+    for(const p of this.all){
+      const g=p.mesh; g.position.set(p.x,0,p.z); g.rotation.y=p.heading;
+      const sp=vlen(p.vx,p.vz); const ud=g.userData;
+      ud.phase+=(0.6+sp*2.2)*(dt||0.016)*6;
+      const swing=Math.min(1,sp/p.maxSpeed*1.3);
+      const a=Math.sin(ud.phase)*swing;
+      // 다리 스윙 + 무릎 굽힘
+      ud.legL.hip.rotation.x=a*0.9; ud.legR.hip.rotation.x=-a*0.9;
+      ud.legL.knee.rotation.x=Math.max(0,-Math.cos(ud.phase))*swing*1.1;
+      ud.legR.knee.rotation.x=Math.max(0,Math.cos(ud.phase))*swing*1.1;
+      // 팔은 반대로
+      ud.armL.rotation.x=-a*0.7; ud.armR.rotation.x=a*0.7;
+      // 달릴수록 상체 앞으로
+      ud.torso.rotation.x=swing*0.18; ud.head.position.z=swing*0.05;
+      // 살짝 상하 바운스
+      g.position.y=Math.abs(Math.sin(ud.phase))*0.08*swing;
+    }
+    const b=this.ball; b.mesh.position.set(b.x,PARAMS.ballRadius,b.z);
+    b.mesh.rotation.x+=b.vz*0.02; b.mesh.rotation.z-=b.vx*0.02;
+  }
+}
+
+/* ===================== 루프 & 카메라 & UI ===================== */
+const sim=new Sim();
+document.getElementById('loading').style.display='none';
+document.getElementById('hud').style.display='block';
+document.getElementById('controls').style.display='flex';
+
+let paused=false, camMode='broadcast', acc=0, last=performance.now(), fpsT=0, fpsN=0;
+function setCam(m){camMode=m;document.getElementById('cam').textContent={broadcast:'방송',top:'탑뷰',ball:'공추적'}[m];
+  ['camBroadcast','camTop','camBall'].forEach(id=>document.getElementById(id).classList.remove('on'));
+  document.getElementById({broadcast:'camBroadcast',top:'camTop',ball:'camBall'}[m]).classList.add('on');}
+
+function updateCamera(){
+  const b=sim.ball;
+  if(camMode==='top'){ controls.enabled=true; return; }
+  if(camMode==='ball'){
+    controls.enabled=false;
+    const tx=b.x, tz=b.z;
+    camera.position.lerp(new THREE.Vector3(tx-14,10,tz+18),0.06);
+    controls.target.lerp(new THREE.Vector3(tx,0,tz),0.1);
+  }else{ // broadcast: 사이드라인 위 넓은 시야, 공 x만 살짝 추적
+    controls.enabled=false;
+    camera.position.lerp(new THREE.Vector3(b.x*0.4,42,78),0.04);
+    controls.target.lerp(new THREE.Vector3(b.x*0.5,0,0),0.05);
+  }
+}
+
+function loop(now){
+  const real=(now-last)/1000; last=now;
+  if(!paused){acc+=Math.min(real,0.1);while(acc>=PARAMS.dt){sim.step();acc-=PARAMS.dt;}}
+  updateCamera(); controls.update();
+  renderer.render(scene,camera);
+  // UI
+  document.getElementById('score').textContent=`KOR ${sim.score.home} : ${sim.score.away} WLD`;
+  const o=sim.ball.owner;
+  document.getElementById('poss').textContent=o?`${o.team==='home'?'KOR':'WLD'} #${o.num} ${o.name}`:'경합/이동중';
+  fpsN++; fpsT+=real; if(fpsT>=0.5){document.getElementById('fps').textContent=Math.round(fpsN/fpsT);fpsN=0;fpsT=0;}
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+document.getElementById('camBroadcast').onclick=()=>setCam('broadcast');
+document.getElementById('camTop').onclick=()=>{setCam('top');camera.position.set(0,90,1);controls.target.set(0,0,0);};
+document.getElementById('camBall').onclick=()=>setCam('ball');
+document.getElementById('pause').onclick=(e)=>{paused=!paused;e.target.classList.toggle('on',paused);e.target.textContent=paused?'▶ 재생':'⏸ 일시정지';};
+document.getElementById('reset').onclick=()=>sim.kickoff();
+addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});
+</script>
+</body>
+</html>
