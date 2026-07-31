@@ -1,11 +1,8 @@
-import { el } from '../ui/dom.js';
-import { state } from '../state.js';
-import { PARAMS } from '../engine/params.js';
-import { Sim } from '../engine/sim.js';
-import { RewindBuffer } from '../engine/rewind.js';
-import { createMatchView } from '../render3d/matchView.js';
-import { CAM_MODES } from '../render3d/cameraRig.js';
-import { findById, toSimMeta } from '../data/players.js';
+import { el } from '../../shared/index.js';
+import { state } from '../../app/public.js';
+import { PARAMS, Sim, RewindBuffer } from '../../simulation/index.js';
+import { createMatchView, CAM_MODES } from '../render3d/index.js';
+import { findById, toSimMeta } from '../../team/data/index.js';
 
 const REWIND_SECONDS = 8;
 const REWIND_LIMIT = 3; // 감독의 '되감기'는 유한한 자원이다 — 이 서비스의 규칙
@@ -176,7 +173,7 @@ export default function matchScreen(root, ctx, params = {}) {
         pauseBtn,
         rewindBtn,
         el('button', { class: 'ctl', text: '↺ 킥오프', onclick: () => { sim.kickoff(); view.sync(0); } }),
-        el('button', { class: 'ctl', text: '전술 변경 ↩', onclick: () => ctx.go('tactics') }),
+        el('button', { class: 'ctl', text: '전술 변경 ↩', onclick: () => ctx.navigate('tactics') }),
       ]),
       el('p', { class: 'hint' }, [
         el('span', { text: '탑뷰에서 드래그=회전 / 휠=줌 · Space=일시정지 · R=되감기' }),

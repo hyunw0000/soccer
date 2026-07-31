@@ -1,8 +1,7 @@
-import { el } from '../ui/dom.js';
-import { state, setState } from '../state.js';
-import { FORMATIONS, FORMATION_KEYS, positionNeeds, slotPosition } from '../engine/formations.js';
-import { FIELD } from '../engine/params.js';
-import { autoLineup, findById, overall } from '../data/players.js';
+import { el } from '../../shared/index.js';
+import { state, setState } from '../../app/public.js';
+import { FIELD, FORMATIONS, FORMATION_KEYS, positionNeeds, slotPosition } from '../../simulation/index.js';
+import { autoLineup, findById, overall } from '../data/index.js';
 
 const SLIDERS = [
   { key: 'lineHeight', label: '수비 라인', lo: '내려선다', hi: '끌어올린다' },
@@ -129,13 +128,13 @@ export default function tacticsScreen(root, ctx) {
           el('h2', { class: 'h2', text: '상대를 보고 전술을 짜세요' }),
         ]),
         el('div', { class: 'topbar-right' }, [
-          el('button', { class: 'ghost', text: '← 명단 수정', onclick: () => ctx.go('squad') }),
+          el('button', { class: 'ghost', text: '← 명단 수정', onclick: () => ctx.navigate('squad') }),
           el('button', {
             class: 'primary',
             text: '킥오프 ⚽',
             onclick: () => {
               setState({ formation, tactics });
-              ctx.go('match', { lineupIds: lineup.map((p) => p.id) });
+              ctx.navigate('match', { lineupIds: lineup.map((p) => p.id) });
             },
           }),
         ]),

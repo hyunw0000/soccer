@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { PARAMS } from '../engine/params.js';
+import { PARAMS } from '../../simulation/index.js';
 import { createScene } from './scene.js';
 import { buildPitch } from './pitch.js';
 import { makePlayerRig, animateRig } from './playerRig.js';
