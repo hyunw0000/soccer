@@ -1,3 +1,4 @@
+import './roster.css';
 import { el } from '../../shared/index.js';
 import { state, setState } from '../../app/public.js';
 import { PLAYERS, byPos, overall } from '../data/index.js';
@@ -14,7 +15,7 @@ export default function squadScreen(root, ctx) {
 
   const counter = el('span', { class: 'counter' });
   const warn = el('p', { class: 'error' });
-  const listWrap = el('div', {});
+  const listWrap = el('div', { class: 'roster-groups' });
 
   const next = el('button', {
     class: 'primary',
@@ -100,14 +101,14 @@ export default function squadScreen(root, ctx) {
   }
 
   /** 그룹 제목 + 카드 그리드(또는 빈 안내문)를 만든다. 국가대표/후보 구분 표시에 쓰인다. */
-  function groupNodes(title, list) {
+  function groupSection(title, list) {
     const selected = list.filter((p) => pool.has(p.id)).length;
-    return [
+    return el('section', { class: 'roster-group' }, [
       el('h3', { class: 'h3', text: `${title} (${selected}/${list.length})` }),
       list.length
         ? el('div', { class: 'player-grid' }, list.map(card))
         : el('p', { class: 'lead', text: '해당 조건의 선수가 없습니다.' }),
-    ];
+    ]);
   }
 
   function render() {
@@ -116,8 +117,8 @@ export default function squadScreen(root, ctx) {
     const squad = sortGroup(list.filter((p) => p.squad2026));
     const candidates = sortGroup(list.filter((p) => !p.squad2026));
     listWrap.replaceChildren(
-      ...groupNodes('2026 월드컵 국가대표', squad),
-      ...groupNodes('국가대표 외 후보 선수', candidates)
+      groupSection('2026 월드컵 국가대표', squad),
+      groupSection('국가대표 외 후보 선수', candidates)
     );
   }
 
