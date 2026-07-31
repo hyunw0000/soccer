@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { FIELD, HALF, GOAL_W } from '../engine/params.js';
+import { FIELD, HALF, GOAL_W } from '../../simulation/index.js';
 
 /** 라인이 그려진 잔디 텍스처를 캔버스로 생성 (외부 이미지 의존 0) */
 function pitchTexture() {

@@ -37,12 +37,18 @@ npm run preview  # 빌드 결과 확인
 index.html               앱 진입 HTML
 vite.config.js
 src/
-  main.js                진입점 — 라우터 기동
-  router.js              화면 전환기 (이전 화면 정리 강제)
-  state.js               감독 세션(이름/명단/전술) + localStorage 검증 로드
-  screens/               화면 단위. mount(root, ctx) → cleanup 반환
-    managerName.js  squad.js  tactics.js  match.js
-  engine/                ★ 순수 로직. three.js를 import 하지 않는다
+  main.js                Vite 진입점 — app 초기화만 위임
+  app/                   담당 1: 앱 플랫폼·시작 화면·통합
+    main.js              화면 공개 API 조립 및 라우터 기동
+    router.js            중앙 화면 전환 + history 준비 + cleanup
+    state.js             감독 세션 + localStorage 검증 로드
+    screens/managerName.js
+  team/                  담당 2: 선수 데이터·명단·전술
+    index.js
+    data/players.js  data/players_korea.json
+    screens/squad.js  screens/tactics.js
+  simulation/            담당 3: 순수 시뮬레이션·되감기
+    index.js             영역 공개 API
     params.js            상수/전술 계수
     math.js  rng.js      벡터 헬퍼 / 시드 난수(상태 노출 → 되감기 가능)
     formations.js        포메이션 정의·슬롯 좌표
@@ -50,21 +56,24 @@ src/
     steering.js          arrive · pursuit · separation
     sim.js               경기 시뮬레이션 + snapshot()/restore()
     rewind.js            되감기 링버퍼
-  render3d/              ★ three.js 전용. 게임 규칙을 모른다
-    scene.js  pitch.js  playerRig.js  cameraRig.js
-    matchView.js         engine ↔ three 를 잇는 유일한 어댑터
-  ui/dom.js              innerHTML 없이 DOM을 만드는 헬퍼
-  styles/base.css
-  data/players_korea.json  선수 데이터(더미 스탯)
+  match/                 담당 4: 경기 UI·3D 렌더링
+    screens/match.js
+    render3d/
+      scene.js  pitch.js  playerRig.js  cameraRig.js
+      matchView.js       simulation ↔ three 어댑터
+  shared/                담당 1 최종 관리, 전 영역 공용
+    index.js
+    ui/dom.js            innerHTML 없이 DOM을 만드는 헬퍼
+    styles/base.css
 public/
   legacy/prototype-3d.html  초기 단일 HTML 프로토타입 (그대로 보존, /legacy/prototype-3d.html 로 접속)
   _headers                  Netlify/Cloudflare 보안 헤더
 ```
 
-### 왜 engine과 render3d를 갈랐나
+### 왜 simulation과 match/render3d를 갈랐나
 
 되감기 때문입니다. 시뮬레이션 상태가 전부 평범한 숫자여야 `snapshot()` 한 번으로 과거를 저장하고 그대로 복원할 수 있습니다. three.js 객체를 상태에 섞으면 이게 불가능해집니다.
-`render3d/`는 매 프레임 `engine`의 숫자를 읽어 메시 위치에 반영만 합니다.
+`match/render3d/`는 매 프레임 `simulation`의 숫자를 읽어 메시 위치에 반영만 합니다.
 
 되감기 정확도는 테스트로 확인했습니다: 같은 시드 → 같은 경기(결정론), 8초 되감은 뒤 그대로 재생하면 원래 미래와 **완전히 일치**합니다.
 
@@ -86,10 +95,14 @@ public/
 
 `vite.config.js`의 `base: './'` 덕분에 서브경로 배포에서도 경로가 깨지지 않습니다.
 
+## 협업
+
+4인 파일 소유권, 공개 진입점, 권장 브랜치와 CI 경로 검사 방안은 [`COLLABORATION.md`](./COLLABORATION.md)에 정리했습니다. 각 담당 폴더의 `AGENTS.md`에는 해당 영역의 수정 허용/금지 범위가 있습니다.
+
 ## 데이터 및 저작권
 
-- `src/data/players_korea.json`의 선수 이름·포지션·소속팀은 공개된 정보를 참고해 **직접 구성한 JSON**이며, 능력치(`stats`)는 전부 밸런싱용 **더미값**입니다. 실제 선수의 능력을 평가하거나 대변하지 않습니다.
-- 외부 이미지·폰트·아이콘 에셋을 사용하지 않습니다. 잔디·등번호 텍스처는 런타임에 Canvas로 그립니다.
+- `src/team/data/players_korea.json`의 선수 이름·포지션·소속팀은 공개된 정보를 참고해 **직접 구성한 JSON**이며, 능력치(`stats`)는 전부 밸런싱용 **더미값**입니다. 실제 선수의 능력을 평가하거나 대변하지 않습니다.
+- 시작 화면은 저장소의 경기장 배경 이미지를 사용합니다. 잔디·등번호 텍스처는 런타임에 Canvas로 그립니다.
 - 사용 라이브러리 라이선스: three.js(MIT), Vite(MIT).
 - 이 저장소의 코드는 MIT 라이선스입니다. `LICENSE` 참고.
 

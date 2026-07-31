@@ -1,6 +1,6 @@
-import { el } from '../ui/dom.js';
-import { state, setState } from '../state.js';
-import { PLAYERS, byPos, overall } from '../data/players.js';
+import { el } from '../../shared/index.js';
+import { state, setState } from '../../app/public.js';
+import { PLAYERS, byPos, overall } from '../data/index.js';
 
 const POS_LABEL = { GK: '골키퍼', DF: '수비수', MF: '미드필더', FW: '공격수' };
 const MIN_POOL = 14;
@@ -37,7 +37,7 @@ export default function squadScreen(root, ctx) {
         }
       }
       setState({ poolIds: [...pool], captainId });
-      ctx.go('tactics');
+      ctx.navigate('tactics');
     },
   });
 
@@ -128,7 +128,7 @@ export default function squadScreen(root, ctx) {
         ]),
         el('div', { class: 'topbar-right' }, [
           counter,
-          el('button', { class: 'ghost', text: '← 이름 다시', onclick: () => ctx.go('manager') }),
+          el('button', { class: 'ghost', text: '← 이름 다시', onclick: () => ctx.navigate('manager') }),
           next,
         ]),
       ]),

@@ -83,7 +83,7 @@ button { font: inherit; cursor: pointer; }
   background:
     linear-gradient(90deg, rgba(1, 8, 14, 0.93) 0%, rgba(1, 8, 14, 0.7) 42%, rgba(1, 8, 14, 0.3) 72%, rgba(1, 8, 14, 0.68) 100%),
     linear-gradient(0deg, rgba(0, 5, 8, 0.72), transparent 52%),
-    url("../../assets/rewind-stadium-background.png") center / cover no-repeat;
+    url("../../../assets/rewind-stadium-background.png") center / cover no-repeat;
 }
 .start-screen::before {
   content: "";

@@ -1,5 +1,5 @@
-import { el } from '../ui/dom.js';
-import { state, setState } from '../state.js';
+import { el } from '../../shared/index.js';
+import { state, setState } from '../public.js';
 
 const playerDots = [
   ['home', 8, 74], ['home', 20, 57], ['home', 28, 33], ['home', 39, 25],
@@ -114,7 +114,7 @@ export default function managerNameScreen(root, ctx) {
       return;
     }
     setState({ managerName: name });
-    ctx.go('squad');
+    ctx.navigate('squad');
   };
 
   const screen = el('main', { class: 'screen start-screen' }, [
