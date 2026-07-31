@@ -2,7 +2,8 @@ import { el } from '../../shared/index.js';
 import { state } from '../../app/public.js';
 import { PARAMS, Sim, RewindBuffer } from '../../simulation/index.js';
 import { createMatchView, CAM_MODES } from '../render3d/index.js';
-import { findById, toSimMeta } from '../../team/data/index.js';
+import { findById, toSimMeta } from '../../roster/index.js';
+import { getNormalizedSlots } from '../../lineup/index.js';
 
 const REWIND_SECONDS = 8;
 const REWIND_LIMIT = 3; // 감독의 '되감기'는 유한한 자원이다 — 이 서비스의 규칙
@@ -13,8 +14,10 @@ export default function matchScreen(root, ctx, params = {}) {
   const sim = new Sim({
     lineup,
     formation: state.formation,
+    formationSlots: getNormalizedSlots(state.formation),
     tactics: state.tactics,
     oppFormation: state.oppFormation,
+    oppFormationSlots: getNormalizedSlots(state.oppFormation),
   });
   const rewind = new RewindBuffer();
 

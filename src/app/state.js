@@ -1,5 +1,5 @@
-import { defaultPool, findById } from '../team/data/index.js';
-import { TACTIC_DEFAULT } from '../simulation/index.js';
+import { defaultPool, findById } from '../roster/index.js';
+import { TACTIC_DEFAULT } from '../tactics/index.js';
 
 const STORAGE_KEY = 'soccer-manager-3d/v1';
 

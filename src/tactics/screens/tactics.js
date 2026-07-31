@@ -1,7 +1,7 @@
 import { el } from '../../shared/index.js';
 import { state, setState } from '../../app/public.js';
-import { FIELD, FORMATIONS, FORMATION_KEYS, positionNeeds, slotPosition } from '../../simulation/index.js';
-import { autoLineup, findById, overall } from '../data/index.js';
+import { FORMATIONS, FORMATION_KEYS, positionNeeds } from '../../lineup/index.js';
+import { autoLineup, findById, overall } from '../../roster/index.js';
 
 const SLIDERS = [
   { key: 'lineHeight', label: '수비 라인', lo: '내려선다', hi: '끌어올린다' },
@@ -27,10 +27,10 @@ export default function tacticsScreen(root, ctx) {
   function drawBoard() {
     desc.textContent = FORMATIONS[formation].desc;
     const nodes = lineup.map((p, i) => {
-      const s = slotPosition(formation, i, 'home', tactics.width);
-      // 월드 좌표 → 보드 퍼센트 (홈은 왼쪽 진영이므로 x를 그대로 쓰되 0~100으로)
-      const left = ((s.x + FIELD.L / 2) / FIELD.L) * 100;
-      const top = ((s.z + FIELD.W / 2) / FIELD.W) * 100;
+      const s = FORMATIONS[formation].slots[i];
+      const spread = 0.8 + tactics.width * 0.5;
+      const left = (s.x + 0.5) * 100;
+      const top = (s.z * spread + 0.5) * 100;
       return el(
         'div',
         {

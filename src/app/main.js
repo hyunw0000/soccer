@@ -1,7 +1,8 @@
 import '../shared/styles/base.css';
 import { createRouter } from './router.js';
 import managerScreen from './screens/managerName.js';
-import { squadScreen, tacticsScreen } from '../team/index.js';
+import { rosterScreen } from '../roster/index.js';
+import { tacticsScreen } from '../tactics/index.js';
 import { matchScreen } from '../match/index.js';
 
 /**
@@ -13,7 +14,7 @@ export function startApp(root = document.getElementById('app')) {
 
   const router = createRouter(root, {
     manager: managerScreen,
-    squad: squadScreen,
+    squad: rosterScreen,
     tactics: tacticsScreen,
     match: matchScreen,
   });
