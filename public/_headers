@@ -1,0 +1,15 @@
+# Netlify / Cloudflare Pages 용 보안 헤더.
+# 이 파일은 빌드 시 dist/ 루트로 그대로 복사된다.
+# (Vercel은 같은 내용을 vercel.json 에 정의해 두었다. GitHub Pages는 헤더 설정을 지원하지 않는다.)
+
+/*
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: no-referrer
+  Permissions-Policy: geolocation=(), microphone=(), camera=(), payment=(), usb=(), interest-cohort=()
+  X-Frame-Options: DENY
+  Cross-Origin-Opener-Policy: same-origin
+
+# 초기 프로토타입만 three.js를 unpkg CDN에서 받는다. 이 경로에만 예외를 준다.
+/legacy/*
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://unpkg.com; connect-src 'self' https://unpkg.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'
