@@ -21,11 +21,3 @@ export const PARAMS = {
   ballRadius: 0.35,
   dt: 1 / 60,
 };
-
-// 전술 슬라이더 → 시뮬레이션 계수. 화면에서 조절하는 값의 단일 출처.
-export const TACTIC_DEFAULT = {
-  lineHeight: 0.5, // 0=수비라인 내림, 1=올림
-  pressing: 0.5, // 0=물러서서 지역방어, 1=전방압박
-  tempo: 0.5, // 0=점유, 1=직선적
-  width: 0.5, // 0=좁게, 1=넓게
-};

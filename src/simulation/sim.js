@@ -1,11 +1,12 @@
-import { PARAMS, FIELD, HALF, GOAL_W, TACTIC_DEFAULT } from './params.js';
+import { PARAMS, FIELD, HALF, GOAL_W } from './params.js';
 import { vlen, clamp } from './math.js';
 import { Rng } from './rng.js';
 import { Player, Ball } from './entities.js';
-import { slotPosition } from './formations.js';
+import { slotPosition } from './coordinates.js';
 import { arrive, pursuit, separation, closest } from './steering.js';
 
 const AWAY_NAMES = ['GK', 'RB', 'RCB', 'LCB', 'LB', 'RCM', 'CM', 'LCM', 'RW', 'ST', 'LW'];
+const SIM_TACTIC_FALLBACK = { lineHeight: 0.5, pressing: 0.5, tempo: 0.5, width: 0.5 };
 // 스냅샷 1인당 저장 항목 수: x, z, vx, vz, heading, energy, kc
 const SNAP_STRIDE = 7;
 
@@ -19,14 +20,26 @@ export class Sim {
    * @param {object} cfg
    * @param {Array}  cfg.lineup   홈 11인 [{num,name,pace,stamina}]
    * @param {string} cfg.formation 포메이션 키
+   * @param {Array}  cfg.formationSlots 홈 포메이션 정규화 슬롯
    * @param {object} cfg.tactics  전술 슬라이더 값
    * @param {string} cfg.oppFormation 상대 포메이션
+   * @param {Array}  cfg.oppFormationSlots 상대 포메이션 정규화 슬롯
    * @param {number} cfg.seed
    */
-  constructor({ lineup, formation, tactics = TACTIC_DEFAULT, oppFormation = '4-4-2', seed = 2026 }) {
+  constructor({
+    lineup,
+    formation,
+    formationSlots,
+    tactics = SIM_TACTIC_FALLBACK,
+    oppFormation = '4-4-2',
+    oppFormationSlots,
+    seed = 2026,
+  }) {
     this.formation = formation;
+    this.formationSlots = formationSlots;
     this.oppFormation = oppFormation;
-    this.tactics = { ...TACTIC_DEFAULT, ...tactics };
+    this.oppFormationSlots = oppFormationSlots;
+    this.tactics = { ...SIM_TACTIC_FALLBACK, ...tactics };
     this.seed = seed;
     this.lineup = lineup;
     this.build();
@@ -44,7 +57,7 @@ export class Sim {
           team: 'home',
           idx: i,
           meta,
-          slot: slotPosition(this.formation, i, 'home', this.tactics.width),
+          slot: slotPosition(this.formationSlots, i, 'home', this.tactics.width),
         })
     );
     this.awayP = AWAY_NAMES.map(
@@ -53,7 +66,7 @@ export class Sim {
           team: 'away',
           idx: i,
           meta: { num: i + 1, name, pace: 78, stamina: 78 },
-          slot: slotPosition(this.oppFormation, i, 'away', 0.5),
+          slot: slotPosition(this.oppFormationSlots, i, 'away', 0.5),
         })
     );
     this.all = [...this.homeP, ...this.awayP];
@@ -66,14 +79,15 @@ export class Sim {
     this.refreshHomeSlots();
   }
 
-  setFormation(key) {
+  setFormation(key, slots = this.formationSlots) {
     this.formation = key;
+    this.formationSlots = slots;
     this.refreshHomeSlots();
   }
 
   refreshHomeSlots() {
     this.homeP.forEach((p, i) => {
-      const s = slotPosition(this.formation, i, 'home', this.tactics.width);
+      const s = slotPosition(this.formationSlots, i, 'home', this.tactics.width);
       p.home.x = s.x;
       p.home.z = s.z;
       p.role = s.role;

@@ -1,2 +1,2 @@
-export { default as squadScreen } from './screens/squad.js';
+export { TACTIC_DEFAULT } from './defaults.js';
 export { default as tacticsScreen } from './screens/tactics.js';

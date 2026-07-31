@@ -1,5 +1,3 @@
-import { FIELD } from './params.js';
-
 // 슬롯 좌표는 정규화 값. x:[-0.5,0.5]*L, z:[-0.5,0.5]*W.
 // 홈팀은 -x 진영에서 +x 방향으로 공격한다.
 export const FORMATIONS = {
@@ -56,6 +54,15 @@ export const FORMATIONS = {
   },
 };
 
+for (const [formationId, formation] of Object.entries(FORMATIONS)) {
+  formation.id = formationId;
+  formation.description = formation.desc;
+  formation.slots = formation.slots.map((slot, index) => ({
+    slotId: `${formationId}-${slot.role.toLowerCase()}-${index + 1}`,
+    ...slot,
+  }));
+}
+
 export const FORMATION_KEYS = Object.keys(FORMATIONS);
 
 /** 포메이션별 포지션 요구 수량 (예: {GK:1, DF:4, MF:3, FW:3}) */
@@ -65,10 +72,10 @@ export function positionNeeds(key) {
   return need;
 }
 
-/** 슬롯 인덱스 → 월드 좌표. side='home'이면 그대로, 'away'면 진영을 뒤집는다. */
-export function slotPosition(key, i, side, width = 0.5) {
-  const s = FORMATIONS[key].slots[i];
-  const sgn = side === 'home' ? 1 : -1;
-  const spread = 0.8 + width * 0.5; // 전술 '폭' 슬라이더가 z 간격을 벌린다
-  return { x: s.x * FIELD.L * sgn, z: s.z * FIELD.W * spread * sgn, role: s.role };
+export function getFormation(key) {
+  return FORMATIONS[key] ?? null;
+}
+
+export function getNormalizedSlots(key) {
+  return getFormation(key)?.slots ?? [];
 }
