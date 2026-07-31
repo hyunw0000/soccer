@@ -221,8 +221,6 @@ export default function managerNameScreen(root, ctx) {
       brand(),
       el('nav', { class: 'start-nav', 'aria-label': '시작 메뉴' }, [
         introButton,
-        el('span', { 'aria-hidden': 'true' }),
-        el('button', { type: 'button', text: '설정' }),
       ]),
     ]),
     el('div', { class: 'start-layout' }, [
