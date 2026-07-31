@@ -14,7 +14,7 @@ export default function squadScreen(root, ctx) {
 
   const counter = el('span', { class: 'counter' });
   const warn = el('p', { class: 'error' });
-  const listWrap = el('div', { class: 'player-grid' });
+  const listWrap = el('div', {});
 
   const next = el('button', {
     class: 'primary',
@@ -93,13 +93,32 @@ export default function squadScreen(root, ctx) {
     );
   }
 
+  function sortGroup(list) {
+    return [...list].sort(
+      (a, b) => Number(pool.has(b.id)) - Number(pool.has(a.id)) || overall(b) - overall(a)
+    );
+  }
+
+  /** 그룹 제목 + 카드 그리드(또는 빈 안내문)를 만든다. 국가대표/후보 구분 표시에 쓰인다. */
+  function groupNodes(title, list) {
+    const selected = list.filter((p) => pool.has(p.id)).length;
+    return [
+      el('h3', { class: 'h3', text: `${title} (${selected}/${list.length})` }),
+      list.length
+        ? el('div', { class: 'player-grid' }, list.map(card))
+        : el('p', { class: 'lead', text: '해당 조건의 선수가 없습니다.' }),
+    ];
+  }
+
   function render() {
     refreshCounter();
     const list = filter === 'ALL' ? PLAYERS : byPos(filter);
-    const sorted = [...list].sort(
-      (a, b) => Number(pool.has(b.id)) - Number(pool.has(a.id)) || overall(b) - overall(a)
+    const squad = sortGroup(list.filter((p) => p.squad2026));
+    const candidates = sortGroup(list.filter((p) => !p.squad2026));
+    listWrap.replaceChildren(
+      ...groupNodes('2026 월드컵 국가대표', squad),
+      ...groupNodes('국가대표 외 후보 선수', candidates)
     );
-    listWrap.replaceChildren(...sorted.map(card));
   }
 
   const filters = el(
