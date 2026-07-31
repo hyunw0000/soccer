@@ -23,6 +23,83 @@ function brand() {
   ]);
 }
 
+function gameIntroDialog(onClose) {
+  const flow = [
+    ['01', '감독 취임', '감독명을 정하고 대한민국 대표팀의 지휘봉을 잡습니다.'],
+    ['02', '선수단 구성', '55명의 선수 풀에서 최대 23명을 소집하고 주장을 선택합니다.'],
+    ['03', '전술 설계', '상대를 분석해 포메이션, 선발 11인, 압박·템포·수비 라인을 정합니다.'],
+    ['04', '3D 경기 지휘', '경기를 관전하며 실시간으로 전술을 바꾸고 결정적 순간을 되감습니다.'],
+  ];
+
+  const modal = el('section', {
+    class: 'intro-modal',
+    role: 'dialog',
+    'aria-modal': 'true',
+    'aria-labelledby': 'intro-title',
+    hidden: true,
+  }, [
+    el('div', { class: 'intro-panel' }, [
+      el('div', { class: 'intro-panel-head' }, [
+        el('div', {}, [
+          el('span', { class: 'intro-kicker', text: '3D FOOTBALL TACTICS' }),
+          el('h2', { id: 'intro-title', text: '게임 소개' }),
+        ]),
+        el('button', {
+          class: 'intro-close',
+          type: 'button',
+          text: '×',
+          'aria-label': '게임 소개 닫기',
+          onclick: onClose,
+        }),
+      ]),
+      el('p', { class: 'intro-lead' }, [
+        '전술을 짜고, 3D로 경기를 지켜보고, ',
+        el('strong', { text: '되감아서 다시 지시하는' }),
+        ' 축구 감독 시뮬레이터입니다.',
+      ]),
+      el('p', { class: 'intro-quote', text: '“내가 감독이었다면?” 그 아쉬운 순간으로 돌아가 결과를 바꿔보세요.' }),
+      el('div', { class: 'intro-flow' }, flow.map(([number, title, description]) =>
+        el('article', { class: 'intro-step' }, [
+          el('b', { text: number }),
+          el('div', {}, [
+            el('h3', { text: title }),
+            el('p', { text: description }),
+          ]),
+        ]))),
+      el('div', { class: 'intro-details' }, [
+        el('article', { class: 'intro-feature' }, [
+          el('span', { text: '핵심 시스템' }),
+          el('h3', { text: '8초 되감기 · 경기당 3회' }),
+          el('p', { text: '과거 상태로 복원한 뒤 새로운 전술로 다른 경기 흐름을 만듭니다.' }),
+        ]),
+        el('article', { class: 'intro-feature' }, [
+          el('span', { text: '경기 관전' }),
+          el('h3', { text: '방송캠 · 탑뷰 · 공 추적' }),
+          el('p', { text: '세 가지 카메라로 22명의 움직임과 체력 변화를 확인합니다.' }),
+        ]),
+        el('article', { class: 'intro-feature' }, [
+          el('span', { text: '전술 선택' }),
+          el('h3', { text: '4-3-3 · 4-4-2 · 3-4-3' }),
+          el('p', { text: '상대 스카우팅 정보를 바탕으로 선발과 세부 전술을 직접 구성합니다.' }),
+        ]),
+      ]),
+      el('div', { class: 'intro-shortcuts' }, [
+        el('span', { text: '경기 단축키' }),
+        el('kbd', { text: 'SPACE' }),
+        el('b', { text: '일시정지' }),
+        el('kbd', { text: 'R' }),
+        el('b', { text: '8초 되감기' }),
+      ]),
+      el('p', { class: 'intro-note', text: '회원가입과 별도 설치 없이 브라우저에서 바로 플레이할 수 있습니다.' }),
+    ]),
+  ]);
+
+  modal.addEventListener('click', (event) => {
+    if (event.target === modal) onClose();
+  });
+  return modal;
+}
+
 function tacticsBoard() {
   const board = el('div', { class: 'start-pitch', 'aria-label': '공격 전술 시뮬레이션' });
 
@@ -117,11 +194,33 @@ export default function managerNameScreen(root, ctx) {
     ctx.navigate('squad');
   };
 
+  let introButton;
+  let introModal;
+  const closeIntro = () => {
+    introModal.hidden = true;
+    introButton?.focus();
+  };
+  introModal = gameIntroDialog(closeIntro);
+  introButton = el('button', {
+    type: 'button',
+    text: '게임 소개',
+    'aria-haspopup': 'dialog',
+    onclick: () => {
+      introModal.hidden = false;
+      introModal.querySelector('.intro-close')?.focus();
+    },
+  });
+
+  const onKeyDown = (event) => {
+    if (event.key === 'Escape' && !introModal.hidden) closeIntro();
+  };
+  document.addEventListener('keydown', onKeyDown);
+
   const screen = el('main', { class: 'screen start-screen' }, [
     el('header', { class: 'start-header' }, [
       brand(),
       el('nav', { class: 'start-nav', 'aria-label': '시작 메뉴' }, [
-        el('button', { type: 'button', text: '게임 소개' }),
+        introButton,
         el('span', { 'aria-hidden': 'true' }),
         el('button', { type: 'button', text: '설정' }),
       ]),
@@ -154,25 +253,18 @@ export default function managerNameScreen(root, ctx) {
             onclick: submit,
           }),
         ]),
+        el('div', { class: 'rewind-message' }, [
+          el('b', { text: '↶', 'aria-hidden': 'true' }),
+          el('p', {}, [
+            '결정적인 순간, ',
+            el('em', { text: '시간을 되돌려' }),
+            ' 전술을 바꾸세요.',
+          ]),
+        ]),
       ]),
       tacticsBoard(),
     ]),
-    el('div', { class: 'start-bottom' }, [
-      el('div', { class: 'rewind-message' }, [
-        el('b', { text: '↶', 'aria-hidden': 'true' }),
-        el('p', {}, [
-          '결정적인 순간, ',
-          el('em', { text: '시간을 되돌려' }),
-          ' 전술을 바꾸세요.',
-        ]),
-      ]),
-      el('div', { class: 'rewind-credit' }, [
-        el('b', { text: '↻', 'aria-hidden': 'true' }),
-        el('span', { text: '되감기 ' }),
-        el('strong', { text: '30' }),
-        el('span', { text: '회 지급' }),
-      ]),
-    ]),
+    introModal,
   ]);
 
   input.id = 'manager-name';
@@ -183,4 +275,5 @@ export default function managerNameScreen(root, ctx) {
 
   root.append(screen);
   input.focus();
+  return () => document.removeEventListener('keydown', onKeyDown);
 }
