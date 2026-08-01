@@ -25,13 +25,16 @@ import {
 } from '../domain/lineup.js';
 import { validateStartingLineup } from '../domain/validation.js';
 import {
+  DEPTH_BANDS,
   ROLES,
   ROLE_LABEL,
   ROLE_ZONES,
   playerOverall,
-  positionLabel,
+  positionCode,
+  selectionScore,
+  positionName,
+  positionOf,
   roleAtX,
-  roleFitScore,
 } from '../domain/roles.js';
 import { createProjection } from './boardProjection.js';
 
@@ -101,10 +104,38 @@ export function createLineupEditor({
             height: `${(zone.to - zone.from) * 100}%`,
           },
         },
-        [el('span', { class: 'pitch-zone-tag', text: `${zone.role} · ${ROLE_LABEL[zone.role]}` })]
+        [
+          el('span', { class: 'pitch-zone-tag', text: `${zone.role} · ${ROLE_LABEL[zone.role]}` }),
+          // 라인 안의 깊이 띠도 함께 그린다. 어디까지가 수비형이고 어디부터
+          // 공격형인지 보이지 않으면 감독은 카드를 감으로 놓게 된다.
+          ...bandNodes(zone),
+        ]
       ),
     ])
   );
+
+  /** 한 라인 안의 깊이 띠 눈금. 띠가 하나뿐인 라인은 그리지 않는다. */
+  function bandNodes(zone) {
+    const bands = DEPTH_BANDS[zone.role] ?? [];
+    if (bands.length < 2) return [];
+    const height = zone.to - zone.from;
+    let from = zone.from;
+    return bands.map((band, index) => {
+      const to = Math.min(band.to, zone.to);
+      const node = el('span', {
+        // 띠 배열은 자기 진영 → 상대 진영 순이다. 마지막 띠의 윗선은
+        // 구역 자체의 경계선과 같은 자리라 겹쳐 그리지 않는다.
+        class: `pitch-band${index === bands.length - 1 ? ' lead' : ''}`,
+        text: band.band,
+        style: {
+          top: `${((zone.to - to) / height) * 100}%`,
+          height: `${((to - from) / height) * 100}%`,
+        },
+      });
+      from = to;
+      return node;
+    });
+  }
   const zoneLayer = el('div', { class: 'pitch-zones' }, [...zoneNodes.values()]);
   const surface = el('div', { class: 'pitch-surface' }, [zoneLayer]);
   const cardLayer = el('div', { class: 'pitch-cards' });
@@ -249,7 +280,7 @@ export function createLineupEditor({
       const role = roleIfDropped(slotId, next.x);
       highlightZone(role);
       for (const key of ROLES) card.classList.toggle(key, key === role);
-      card.querySelector('.fcard-slot').textContent = positionLabel(role, next.z);
+      card.querySelector('.fcard-slot').textContent = positionCode(role, next.x, next.z);
     });
 
     const finish = (e) => {
@@ -314,7 +345,7 @@ export function createLineupEditor({
 
   /** 카드에 적는 포지션 이름. 슬롯 이름이 아니라 지금 놓인 자리에서 파생한다. */
   function labelOf(assignment) {
-    return positionLabel(assignment.role, assignment.z);
+    return positionOf(assignment);
   }
 
   function drawBoard() {
@@ -333,8 +364,8 @@ export function createLineupEditor({
             class: `fcard ${a.role}${captain ? ' cap' : ''}${player ? '' : ' empty'}${fixed ? ' fixed' : ''}`,
             style: { left: pos.left, top: pos.top },
             title: player
-              ? `${player.name} (${player.detail || player.pos}) · 현재 ${label} OVR ${playerOverall(player)}${fixed ? ' · 골키퍼는 자리를 옮길 수 없습니다' : ' · 끌어서 이동'}`
-              : `${label} 빈 자리`,
+              ? `${player.name} (${player.detail || player.pos}) · 현재 ${label} ${positionName(label)} OVR ${playerOverall(player)}${fixed ? ' · 골키퍼는 자리를 옮길 수 없습니다' : ' · 끌어서 이동'}`
+              : `${label} ${positionName(label)} 빈 자리`,
           },
           [
             el('span', { class: 'fcard-top' }, [
@@ -355,10 +386,11 @@ export function createLineupEditor({
   }
 
   function drawSlots() {
-    // 명단은 공격수부터 골키퍼 순으로 읽는다. 같은 줄이면 왼쪽 자리부터.
+    // 명단은 공격수부터 골키퍼 순으로 읽는다. 같은 라인이면 앞선부터, 같은 줄이면 왼쪽 자리부터.
+    // 깊이를 먼저 보므로 공격형 미드필더가 수비형 미드필더보다 위에 온다.
     // 배치 자체의 순서(assignments)는 계약이므로 건드리지 않고 보기 순서만 바꾼다.
     const ordered = [...current.assignments].sort(
-      (x, y) => ROLES.indexOf(y.role) - ROLES.indexOf(x.role) || x.z - y.z
+      (x, y) => ROLES.indexOf(y.role) - ROLES.indexOf(x.role) || y.x - x.x || x.z - y.z
     );
 
     slotList.replaceChildren(
@@ -380,10 +412,8 @@ export function createLineupEditor({
           const options = squadPlayerIds
             .map(lookup)
             .filter(Boolean)
-            .sort(
-              (x, y) =>
-                roleFitScore(y, a.role) - roleFitScore(x, a.role) || playerOverall(y) - playerOverall(x)
-            );
+            // 이 자리에 세웠을 때 값어치가 높은 선수가 목록 위로 오게 한다.
+            .sort((x, y) => selectionScore(y, labelOf(a)) - selectionScore(x, labelOf(a)));
 
           const select = el('select', {
             class: 'slot-select',
@@ -410,7 +440,7 @@ export function createLineupEditor({
           .join(' ');
 
         return el(lockRoster ? 'div' : 'label', { class: rowClass, onpointerdown: () => selectSlot(a.slotId) }, [
-          el('span', { class: `pos ${a.role}`, text: labelOf(a) }),
+          el('span', { class: `pos ${a.role}`, text: labelOf(a), title: positionName(labelOf(a)) }),
           nameNode,
           el('b', { class: 'ovr', text: player ? String(playerOverall(player)) : '–' }),
         ]);

@@ -8,7 +8,7 @@
  */
 
 import { el } from '../../shared/index.js';
-import { positionLabel } from '../../lineup/index.js';
+import { positionOf } from '../../lineup/index.js';
 import {
   PLAYER_TACTIC_MAX,
   createPlayerTactics,
@@ -179,7 +179,7 @@ export function createPlayerTacticsPanel({ getSelection, onChange, onHint = () =
     layout(group);
 
     // 지시의 주인은 자리다. 자리를 크게 쓰고, 지금 그 자리에 선 선수는 곁들여 보여 준다.
-    name.textContent = `${positionLabel(assignment.role, assignment.z)} · ${group.label}`;
+    name.textContent = `${positionOf(assignment)} · ${group.label}`;
     meta.textContent = player ? `${player.num} ${player.name}` : '빈 자리';
     badge.hidden = !isDefaultPlayerTactics(tactics, assignment.role, assignment.z);
 

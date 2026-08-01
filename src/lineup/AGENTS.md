@@ -19,7 +19,12 @@
 - 포메이션: `FORMATIONS`, `FORMATION_KEYS`, `LINEUP_SIZE`, `COORD_MIN`, `COORD_MAX`, `getFormation`, `getNormalizedSlots`, `getSlot`, `positionNeeds`, `resolveFormationId`.
 - 라인업 도메인(모두 순수 함수, 입력을 변경하지 않는다): `createStartingLineup`, `autoLineup`, `assignPlayer`, `swapAssignments`, `changeFormation`, `syncSubstitutes`, `setCaptain`, `startingPlayerIds`, `getAssignment`, `isComplete`, `createLookup`.
 - 검증: `validateStartingLineup(startingLineup, selectedSquad?, playerCatalog?)` → `{ ok, errors[{code,message}] }`, `formatErrors`.
-- 역할: `ROLES`, `ROLE_LABEL`, `isRole`, `roleFits`, `roleFitScore`.
+- 역할(라인): `ROLES`, `ROLE_LABEL`, `ROLE_ZONES`, `isRole`, `roleAtX`, `roleFits`, `roleFitScore`.
+- 세부 포지션: `POSITIONS`, `POSITION_CODES`, `DEPTH_BANDS`, `isPosition`, `depthBand`, `positionCode(role, x, z)`, `positionOf({role,x,z})`, `positionName`, `positionPenalty`, `selectionScore`, `roleOfPosition`.
+  - `positionPenalty(player, code)`는 자리가 어긋난 정도를 **능력치 점수 단위**로 돌려준다. `selectionScore`는 능력치에서 그 감점을 뺀 값이며, 자동 편성과 목록 정렬이 함께 쓴다.
+  - 자동 편성은 슬롯 순서대로 뽑지 않고 `selectionScore` 합이 최대가 되도록 전체를 함께 배정한다.
+  - 세부 포지션은 깊이(x)와 좌우(z)를 함께 읽어 파생한다. `positionLabel`은 `positionCode`의 별칭이며 시그니처가 `(role, x, z)`로 바뀌었다.
+  - 슬롯의 `label`/`position`도 좌표에서 파생한다. 포메이션 표에 이름을 손으로 적어 두지 않는다.
 - 화면: `lineupScreen`(라우트 등록은 담당자 1), `createLineupEditor`(lineup·tactics 화면이 공유하는 배치 편집기).
 - 위 목록을 바꾸려면 공개 계약을 먼저 협의한다.
 - Formation은 `formation.id`, 슬롯은 배열 순서와 무관한 `slot.slotId`를 사용한다.

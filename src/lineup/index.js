@@ -37,14 +37,25 @@ export {
 
 export { validateStartingLineup, formatErrors } from './domain/validation.js';
 export {
+  DEPTH_BANDS,
+  POSITIONS,
+  POSITION_CODES,
   ROLES,
   ROLE_LABEL,
   ROLE_ZONES,
+  depthBand,
+  isPosition,
   isRole,
+  positionCode,
   positionLabel,
+  positionName,
+  positionOf,
+  positionPenalty,
   roleAtX,
   roleFits,
   roleFitScore,
+  roleOfPosition,
+  selectionScore,
 } from './domain/roles.js';
 
 export { createLineupEditor } from './screens/lineupEditor.js';

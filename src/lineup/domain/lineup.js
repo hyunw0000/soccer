@@ -18,7 +18,7 @@ import {
   getSlot,
   resolveFormationId,
 } from '../formations.js';
-import { ROLES, roleAtX, roleFitScore, playerOverall } from './roles.js';
+import { positionOf, selectionScore, roleAtX } from './roles.js';
 
 /** 정규화 좌표를 허용 범위 안으로 잘라낸다. 범위 밖 값은 버리지 않고 경계로 붙인다. */
 function clampCoord(value, fallback) {
@@ -203,8 +203,62 @@ function withDerivedGoalkeeper(lineup) {
 }
 
 /**
+ * 슬롯 묶음에 선수를 배정한다. 팀 전체 값어치(selectionScore 합)를 최대로 만드는 것이 목표다.
+ *
+ * 슬롯을 순서대로 훑으며 그때그때 최고점을 고르면, 앞에 나온 슬롯이 뒷 슬롯의
+ * 주인을 가로챈다. 센터백이 왼쪽 풀백 자리에서도 두 번째로 높은 점수를 받으면
+ * 풀백 슬롯이 먼저 데려가 버리고, 정작 센터백 자리는 한참 낮은 선수가 채우는 식이다.
+ *
+ * 그래서 (선수, 슬롯) 조합 전체를 점수순으로 훑어 가장 좋은 짝부터 확정하고,
+ * 마지막에 두 자리를 맞바꿔 합이 커지는 경우가 없어질 때까지 다듬는다.
+ *
+ * @param {ReadonlyArray<object>} slots 채울 슬롯
+ * @param {ReadonlyArray<object>} pool 후보 선수
+ * @returns {Map<string, string>} slotId → playerId
+ */
+function assignByValue(slots, pool) {
+  const score = (player, slot) => (player ? selectionScore(player, slot.position) : -Infinity);
+
+  // 1단계: 가장 좋은 짝부터 확정한다. 슬롯 순서가 결과를 좌우하지 않는다.
+  const pairs = [];
+  for (const slot of slots) for (const player of pool) pairs.push({ slot, player, value: score(player, slot) });
+  pairs.sort((a, b) => b.value - a.value);
+
+  const bySlot = new Map();
+  const taken = new Set();
+  for (const { slot, player } of pairs) {
+    if (bySlot.has(slot.slotId) || taken.has(player.id)) continue;
+    bySlot.set(slot.slotId, player);
+    taken.add(player.id);
+  }
+
+  // 2단계: 두 자리를 맞바꿔 합이 커지면 바꾼다. 1단계가 놓친 엇갈림을 정리한다.
+  // 슬롯 수가 11이라 모든 짝을 봐도 비용이 없다. 더 나아지지 않으면 즉시 멈춘다.
+  const filled = slots.filter((s) => bySlot.has(s.slotId));
+  for (let pass = 0; pass < filled.length; pass++) {
+    let improved = false;
+    for (let i = 0; i < filled.length; i++) {
+      for (let j = i + 1; j < filled.length; j++) {
+        const a = filled[i];
+        const b = filled[j];
+        const pa = bySlot.get(a.slotId);
+        const pb = bySlot.get(b.slotId);
+        if (score(pb, a) + score(pa, b) > score(pa, a) + score(pb, b)) {
+          bySlot.set(a.slotId, pb);
+          bySlot.set(b.slotId, pa);
+          improved = true;
+        }
+      }
+    }
+    if (!improved) break;
+  }
+
+  return new Map([...bySlot].map(([slotId, player]) => [slotId, player.id]));
+}
+
+/**
  * 포지션 요구에 맞춰 풀에서 선발 11명을 자동으로 채운다.
- * 포지션 인원이 모자라면 남은 선수 중 적합도·능력치가 가장 높은 선수로 메운다.
+ * 자리마다 세부 포지션 적합도와 능력치를 함께 보며, 팀 전체로 가장 좋은 조합을 찾는다.
  *
  * @param {string[]} playerIds 선택된 명단(SelectedSquad.playerIds)
  * @param {string} formationId
@@ -218,26 +272,10 @@ export function autoLineup(playerIds = [], formationId, playerCatalog, options =
   const slots = getNormalizedSlots(resolvedId);
 
   const pool = [...new Set(playerIds)].map(lookup).filter(Boolean);
-  const used = new Set();
+  const filled = assignByValue(slots, pool);
 
-  const pick = (role) => {
-    const candidate = pool
-      .filter((p) => !used.has(p.id))
-      .sort((a, b) => roleFitScore(b, role) - roleFitScore(a, role) || playerOverall(b) - playerOverall(a))[0];
-    if (candidate) used.add(candidate.id);
-    return candidate ?? null;
-  };
-
-  // 자원이 가장 희소한 GK부터 채워야 필드 플레이어가 GK 슬롯을 먹지 않는다.
-  const filled = new Map();
-  for (const role of ROLES) {
-    for (const slot of slots.filter((s) => s.role === role)) {
-      filled.set(slot.slotId, pick(role)?.id ?? null);
-    }
-  }
-
-  const assignments = slots.map((slot) => toAssignment(slot, filled.get(slot.slotId)));
-  const starters = new Set([...used]);
+  const assignments = slots.map((slot) => toAssignment(slot, filled.get(slot.slotId) ?? null));
+  const starters = new Set(filled.values());
 
   return withDerivedGoalkeeper({
     formationId: resolvedId,
@@ -304,26 +342,34 @@ export function changeFormation(startingLineup, formationId, playerCatalog) {
   const remaining = startingPlayerIds(startingLineup);
   const filled = new Map();
 
-  // 1차: 이전 라인업에서 같은 역할이던 선수를 같은 역할 슬롯에 그대로 둔다.
+  const prevPositionOf = (id) => {
+    const prev = startingLineup.assignments.find((a) => a.playerId === id);
+    return prev ? positionOf(prev) : null;
+  };
+
+  // 1차: 이전 배치와 같은 세부 포지션이면 그 자리를 그대로 잇는다.
+  // 포메이션이 바뀌어도 10번은 10번 자리, 윙백은 윙백 자리에 남는다.
   for (const slot of slots) {
+    const index = remaining.findIndex((id) => prevPositionOf(id) === slot.position);
+    if (index >= 0) filled.set(slot.slotId, remaining.splice(index, 1)[0]);
+  }
+  // 2차: 세부 포지션이 겹치지 않으면 같은 라인이던 선수로 잇는다.
+  for (const slot of slots) {
+    if (filled.get(slot.slotId)) continue;
     const index = remaining.findIndex((id) => {
       const prev = startingLineup.assignments.find((a) => a.playerId === id);
       return prev?.role === slot.role;
     });
     if (index >= 0) filled.set(slot.slotId, remaining.splice(index, 1)[0]);
   }
-  // 2차: 남은 빈 슬롯을 적합도·능력치 순으로 채운다.
-  for (const slot of slots) {
-    if (filled.get(slot.slotId)) continue;
-    const sorted = [...remaining].sort((x, y) => {
-      const px = lookup(x);
-      const py = lookup(y);
-      return roleFitScore(py, slot.role) - roleFitScore(px, slot.role) || playerOverall(py) - playerOverall(px);
-    });
-    const picked = sorted[0];
-    if (!picked) continue;
-    remaining.splice(remaining.indexOf(picked), 1);
-    filled.set(slot.slotId, picked);
+  // 3차: 남은 빈 슬롯은 자동 편성과 같은 방식으로 한 번에 배정한다.
+  const empty = slots.filter((slot) => !filled.get(slot.slotId));
+  if (empty.length) {
+    const rest = assignByValue(empty, remaining.map(lookup).filter(Boolean));
+    for (const [slotId, playerId] of rest) {
+      filled.set(slotId, playerId);
+      remaining.splice(remaining.indexOf(playerId), 1);
+    }
   }
 
   return withDerivedGoalkeeper({

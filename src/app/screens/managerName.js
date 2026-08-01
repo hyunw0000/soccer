@@ -79,7 +79,7 @@ function gameIntroDialog(onClose) {
         ]),
         el('article', { class: 'intro-feature' }, [
           el('span', { text: '전술 선택' }),
-          el('h3', { text: '4-3-3 · 4-4-2 · 3-4-3' }),
+          el('h3', { text: '4-3-3 · 4-4-2 · 4-2-3-1 · 3-4-3' }),
           el('p', { text: '상대 스카우팅 정보를 바탕으로 선발과 세부 전술을 직접 구성합니다.' }),
         ]),
       ]),
