@@ -84,7 +84,13 @@ export default function squadScreen(root, ctx) {
           text: isCap ? '★' : '☆',
           onclick: (e) => {
             e.stopPropagation();
-            if (!pool.has(p.id)) pool.add(p.id);
+            if (!pool.has(p.id)) {
+              if (pool.size >= MAX_POOL) {
+                warn.textContent = `최대 ${MAX_POOL}명까지 소집할 수 있습니다.`;
+                return;
+              }
+              pool.add(p.id);
+            }
             captainId = p.id;
             warn.textContent = '';
             render();
@@ -94,31 +100,25 @@ export default function squadScreen(root, ctx) {
     );
   }
 
-  function sortGroup(list) {
-    return [...list].sort(
-      (a, b) => Number(pool.has(b.id)) - Number(pool.has(a.id)) || overall(b) - overall(a)
-    );
-  }
-
-  /** 그룹 제목 + 카드 그리드(또는 빈 안내문)를 만든다. 국가대표/후보 구분 표시에 쓰인다. */
-  function groupSection(title, list) {
-    const selected = list.filter((p) => pool.has(p.id)).length;
+  /** 그룹 제목 + 카드 그리드(또는 빈 안내문)를 만든다. 소집 명단/후보 구분 표시에 쓰인다. */
+  function groupSection(title, list, emptyText) {
     return el('section', { class: 'roster-group' }, [
-      el('h3', { class: 'h3', text: `${title} (${selected}/${list.length})` }),
+      el('h3', { class: 'h3', text: title }),
       list.length
         ? el('div', { class: 'player-grid' }, list.map(card))
-        : el('p', { class: 'lead', text: '해당 조건의 선수가 없습니다.' }),
+        : el('p', { class: 'lead', text: emptyText }),
     ]);
   }
 
   function render() {
     refreshCounter();
     const list = filter === 'ALL' ? PLAYERS : byPos(filter);
-    const squad = sortGroup(list.filter((p) => p.squad2026));
-    const candidates = sortGroup(list.filter((p) => !p.squad2026));
+    const byOverall = (a, b) => overall(b) - overall(a);
+    const called = list.filter((p) => pool.has(p.id)).sort(byOverall);
+    const candidates = list.filter((p) => !pool.has(p.id)).sort(byOverall);
     listWrap.replaceChildren(
-      groupSection('2026 월드컵 국가대표', squad),
-      groupSection('국가대표 외 후보 선수', candidates)
+      groupSection(`소집 명단 (${called.length}/${MAX_POOL})`, called, '아직 소집한 선수가 없습니다.'),
+      groupSection(`후보 선수 (${candidates.length}명)`, candidates, '해당 조건의 후보 선수가 없습니다.')
     );
   }
 
@@ -155,7 +155,7 @@ export default function squadScreen(root, ctx) {
       el('p', { class: 'lead' }, [
         `감독 `,
         el('b', { text: state.managerName || '이름 없음' }),
-        ` — 카드를 눌러 소집(최대 ${MAX_POOL}명), ☆를 눌러 주장을 지정합니다.`,
+        ` — 카드를 눌러 소집/제외(최대 ${MAX_POOL}명, 가득 차면 먼저 한 명을 빼야 합니다), ☆를 눌러 주장을 지정합니다.`,
       ]),
       filters,
       warn,
