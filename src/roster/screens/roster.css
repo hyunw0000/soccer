@@ -1,13 +1,77 @@
 /* Roster 페이지 전용 스타일. 공용 토큰만 사용하고 카드·버튼·색상은 재정의하지 않는다. */
 
-/* 국가대표 / 후보 그룹을 좌우로 나란히 배치 */
-.roster-groups {
+/* 소집 명단 | 화살표 | 후보 3단 배치 */
+.transfer {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  align-items: start;
-  gap: 20px;
+  grid-template-columns: 1fr 92px 1fr;
+  align-items: stretch;
+  gap: 14px;
+  margin-top: 8px;
+}
+
+.transfer-panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border: 1px solid var(--line);
+  background: rgba(3, 15, 22, 0.55);
+  padding: 4px 12px 12px;
+}
+
+.transfer-panel .h3 { margin: 10px 0 4px; }
+.transfer-panel.is-called .h3 { color: var(--kor); }
+
+/* 목록만 스크롤시켜 화살표가 항상 가운데 보이게 한다 */
+.transfer-body {
+  overflow-y: auto;
+  max-height: 56vh;
+  min-height: 180px;
+  padding-right: 4px;
+}
+
+.transfer-panel .player-grid { grid-template-columns: 1fr; margin-top: 8px; }
+
+/* 가운데 화살표 두 개 */
+.transfer-arrows {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 12px;
+}
+
+.move-btn {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  padding: 12px 0;
+  background: linear-gradient(180deg, rgba(9, 40, 51, 0.9), rgba(2, 14, 20, 0.9));
+  border: 1px solid var(--line);
+  color: var(--fg);
+  cursor: pointer;
+}
+
+.move-btn:hover:not(:disabled) {
+  border-color: var(--line-strong);
+  background: linear-gradient(180deg, rgba(17, 78, 96, 0.95), rgba(4, 24, 33, 0.95));
+}
+
+.move-btn:disabled { opacity: 0.35; cursor: default; }
+
+.move-arrow { font-size: 18px; line-height: 1; color: var(--accent); }
+.move-label { font-size: 11px; letter-spacing: 1px; color: var(--dim); }
+
+/* 옮길 대상으로 고른 카드 — 좌우 어느 쪽이든 같은 하늘색으로 보이게 한다 */
+.pcard.sel,
+.pcard.on.sel {
+  border-color: var(--line-strong);
+  background: linear-gradient(135deg, rgba(10, 62, 78, 0.95), rgba(3, 22, 30, 0.97));
+  box-shadow: inset 4px 0 0 var(--accent), 0 0 14px rgba(36, 204, 232, 0.22);
 }
 
 @media (max-width: 900px) {
-  .roster-groups { grid-template-columns: 1fr; }
+  .transfer { grid-template-columns: 1fr; }
+  .transfer-arrows { flex-direction: row; justify-content: center; }
+  .move-btn { flex: 1; grid-auto-flow: column; padding: 10px 0; }
+  .move-btn .move-arrow { transform: rotate(90deg); }
+  .transfer-body { max-height: 42vh; }
 }
