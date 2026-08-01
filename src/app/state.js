@@ -13,8 +13,16 @@ const initial = {
   poolIds: defaultPool(23),
   captainId: 'kor_son',
   formation: '4-3-3',
-  oppFormation: '4-4-2',
   tactics: { ...TACTIC_DEFAULT },
+  // 포메이션별로 감독이 옮겨 둔 좌표. { formationId: { slotId: {x, z} } }
+  lineupPositions: {},
+  // 자리별 개인 전술 8축. { slotId: { forwardness, width, ... } }
+  // 지시는 선수가 아니라 자리에 붙는다 — 다른 선수를 세워도 그 자리의 지시로 뛴다.
+  slotTactics: {},
+  // 아래 세 값은 화면이 채운다. 경기 화면은 pendingMatchSetup만 읽는다.
+  startingLineup: null,
+  currentOpponent: null,
+  pendingMatchSetup: null,
 };
 
 export const state = { ...initial, ...load() };
@@ -25,7 +33,16 @@ export function setState(patch) {
 }
 
 export function resetState() {
-  Object.assign(state, initial, { poolIds: defaultPool(23), tactics: { ...TACTIC_DEFAULT } });
+  Object.assign(state, initial, {
+    poolIds: defaultPool(23),
+    tactics: { ...TACTIC_DEFAULT },
+    lineupPositions: {},
+    slotTactics: {},
+    // 새 게임이 이전 경기 설정을 물려받지 않게 한다.
+    startingLineup: null,
+    currentOpponent: null,
+    pendingMatchSetup: null,
+  });
   save();
 }
 
@@ -41,6 +58,10 @@ function save() {
         captainId: state.captainId,
         formation: state.formation,
         tactics: state.tactics,
+        // 감독이 보드에서 옮긴 배치까지 복원한다. MatchSetup은 전술 화면이 다시 만든다.
+        startingLineup: state.startingLineup,
+        lineupPositions: state.lineupPositions,
+        slotTactics: state.slotTactics,
       })
     );
   } catch {
@@ -62,6 +83,32 @@ function load() {
     }
     if (typeof v.captainId === 'string' && findById(v.captainId)) out.captainId = v.captainId;
     if (typeof v.formation === 'string') out.formation = v.formation;
+    // 배치는 lineup의 createStartingLineup이 읽을 때 정규화하므로 형태만 확인한다.
+    if (v.startingLineup && Array.isArray(v.startingLineup.assignments)) {
+      out.startingLineup = v.startingLineup;
+    }
+    // 좌표 기억은 { formationId: { slotId: {x, z} } } 모양만 받는다. 값은 편집기가 다시 잘라낸다.
+    if (v.lineupPositions && typeof v.lineupPositions === 'object') {
+      const memory = {};
+      for (const [formationId, slots] of Object.entries(v.lineupPositions)) {
+        if (!slots || typeof slots !== 'object') continue;
+        const kept = {};
+        for (const [slotId, p] of Object.entries(slots)) {
+          if (p && Number.isFinite(Number(p.x)) && Number.isFinite(Number(p.z))) {
+            kept[slotId] = { x: Number(p.x), z: Number(p.z) };
+          }
+        }
+        memory[formationId] = kept;
+      }
+      out.lineupPositions = memory;
+    }
+    // 개인 전술은 tactics 영역의 normalizePlayerTactics가 값을 잘라내므로 모양만 확인한다.
+    // 선수 id로 저장하던 옛 값(v.playerTactics)은 읽지 않는다 — 자리에 붙는 값이 되었다.
+    if (v.slotTactics && typeof v.slotTactics === 'object') {
+      out.slotTactics = Object.fromEntries(
+        Object.entries(v.slotTactics).filter(([, t]) => t && typeof t === 'object')
+      );
+    }
     if (v.tactics && typeof v.tactics === 'object') {
       out.tactics = { ...TACTIC_DEFAULT };
       for (const k of Object.keys(TACTIC_DEFAULT)) {

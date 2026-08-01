@@ -16,8 +16,12 @@
 ## 3. 공개 API와 계약
 
 - 외부는 `src/lineup/index.js`만 사용한다.
-- 현재 export: `FORMATIONS`, `FORMATION_KEYS`, `getFormation`, `getNormalizedSlots`, `positionNeeds`.
-- 목표 추가 API인 `autoLineup`, `assignPlayer`, `validateStartingLineup`은 아직 구현되지 않았다. 추가 시 공개 계약을 먼저 협의한다.
+- 포메이션: `FORMATIONS`, `FORMATION_KEYS`, `LINEUP_SIZE`, `COORD_MIN`, `COORD_MAX`, `getFormation`, `getNormalizedSlots`, `getSlot`, `positionNeeds`, `resolveFormationId`.
+- 라인업 도메인(모두 순수 함수, 입력을 변경하지 않는다): `createStartingLineup`, `autoLineup`, `assignPlayer`, `swapAssignments`, `changeFormation`, `syncSubstitutes`, `setCaptain`, `startingPlayerIds`, `getAssignment`, `isComplete`, `createLookup`.
+- 검증: `validateStartingLineup(startingLineup, selectedSquad?, playerCatalog?)` → `{ ok, errors[{code,message}] }`, `formatErrors`.
+- 역할: `ROLES`, `ROLE_LABEL`, `isRole`, `roleFits`, `roleFitScore`.
+- 화면: `lineupScreen`(라우트 등록은 담당자 1), `createLineupEditor`(lineup·tactics 화면이 공유하는 배치 편집기).
+- 위 목록을 바꾸려면 공개 계약을 먼저 협의한다.
 - Formation은 `formation.id`, 슬롯은 배열 순서와 무관한 `slot.slotId`를 사용한다.
 - StartingLineup assignment는 `playerId`, `slotId`, `role`, 정규화 `x`, `z`를 포함한다.
 - simulation 내부 또는 공개 index도 import하지 않는다. 월드 좌표 변환은 simulation 책임이다.

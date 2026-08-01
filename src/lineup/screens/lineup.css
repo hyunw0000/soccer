@@ -1,1 +1,328 @@
-/* Lineup 페이지 전용 스타일 예약 파일. 현재 UI는 공용 base.css를 유지한다. */
+/*
+ * Lineup 페이지 전용 스타일.
+ * 공용 토큰(--panel-strong, --line, --dim, --bad, --accent ...)과 공용 컴포넌트(.panel, .chip)를 사용한다.
+ * 색상, 폰트, 버튼, 카드 등 공용 시각 체계는 여기서 재정의하지 않는다.
+ *
+ * 배치 보드는 이 기능 전용 UI다. 기울인 잔디 위에 카드를 세워 두고,
+ * 카드 위치는 boardProjection.js가 계산한 값을 그대로 받는다.
+ */
+
+/* ---------- 배치 보드 ---------- */
+
+.pitch {
+  position: relative;
+  margin-top: 12px;
+  /* 원근으로 아래쪽이 넓어지므로 좌우에 여유를 둔다. */
+  overflow: visible;
+  touch-action: none;
+}
+
+.pitch-surface {
+  position: absolute;
+  left: 50%;
+  transform: translate(-50%, -50%) perspective(900px) rotateX(22deg);
+  border: 2px solid rgba(255, 255, 255, 0.34);
+  border-radius: 2px;
+  background:
+    /* 센터 서클 */
+    radial-gradient(circle at 50% 50%, transparent 11.4%, rgba(255, 255, 255, 0.3) 11.4%, rgba(255, 255, 255, 0.3) 12.2%, transparent 12.3%),
+    /* 하프라인 */
+    linear-gradient(transparent calc(50% - 1px), rgba(255, 255, 255, 0.3) calc(50% - 1px), rgba(255, 255, 255, 0.3) calc(50% + 1px), transparent calc(50% + 1px)),
+    /* 잔디 줄무늬 */
+    repeating-linear-gradient(180deg, #1d6a42 0 8.33%, #21764a 8.33% 16.66%);
+  box-shadow: inset 0 0 60px rgba(0, 0, 0, 0.45);
+}
+
+/* 양 진영 페널티 박스 */
+.pitch-surface::before,
+.pitch-surface::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  width: 58%;
+  height: 15%;
+  transform: translateX(-50%);
+  border: 2px solid rgba(255, 255, 255, 0.28);
+}
+
+.pitch-surface::before {
+  top: 0;
+  border-top: 0;
+}
+
+.pitch-surface::after {
+  bottom: 0;
+  border-bottom: 0;
+}
+
+/* ---------- 역할 구역 ---------- */
+
+/*
+ * 구역은 잔디의 자식이라 잔디와 같은 원근을 탄다.
+ * 위치와 높이는 편집기가 ROLE_ZONES에서 계산해 style로 내려 준다 — 여기서 값을 정하지 않는다.
+ */
+.pitch-zones {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.pitch-zone {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-top: 1px dashed rgba(255, 255, 255, 0.22);
+  transition: background-color 0.12s ease;
+}
+
+.pitch-zone:first-child {
+  border-top: 0;
+}
+
+.pitch-zone.GK {
+  background: rgba(255, 209, 102, 0.07);
+}
+
+/* 카드를 끌고 들어온 구역. 어느 역할이 되는지 손을 떼기 전에 보이게 한다. */
+.pitch-zone.hot {
+  background: rgba(255, 255, 255, 0.16);
+  border-top-color: rgba(255, 255, 255, 0.5);
+}
+
+.pitch-zone-tag {
+  position: absolute;
+  top: 4px;
+  left: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.pitch-zone.hot .pitch-zone-tag {
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.pitch-cards {
+  position: absolute;
+  inset: 0;
+}
+
+/* ---------- 선수 카드 ---------- */
+
+.fcard {
+  --depth: 1;
+  position: absolute;
+  /* --depth는 원근 축소율이다. 카드는 눕히지 않고 크기로만 거리감을 준다. */
+  transform: translate(-50%, -50%) scale(var(--depth));
+  display: grid;
+  gap: 2px;
+  /* 카드 크기는 편집기가 잔디 크기에 맞춰 --card-w로 내려 준다. */
+  width: var(--card-w, 74px);
+  padding: 5px 6px 6px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: linear-gradient(180deg, rgba(13, 22, 30, 0.94), rgba(6, 12, 17, 0.96));
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.45);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+/* 골키퍼처럼 자리가 고정된 카드. 끌 수 없다는 것을 커서로 알린다. */
+.fcard.fixed {
+  cursor: default;
+}
+
+.fcard.dragging {
+  cursor: grabbing;
+  z-index: 3;
+  border-color: var(--accent);
+}
+
+.fcard.empty {
+  opacity: 0.5;
+  border-style: dashed;
+}
+
+.fcard-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px;
+}
+
+.fcard-ovr {
+  font-size: 13px;
+  line-height: 1;
+  color: var(--accent);
+}
+
+.fcard-slot {
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  color: var(--dim);
+}
+
+.fcard-num {
+  justify-self: center;
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.fcard-name {
+  font-size: 10px;
+  line-height: 1.2;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 역할별 색은 오른쪽 목록의 포지션 칩과 같은 기준을 쓴다. */
+.fcard.GK .fcard-num { color: #e3b341; }
+.fcard.DF .fcard-num { color: #6fb3f2; }
+.fcard.MF .fcard-num { color: #79d17a; }
+.fcard.FW .fcard-num { color: #f0836b; }
+
+/* ---------- 보드 도구 ---------- */
+
+.board-tools {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.board-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.board-hint {
+  color: var(--dim);
+  font-size: 11.5px;
+}
+
+.board-tools button {
+  padding: 5px 10px;
+  font-size: 12px;
+}
+
+.board-tools button[disabled] {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* ---------- 선발 목록 ---------- */
+
+.lineup-list {
+  display: grid;
+  gap: 3px;
+}
+
+.lineup-row {
+  display: grid;
+  grid-template-columns: 46px 1fr 40px;
+  gap: 8px;
+  align-items: center;
+  padding: 3px 6px;
+  border-radius: 5px;
+}
+
+.lineup-row.head {
+  padding-bottom: 5px;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  color: var(--dim);
+  font-size: 11px;
+}
+
+.lineup-row.head span:last-child,
+.lineup-row .ovr {
+  text-align: right;
+}
+
+/* 개인 지시처럼 '한 명'을 다루는 화면이 지금 어느 선수를 보고 있는지 알려 준다. */
+.lineup-row.on {
+  background: rgba(36, 204, 232, 0.12);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.lineup-row .ovr {
+  font-size: 13px;
+  color: var(--accent);
+}
+
+/* 명단을 잠근 화면(개인 전술)의 선수 이름. 고르는 자리는 포지션이므로 이름은 읽기 전용이다. */
+.lineup-row .slot-name {
+  overflow: hidden;
+  font-size: 12.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+/* 공용 .pos 칩은 선수 카드용이라 두 줄을 차지한다. 한 줄짜리 목록에 맞춰 되돌린다. */
+.lineup-row .pos {
+  grid-row: auto;
+  padding: 4px 0;
+  font-size: 11px;
+}
+
+/* ---------- 교체 명단 ---------- */
+
+.lineup-subs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  align-items: center;
+  margin-top: 12px;
+}
+
+.subs-title {
+  width: 100%;
+  color: var(--dim);
+  font-size: 11px;
+}
+
+.sub-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 7px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  font-size: 11.5px;
+}
+
+.sub-chip .pos {
+  font-size: 10px;
+  font-style: normal;
+}
+
+.sub-chip b {
+  color: var(--accent);
+}
+
+/* ---------- 오류 ---------- */
+
+.lineup-errors {
+  list-style: none;
+  display: grid;
+  gap: 4px;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--bad);
+  border-radius: 8px;
+  background: var(--panel-strong);
+  color: var(--bad);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.lineup-errors[hidden] {
+  display: none;
+}
