@@ -65,8 +65,13 @@ export function buildPitch(scene) {
   scene.add(pitch);
 
   const surround = new THREE.Mesh(
-    new THREE.PlaneGeometry(FIELD.L + 40, FIELD.W + 40),
-    new THREE.MeshStandardMaterial({ color: 0x18632b, roughness: 1 })
+    new THREE.PlaneGeometry(FIELD.L + 12, FIELD.W + 12),
+    new THREE.MeshStandardMaterial({
+      color: 0x0d2b1b,
+      roughness: 1,
+      transparent: true,
+      opacity: 0.82,
+    })
   );
   surround.rotation.x = -Math.PI / 2;
   surround.position.y = -0.02;
