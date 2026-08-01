@@ -190,8 +190,8 @@ export default function managerNameScreen(root, ctx) {
       input.focus();
       return;
     }
-    setState({ managerName: name });
-    ctx.navigate('squad');
+    setState({ managerName: name, hasCompletedSetup: true });
+    ctx.navigate('/roster');
   };
 
   let introButton;
