@@ -19,6 +19,7 @@ export default function matchScreen(root, ctx, params = {}) {
     oppFormation: state.oppFormation,
     oppFormationSlots: getNormalizedSlots(state.oppFormation),
   });
+  sim.kickoff({ kickoffTeam: 'home' }); // 시작 시 양 팀이 동시에 공으로 달려드는 문제 방지
   const rewind = new RewindBuffer();
 
   const stage = el('div', { class: 'stage' });
@@ -38,6 +39,8 @@ export default function matchScreen(root, ctx, params = {}) {
   let fpsN = 0;
   let raf = 0;
   let renderedEvents = 0;
+  let lastPhase = sim.phase;
+  let speed = 1; // 1 | 2 | 4 — 재생 배속(UI 상태). Sim/RewindBuffer에는 저장하지 않는다.
 
   // 렌더러는 stage가 DOM에 붙은 뒤에 만든다.
   // 붙기 전에 만들면 clientWidth/Height가 0이라 캔버스가 0x0으로 생성돼 화면이 검게 남는다.
@@ -51,10 +54,45 @@ export default function matchScreen(root, ctx, params = {}) {
   });
 
   function setPaused(v) {
+    // 하프타임/풀타임 중에는 '후반 시작' 버튼 없이 일반 재개로 넘어갈 수 없다
+    if (!v && sim.phase !== 'playing') return;
     paused = v;
     pauseBtn.textContent = paused ? '▶ 재개' : '⏸ 일시정지';
     pauseBtn.classList.toggle('on', paused);
-    banner.classList.toggle('show', paused);
+    updateBanners();
+  }
+
+  // 일시정지 배너와 전/후반 배너는 동시에 뜨지 않는다 — phase가 playing일 때만 일시정지 배너를 쓴다
+  function updateBanners() {
+    banner.classList.toggle('show', paused && sim.phase === 'playing');
+    phaseBanner.classList.toggle('show', sim.phase !== 'playing');
+    updateSpeedButtons();
+  }
+
+  function setSpeed(v) {
+    speed = v;
+    updateSpeedButtons();
+  }
+
+  // step()이 안 불리는 동안(일시정지·halftime·fulltime)은 배속이 의미 없으므로 비활성화한다
+  function updateSpeedButtons() {
+    const disabled = paused || sim.phase !== 'playing';
+    speedButtons.forEach(({ value, btn }) => {
+      btn.classList.toggle('on', value === speed);
+      btn.disabled = disabled;
+    });
+  }
+
+  function renderPhaseBanner() {
+    if (sim.phase === 'halftime') {
+      phaseTitle.textContent = '전반 종료';
+      phaseSub.textContent = '후반 시작을 누르면 원정팀 킥오프로 다시 시작합니다.';
+      phaseBanner.replaceChildren(phaseTitle, phaseSub, secondHalfBtn);
+    } else if (sim.phase === 'fulltime') {
+      phaseTitle.textContent = '경기 종료';
+      phaseSub.textContent = `최종 스코어 KOR ${sim.score.home} : ${sim.score.away} WLD`;
+      phaseBanner.replaceChildren(phaseTitle, phaseSub);
+    }
   }
 
   function doRewind() {
@@ -67,6 +105,13 @@ export default function matchScreen(root, ctx, params = {}) {
     rewindBtn.disabled = rewindsLeft <= 0;
     renderedEvents = Math.min(renderedEvents, sim.events.length);
     feed.replaceChildren(...[...sim.events].map(eventNode));
+    liveTactics.forEach(({ key, input }) => {
+      input.value = String(Math.round(sim.tactics[key] * 100));
+    });
+    if (sim.phase !== lastPhase) {
+      lastPhase = sim.phase;
+      renderPhaseBanner();
+    }
     view.sync(0);
     setPaused(true);
   }
@@ -76,19 +121,42 @@ export default function matchScreen(root, ctx, params = {}) {
     el('span', { text: '되감은 시점부터 새 전술로 경기가 다시 흘러갑니다.' }),
   ]);
 
+  // 전/후반 전환 배너 — 일시정지 배너와 구분되는 별도 배너
+  const secondHalfBtn = el('button', {
+    class: 'ctl',
+    text: '▶ 후반 시작',
+    onclick: () => {
+      sim.startSecondHalf();
+      setPaused(false);
+      view.sync(0);
+    },
+  });
+  const phaseTitle = el('b', { text: '' });
+  const phaseSub = el('span', { text: '' });
+  const phaseBanner = el('div', { class: 'banner phase-banner' }, [phaseTitle, phaseSub]);
+
   // 경기 중 실시간 전술 변경
   const liveTactics = ['lineHeight', 'pressing', 'tempo', 'width'].map((key) => {
     const label = { lineHeight: '라인', pressing: '압박', tempo: '템포', width: '폭' }[key];
-    return el('label', { class: 'live-slider' }, [
-      el('span', { text: label }),
-      el('input', {
-        type: 'range',
-        min: '0',
-        max: '100',
-        value: String(Math.round(sim.tactics[key] * 100)),
-        oninput: (e) => sim.applyTactics({ [key]: Number(e.target.value) / 100 }),
-      }),
-    ]);
+    const input = el('input', {
+      type: 'range',
+      min: '0',
+      max: '100',
+      value: String(Math.round(sim.tactics[key] * 100)),
+      oninput: (e) => sim.applyTactics({ [key]: Number(e.target.value) / 100 }),
+    });
+    const node = el('label', { class: 'live-slider' }, [el('span', { text: label }), input]);
+    return { key, input, node };
+  });
+
+  // 재생 배속 — 시뮬레이션 계산 내용은 그대로, 실제 시간 대비 소비 속도만 바뀐다
+  const speedButtons = [1, 2, 4].map((v) => {
+    const btn = el('button', {
+      class: `ctl${v === speed ? ' on' : ''}`,
+      text: `${v}x`,
+      onclick: () => setSpeed(v),
+    });
+    return { value: v, btn };
   });
 
   const camButtons = Object.entries(CAM_MODES).map(([k, label]) =>
@@ -116,16 +184,26 @@ export default function matchScreen(root, ctx, params = {}) {
     const real = (now - last) / 1000;
     last = now;
 
-    if (!paused) {
-      acc += Math.min(real, 0.1);
-      while (acc >= PARAMS.dt) {
+    if (!paused && sim.phase !== 'fulltime') {
+      acc += Math.min(real, 0.1) * speed;
+      let stepsThisFrame = 0;
+      const MAX_STEPS_PER_FRAME = 8; // 브라우저가 못 따라갈 때 안전장치
+      while (acc >= PARAMS.dt && stepsThisFrame < MAX_STEPS_PER_FRAME) {
         sim.step();
         rewind.maybeRecord(sim);
         acc -= PARAMS.dt;
+        stepsThisFrame++;
       }
       view.sync(real);
     }
     view.render();
+
+    if (sim.phase !== lastPhase) {
+      lastPhase = sim.phase;
+      renderPhaseBanner();
+      if (sim.phase === 'halftime') setPaused(true);
+      else updateBanners();
+    }
 
     scoreEl.textContent = `KOR ${sim.score.home} : ${sim.score.away} WLD`;
     clockEl.textContent = `${sim.matchMinute}'`;
@@ -156,6 +234,7 @@ export default function matchScreen(root, ctx, params = {}) {
     el('div', { class: 'screen match' }, [
       stage,
       banner,
+      phaseBanner,
       el('div', { class: 'hud' }, [
         scoreEl,
         el('div', { class: 'row' }, [el('span', { text: '경기 시간' }), clockEl]),
@@ -166,7 +245,9 @@ export default function matchScreen(root, ctx, params = {}) {
       ]),
       el('div', { class: 'sidepanel' }, [
         el('b', { class: 'panel-title', text: `${state.managerName || '감독'}의 지시` }),
-        ...liveTactics,
+        ...liveTactics.map((t) => t.node),
+        el('b', { class: 'panel-title', text: '재생 속도' }),
+        el('div', { class: 'speed-row' }, speedButtons.map((s) => s.btn)),
         el('b', { class: 'panel-title', text: '경기 기록' }),
         feed,
       ]),

@@ -20,4 +20,7 @@ export const PARAMS = {
   ballMaxSpeed: 40,
   ballRadius: 0.35,
   dt: 1 / 60,
+  halfMinutes: 45, // matchMinute 기준 전/후반 길이 (1초 = 게임 1분 스케일)
+  centerCircleRadius: 9.15, // 킥오프 규정 거리
+  kickoffUnlockSpeed: 0.5, // 이 이상으로 볼이 움직이면 킥오프 제한 해제
 };

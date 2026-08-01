@@ -50,6 +50,9 @@ export class Sim {
     this.tick = 0;
     this.score = { home: 0, away: 0 };
     this.events = []; // {tick, type, team, text}
+    this.half = 1;
+    this.phase = 'playing'; // 'playing' | 'halftime' | 'fulltime'
+    this.kickoffLock = null; // { team, active } — 킥오프 제한 구역 규칙
 
     this.homeP = this.lineup.map(
       (meta, i) =>
@@ -103,7 +106,7 @@ export class Sim {
     return Math.floor(this.clockSeconds);
   }
 
-  kickoff() {
+  kickoff({ kickoffTeam = 'home' } = {}) {
     this.ball.reset();
     for (const p of this.all) {
       p.x = p.home.x;
@@ -111,6 +114,52 @@ export class Sim {
       p.vx = 0;
       p.vz = 0;
       p.kc = 0;
+    }
+    const team = kickoffTeam === 'home' ? this.homeP : this.awayP;
+    const taker = closest(team, this.ball); // GK 제외, 센터(볼)에 가장 가까운 선수
+    const partner = taker
+      ? closest(
+          team.filter((p) => p !== taker),
+          this.ball
+        )
+      : null;
+    if (taker) {
+      // 실제 킥오프처럼 선수를 공 위치(센터)에 정확히 세운다 — 걸어가서 잡는 게 아니라 바로 서있게 한다
+      taker.x = 0;
+      taker.z = 0;
+    }
+    if (partner) {
+      // 짧은 첫 패스를 받을 파트너를 자기 진영 쪽으로 살짝 물러선 위치(minPass 이상 거리)에 세운다
+      partner.x = (kickoffTeam === 'home' ? -1 : 1) * (PARAMS.minPass + 1);
+      partner.z = 0;
+    }
+    if (taker && partner) {
+      // tryKick()의 일반 패스 점수(전진 편향)에 맡기면 파트너가 아닌 다른 선수에게 갈 수 있어
+      // 킥오프 첫 패스만은 taker -> partner로 직접 지정한다 (실제 킥오프는 항상 옆·뒤로 짧게 시작한다)
+      taker.kc = PARAMS.kickCooldownTicks;
+      this.ball.kick(partner.x - taker.x, partner.z - taker.z, PARAMS.passForce);
+    } else if (taker) {
+      this.ball.ownerKey = `${taker.team}:${taker.idx}`;
+    }
+    this.kickoffLock = { team: kickoffTeam, active: true };
+  }
+
+  /** 후반 시작 — 관례상 원정팀 킥오프 */
+  startSecondHalf() {
+    this.half = 2;
+    this.phase = 'playing';
+    this.kickoff({ kickoffTeam: 'away' });
+  }
+
+  /**
+   * 전/후반 종료를 판단한다. matchMinute(표시용, Math.floor)가 아니라 clockSeconds로 비교한다 —
+   * halfMinutes가 1보다 작아지면 floor 때문에 halftime·fulltime 임계값이 같은 정수로 뭉개질 수 있다.
+   */
+  updatePhase() {
+    if (this.half === 1 && this.phase === 'playing' && this.clockSeconds >= PARAMS.halfMinutes) {
+      this.phase = 'halftime';
+    } else if (this.half === 2 && this.phase === 'playing' && this.clockSeconds >= PARAMS.halfMinutes * 2) {
+      this.phase = 'fulltime';
     }
   }
 
@@ -121,15 +170,25 @@ export class Sim {
   }
 
   step() {
+    if (this.phase === 'fulltime') return; // 종료 후에는 위치를 더 갱신하지 않는다 (호출은 무해하게 무시)
+
+    // 매 스텝 시작 시 이전 스텝에서 남은 볼 속도로 킥오프 제한 해제 여부를 판정한다
+    if (this.kickoffLock?.active && vlen(this.ball.vx, this.ball.vz) > PARAMS.kickoffUnlockSpeed) {
+      this.kickoffLock = null;
+    }
+
     const dt = PARAMS.dt;
     const t = this.tactics;
-    const hc = closest(this.homeP, this.ball);
-    const ac = closest(this.awayP, this.ball);
+    const lock = this.kickoffLock?.active ? this.kickoffLock : null;
+    // 킥오프 팀이 아닌 쪽은 이번 스텝에서 chaser 후보에서 제외된다
+    const hc = lock && lock.team !== 'home' ? null : closest(this.homeP, this.ball);
+    const ac = lock && lock.team !== 'away' ? null : closest(this.awayP, this.ball);
 
     for (const p of this.all) {
       const mates = p.team === 'home' ? this.homeP : this.awayP;
       const chaser = p.team === 'home' ? hc : ac;
       const mine = p.team === 'home';
+      const restricted = !!lock && p.team !== lock.team;
       // 전술은 홈팀에만 적용한다 (감독은 우리 팀만 지시한다)
       const press = mine ? t.pressing : 0.5;
       const line = mine ? t.lineHeight : 0.5;
@@ -149,9 +208,26 @@ export class Sim {
         [fx, fz] = pursuit(p, this.ball);
       } else {
         // 공 위치를 따라 블록 전체가 밀린다. lineHeight가 전진 폭을 키운다.
-        const shift = (this.ball.x / FIELD.L) * (14 + line * 22) * (mine ? 1 : -1);
-        const tx = p.home.x + shift;
-        const tz = p.home.z + (this.ball.z - p.home.z) * (0.08 + press * 0.14);
+        // 볼 x좌표 쪽으로 라인이 쏠린다 — 팀 무관하게 같은 방향(절대좌표 기준)이어야 한다.
+        // mine 부호를 곱하면 원정팀 수비 라인이 자기 골대 쪽 위험 상황에서 오히려 골대 반대편으로
+        // 벌어지는 버그가 생긴다(공격수 전진은 맞지만 수비 압축 방향이 뒤집힘).
+        const shift = (this.ball.x / FIELD.L) * (14 + line * 22);
+        let tx = p.home.x + shift;
+        let tz = p.home.z + (this.ball.z - p.home.z) * (0.08 + press * 0.14);
+        if (restricted) {
+          // 킥오프 규정: 상대팀은 볼이 움직이기 전까지 센터서클 밖에 있어야 한다
+          const d = vlen(tx, tz);
+          if (d < PARAMS.centerCircleRadius) {
+            if (d < 1e-6) {
+              tx = (mine ? -1 : 1) * PARAMS.centerCircleRadius;
+              tz = 0;
+            } else {
+              const scale = PARAMS.centerCircleRadius / d;
+              tx *= scale;
+              tz *= scale;
+            }
+          }
+        }
         if (vlen(tx - p.x, tz - p.z) > PARAMS.comfortZone) [fx, fz] = arrive(p, tx, tz);
       }
 
@@ -185,6 +261,7 @@ export class Sim {
     this.ball.update(dt);
     this.checkGoal();
     this.tick++;
+    this.updatePhase();
   }
 
   tryKick(p) {
@@ -230,12 +307,12 @@ export class Sim {
     if (b.x <= -HALF.L && Math.abs(b.z) < GOAL_W / 2) {
       this.score.away++;
       this.pushEvent('goal', 'away', '실점');
-      this.kickoff();
+      this.kickoff({ kickoffTeam: 'home' }); // 실점 팀이 킥오프한다
     } else if (b.x >= HALF.L && Math.abs(b.z) < GOAL_W / 2) {
       this.score.home++;
       const scorer = this.playerByKey(b.ownerKey);
       this.pushEvent('goal', 'home', scorer ? `${scorer.name} 득점` : '득점');
-      this.kickoff();
+      this.kickoff({ kickoffTeam: 'away' }); // 실점 팀이 킥오프한다
     }
   }
 
@@ -267,6 +344,10 @@ export class Sim {
       score: { ...this.score },
       rng: this.rng.s,
       eventCount: this.events.length,
+      tactics: { ...this.tactics },
+      half: this.half,
+      phase: this.phase,
+      kickoffLock: this.kickoffLock ? { ...this.kickoffLock } : null,
     };
   }
 
@@ -287,5 +368,15 @@ export class Sim {
     this.tick = s.tick;
     this.rng.s = s.rng;
     this.events.length = s.eventCount; // 되감은 시점 이후의 사건은 없던 일이 된다
+    if (s.tactics) {
+      this.tactics = { ...s.tactics }; // 옛 스냅샷 호환: 필드가 없으면 현재 값 유지
+      // width는 p.home(정렬 목표 좌표)에서 파생된다. 재계산하지 않으면
+      // 되감은 뒤에도 변경 후 width가 스티어링 목표에 남아 재현성이 깨진다.
+      this.refreshHomeSlots();
+    }
+    // 옛 스냅샷 호환: half/phase/kickoffLock이 없으면 현재 값 유지
+    if (s.half !== undefined) this.half = s.half;
+    if (s.phase !== undefined) this.phase = s.phase;
+    if ('kickoffLock' in s) this.kickoffLock = s.kickoffLock ? { ...s.kickoffLock } : null;
   }
 }
