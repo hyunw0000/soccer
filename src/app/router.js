@@ -15,7 +15,9 @@ export function createRouter(root, screens, { canAccess = () => true } = {}) {
     if (resolved === 'notFound') return resolved;
     if (!ROUTES[resolved]) return 'notFound';
     if (!canAccess(resolved, ROUTES[resolved])) return 'setup';
-    if ((resolved === 'start' || resolved === 'setup') && canAccess('roster', ROUTES.roster)) return 'roster';
+    // 완료된 사용자가 루트로 다시 들어오면 명단으로 보내되,
+    // 이름 수정을 위해 명시적으로 연 setup 화면은 그대로 허용한다.
+    if (resolved === 'start' && canAccess('roster', ROUTES.roster)) return 'roster';
     return resolved;
   }
 
