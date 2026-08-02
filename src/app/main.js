@@ -11,7 +11,7 @@ import { retryKoreaMatch, state } from './public.js';
 import { lineupScreen } from '../lineup/index.js';
 import { rosterScreen } from '../roster/index.js';
 import { tacticsScreen } from '../tactics/index.js';
-import { matchScreen } from '../match/index.js';
+import { championshipDemoScreen, matchScreen } from '../match/index.js';
 import { tournamentScreen } from '../tournament/index.js';
 
 /**
@@ -39,6 +39,7 @@ export function startApp(root = document.getElementById('app')) {
     tactics: withAppLayout(tacticsScreen, '/tactics'),
     simulation: withAppLayout(simulationPlaceholder, '/simulation'),
     match: withAppLayout(matchScreen, '/match'),
+    championDemo: withAppLayout(championshipDemoScreen, '/champion-demo'),
     notFound: notFoundScreen,
   }, {
     canAccess: (_name, route) => route.public === true || state.hasCompletedSetup === true,

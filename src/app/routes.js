@@ -7,6 +7,7 @@ export const ROUTES = Object.freeze({
   tactics: { path: '/tactics' },
   simulation: { path: '/simulation' },
   match: { path: '/match' },
+  championDemo: { path: '/champion-demo' },
 });
 
 // 기존 기능 모듈이 사용하는 화면 이름을 유지한다.

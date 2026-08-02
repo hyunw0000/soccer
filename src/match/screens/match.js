@@ -81,6 +81,9 @@ export default function matchScreen(root, ctx) {
   let lastPhase = sim.phase;
   let speed = 1; // 1 | 2 | 3 — 재생 배속(UI 상태). Sim/RewindBuffer에는 저장하지 않는다.
   let matchResult = null; // fulltime 결과 기록. null인 동안만 경기 루프와 되감기를 허용한다.
+  let championRevealTimer = 0;
+  let championEffectTimer = 0;
+  let championAnimationFrame = 0;
 
   // 렌더러는 stage가 DOM에 붙은 뒤에 만든다.
   // 붙기 전에 만들면 clientWidth/Height가 0이라 캔버스가 0x0으로 생성돼 화면이 검게 남는다.
@@ -163,6 +166,8 @@ export default function matchScreen(root, ctx) {
       ? recordKoreaMatch({ matchId: runStep.matchId, koreaScore, opponentScore })
       : null;
     matchResult = { koreaScore, opponentScore, outcome, progress };
+    const isKoreaChampion =
+      runStep?.matchId === 104 && outcome === "win" && progress?.status === "champion";
 
     resultDialog.dataset.outcome = outcome;
     resultTitle.textContent =
@@ -193,6 +198,11 @@ export default function matchScreen(root, ctx) {
 
     setPaused(true);
     updateBanners();
+    if (isKoreaChampion) {
+      championshipScore.textContent = `${koreaScore} : ${opponentScore}`;
+      championRevealTimer = window.setTimeout(openChampionshipCelebration, 500);
+      return;
+    }
     if (!resultDialog.isConnected) document.body.append(resultDialog);
     if (!resultDialog.open) resultDialog.showModal();
     (canAdvance ? advanceBtn : canRetry ? retryBtn : tournamentBtn).focus();
@@ -421,6 +431,164 @@ export default function matchScreen(root, ctx) {
     ]),
   ]);
   resultDialog.addEventListener("cancel", (event) => event.preventDefault());
+
+  // Match 104 우승 전용 축하 화면. 경기 결과와 진행 상태는 finishMatch()가 확정하고,
+  // 이 레이어는 그 결과를 표현만 한다.
+  const championshipOpponentId = runStep?.opponentTeamId ?? matchSetup.awayTeam.id;
+  const championshipScore = el("strong", { class: "championship-score", text: "" });
+  const championshipConfetti = el("div", {
+    class: "championship-confetti",
+    "aria-hidden": "true",
+  });
+  const championshipFireworks = el("div", {
+    class: "championship-fireworks",
+    "aria-hidden": "true",
+  });
+  const championshipRecordBtn = el("button", {
+    class: "championship-button championship-button--primary",
+    type: "button",
+    text: "우승 기록 보기 →",
+    onclick: () => ctx.navigate("tournament"),
+  });
+  const championshipReplayBtn = el("button", {
+    class: "championship-button",
+    type: "button",
+    text: "축하 연출 다시 보기",
+    onclick: replayChampionshipEffects,
+  });
+  const managerCelebration = state.managerName
+    ? el("p", {
+        class: "championship-manager",
+        text: `${state.managerName} 감독이 대한민국의 새로운 역사를 완성했습니다.`,
+      })
+    : null;
+  const championshipDialog = el("dialog", {
+    class: "championship-dialog",
+    role: "dialog",
+    "aria-modal": "true",
+    "aria-labelledby": "championship-title",
+  }, [
+    championshipFireworks,
+    championshipConfetti,
+    el("section", { class: "championship-card" }, [
+      el("header", { class: "championship-header" }, [
+        el("p", { class: "championship-eyebrow", text: "FINAL · MATCH 104" }),
+        el("b", { class: "championship-world", text: "WORLD CHAMPIONS" }),
+      ]),
+      el("div", { class: "championship-trophy", "aria-hidden": "true" }, [
+        el("span", { class: "championship-trophy__cup" }),
+        el("span", { class: "championship-trophy__stem" }),
+        el("span", { class: "championship-trophy__base" }),
+      ]),
+      el("h2", { id: "championship-title", text: "역사를 다시 썼습니다" }),
+      el("div", { class: "championship-winner" }, [
+        CountryFlag({ teamId: "KOR", size: "large" }),
+        el("div", {}, [
+          el("strong", { text: "대한민국" }),
+          el("span", { text: "2026 월드 챔피언" }),
+        ]),
+      ]),
+      el("div", { class: "championship-scoreboard" }, [
+        el("div", { class: "championship-team" }, [
+          CountryFlag({ teamId: "KOR", size: "medium" }),
+          el("span", { text: "대한민국" }),
+        ]),
+        championshipScore,
+        el("div", { class: "championship-team" }, [
+          CountryFlag({ teamId: championshipOpponentId, size: "medium" }),
+          el("span", { text: teamName(championshipOpponentId) }),
+        ]),
+      ]),
+      el("p", { class: "championship-copy" }, [
+        el("span", { text: "조별리그 탈락의 운명을 되돌리고" }),
+        el("strong", { text: "대한민국이 세계 정상에 올랐습니다." }),
+      ]),
+      managerCelebration,
+      el("div", { class: "championship-actions" }, [
+        championshipRecordBtn,
+        championshipReplayBtn,
+      ]),
+    ]),
+  ]);
+
+  const confettiPalette = ["#f7d774", "#ef3345", "#1877c9", "#fff1c1"];
+  function createChampionshipConfetti() {
+    return Array.from({ length: 52 }, (_, index) => {
+      const left = (index * 37 + 7) % 100;
+      const delay = ((index * 17) % 90) / 100;
+      const duration = 3.2 + ((index * 13) % 22) / 10;
+      const drift = ((index % 9) - 4) * 13;
+      const size = 5 + (index % 5) * 2;
+      return el("i", {
+        class: "championship-confetti__piece",
+        style: `--confetti-x:${left}%;--confetti-delay:${delay}s;--confetti-duration:${duration}s;--confetti-drift:${drift}px;--confetti-size:${size}px;--confetti-color:${confettiPalette[index % confettiPalette.length]}`,
+      });
+    });
+  }
+
+  function createChampionshipFireworks() {
+    const bursts = [
+      ["12%", "14%", "0s", "#f7d774"],
+      ["86%", "18%", ".3s", "#ef3345"],
+      ["50%", "5%", ".55s", "#fff1ad"],
+      ["6%", "48%", ".8s", "#1877c9"],
+      ["94%", "45%", "1.05s", "#f7d774"],
+    ];
+    return bursts.map(([left, top, delay, color]) =>
+      el("i", {
+        class: "championship-firework",
+        style: `--firework-x:${left};--firework-y:${top};--firework-delay:${delay};--firework-color:${color}`,
+      }),
+    );
+  }
+
+  function clearChampionshipEffects() {
+    window.clearTimeout(championEffectTimer);
+    window.cancelAnimationFrame(championAnimationFrame);
+    championEffectTimer = 0;
+    championAnimationFrame = 0;
+    championshipConfetti.replaceChildren();
+    championshipFireworks.replaceChildren();
+    championshipDialog.classList.remove("is-celebrating");
+  }
+
+  function replayChampionshipEffects() {
+    clearChampionshipEffects();
+    championshipConfetti.replaceChildren(...createChampionshipConfetti());
+    championshipFireworks.replaceChildren(...createChampionshipFireworks());
+    championAnimationFrame = window.requestAnimationFrame(() => {
+      championshipDialog.classList.add("is-celebrating");
+    });
+    championEffectTimer = window.setTimeout(clearChampionshipEffects, 6000);
+  }
+
+  function openChampionshipCelebration() {
+    championRevealTimer = 0;
+    if (!championshipDialog.isConnected) document.body.append(championshipDialog);
+    if (!championshipDialog.open) championshipDialog.showModal();
+    championshipDialog.classList.add("is-visible");
+    replayChampionshipEffects();
+    championshipRecordBtn.focus();
+  }
+
+  const trapChampionshipFocus = (event) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      return;
+    }
+    if (event.key !== "Tab") return;
+    const first = championshipRecordBtn;
+    const last = championshipReplayBtn;
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  };
+  championshipDialog.addEventListener("cancel", (event) => event.preventDefault());
+  championshipDialog.addEventListener("keydown", trapChampionshipFocus);
 
   // 경기 중 실시간 전술 변경 — 슬라이더는 네 값을 직접 미는 즉석 조정이다.
   // 감독이 짠 전술(수비 스타일·깊이·빌드업 …)을 통째로 바꾸는 건 아래 전술 패널이 한다.
@@ -879,13 +1047,18 @@ export default function matchScreen(root, ctx) {
   // 화면을 떠날 때 반드시 루프와 WebGL 컨텍스트를 정리한다
   const cleanup = () => {
     cancelAnimationFrame(raf);
+    window.clearTimeout(championRevealTimer);
+    clearChampionshipEffects();
     window.removeEventListener("keydown", onKey);
     window.removeEventListener("pointerdown", onWindowPointerDown);
     window.removeEventListener("pointermove", onWindowPointerMove);
     window.removeEventListener("pointerup", onWindowPointerUp);
     kickoffDialog.removeEventListener('keydown',trapKickoffFocus);
+    championshipDialog.removeEventListener("keydown", trapChampionshipFocus);
+    championshipDialog.classList.remove("is-visible");
     kickoffDialog.remove();
     resultDialog.remove();
+    championshipDialog.remove();
     view?.dispose();
   };
 

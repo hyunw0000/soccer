@@ -1,6 +1,7 @@
 import { el } from '../../shared/index.js';
 
 const NAV_ITEMS = Object.freeze([
+  ['우승 데모', '/champion-demo'],
   ['대회', '/tournament'],
   ['선수단', '/roster'],
   ['라인업', '/lineup'],
