@@ -4,7 +4,7 @@ import { Rng, seededRandom, seededRandomPlayerId, ACTION_ID } from './rng.js';
 import { Player, Ball } from './entities.js';
 import { assignmentSlot, INSTRUCTION_FALLBACK } from './coordinates.js';
 import { arrive, pursuit, separation, closest } from './steering.js';
-import { chooseAction, effectivePressing } from './decision.js';
+import { chooseAction, effectivePressing, teamTacticsOf } from './decision.js';
 
 const SIM_TACTIC_FALLBACK = { lineHeight: 0.5, pressing: 0.5, tempo: 0.5, width: 0.5 };
 const TACTIC_KEYS = Object.keys(SIM_TACTIC_FALLBACK);
@@ -16,8 +16,8 @@ const COORD_LIMIT = 0.5;
 const RUN_PUSH = 14;
 // 스냅샷 1인당 저장 항목 수: x, z, vx, vz, heading, energy, kc
 const SNAP_STRIDE = 7;
-// 실점 이벤트로부터 몇 초(clockSeconds 단위) 전을 되감기 목표로 삼을지
-const EVENT_REWIND_LOOKBACK_SECONDS = 3;
+// 실점 이벤트로부터 몇 초(clockSeconds 단위) 전을 되감기 목표로 삼을지는
+// PARAMS.rewindLookbackSeconds가 정한다 — 밸런스 상수는 params.js 한 곳에 모은다.
 
 const inCoordRange = (n) => Number.isFinite(n) && n >= -COORD_LIMIT && n <= COORD_LIMIT;
 
@@ -178,6 +178,32 @@ export class Sim {
     });
   }
 
+  /**
+   * 한 팀의 대형이 이번 스텝에 앞뒤로 얼마나 밀릴지(m).
+   *
+   * 볼 위치를 따라가는 몫과 라인 높이가 통째로 미는 몫을 더한 값이지만, 그대로 쓰면
+   * 라인을 끝까지 내렸을 때 뒷줄이 골라인 밖으로 밀려난다. 그래서 **팀 전체에 같은 비율**을
+   * 곱해, 가장 여유 없는 선수가 경기장 안에 머물 수 있는 만큼만 움직인다 —
+   * 대형의 간격은 그대로 유지되고(비율 이동), 한 줄에 쌓이거나 라인을 넘는 일이 없다.
+   */
+  blockShift(team) {
+    const tactics = team === 'home' ? this.tactics : this.oppTactics;
+    const dir = team === 'home' ? 1 : -1;
+    const line = tactics.lineHeight;
+    const raw =
+      (this.ball.x / FIELD.L) * (14 + line * 22) + (line - 0.5) * PARAMS.lineHeightBasePush * dir;
+    if (!raw) return 0;
+
+    const limit = HALF.L - PARAMS.formationTargetGoalMargin;
+    let scale = 1;
+    for (const p of team === 'home' ? this.homeP : this.awayP) {
+      if (p.role === 'GK') continue; // 골키퍼는 대형이 아니라 자기 골문을 따른다
+      const room = raw > 0 ? limit - p.home.x : p.home.x + limit;
+      scale = Math.min(scale, clamp(room / Math.abs(raw), 0, 1));
+    }
+    return raw * scale;
+  }
+
   get clockSeconds() {
     return this.tick * PARAMS.dt;
   }
@@ -265,16 +291,23 @@ export class Sim {
     // 킥오프 팀이 아닌 쪽은 이번 스텝에서 chaser 후보에서 제외된다
     const hc = lock && lock.team !== 'home' ? null : closest(this.homeP, this.ball);
     const ac = lock && lock.team !== 'away' ? null : closest(this.awayP, this.ball);
+    // 압박이 센 팀은 볼에 가장 가까운 한 명만 나가지 않는다 — 두 번째 선수가 함께 달려들어
+    // 협위(挾圍)를 만든다. 압박 0.5 이하에서는 반경이 0이라 예전 동작 그대로다.
+    const hs = hc ? closest(this.homeP.filter((p) => p !== hc), this.ball) : null;
+    const as = ac ? closest(this.awayP.filter((p) => p !== ac), this.ball) : null;
+    // 대형 이동은 팀 단위 값이라 선수마다 다시 계산하지 않는다.
+    const homeShift = this.blockShift('home');
+    const awayShift = this.blockShift('away');
 
     for (const p of this.all) {
       const mates = p.team === 'home' ? this.homeP : this.awayP;
       const chaser = p.team === 'home' ? hc : ac;
       const mine = p.team === 'home';
       const restricted = !!lock && p.team !== lock.team;
-      // 전술은 홈팀에만 적용한다 (감독은 우리 팀만 지시한다)
+      // 양 팀 모두 자기 전술로 뛴다 — 감독이 만지는 건 홈뿐이지만, 경기는 두 전술의 대결이다.
       // 개인 지시는 팀 값을 덮어쓰지 않고 ±0.3까지 밀거나 당긴다 — 팀 전술이 여전히 뼈대다.
-      const press = mine ? clamp(t.pressing + (p.ins.pressing - 0.5) * 0.6, 0, 1) : 0.5;
-      const line = mine ? t.lineHeight : 0.5;
+      const tt = mine ? t : this.oppTactics;
+      const press = clamp(tt.pressing + (p.ins.pressing - 0.5) * 0.6, 0, 1);
       // 마지막으로 공을 찬 쪽을 그 팀의 소유로 본다. 침투는 이때만 의미가 있다.
       const holding = this.ball.ownerKey ? this.ball.ownerKey.startsWith(p.team) : false;
 
@@ -312,13 +345,29 @@ export class Sim {
         [fx, fz] = arrive(p, tx, tz);
       } else if (p === chaser) {
         [fx, fz] = pursuit(p, this.ball);
+      } else if (
+        // 협위 압박 — 우리가 볼을 갖고 있지 않을 때, 압박 지시가 센 팀의 두 번째 선수가
+        // 볼로 함께 달려든다. 반경은 압박 0.5에서 0, 1.0에서 pressSupportRadius다.
+        p === (mine ? hs : as) &&
+        !holding &&
+        !restricted &&
+        vlen(this.ball.x - p.x, this.ball.z - p.z) < clamp((press - 0.5) * 2, 0, 1) * PARAMS.pressSupportRadius
+      ) {
+        [fx, fz] = pursuit(p, this.ball);
       } else {
-        // 고정 위치를 따라 블록 전체가 밀린다. lineHeight가 전진 폭을 늘린다
-        const shift = (this.ball.x / FIELD.L) * (14 + line * 22);
-        // 우리팀이 공을 갖고 있을 때만 개인차 있는 침투런을 반영한다
+        // 대형 전체가 같은 폭으로 밀린다(blockShift가 이미 경기장 안에 들어오도록 비율을
+        // 맞춰 둔 값이다). 우리팀이 공을 갖고 있을 때만 개인차 있는 침투런을 얹는다.
+        const shift = mine ? homeShift : awayShift;
         const run = holding ? (p.ins.runs - 0.5) * RUN_PUSH * (mine ? 1 : -1) : 0;
-        let tx = p.home.x + shift + run;
-        let tz = p.home.z + (this.ball.z - p.home.z) * (0.08 + press * 0.14) * (0.5 + p.ins.roaming);
+        // 침투런까지 더한 뒤 마지막으로 한 번 더 라인 안쪽으로 자른다 — 어떤 지시를 줘도
+        // 목표 지점은 경기장 안이어야 한다.
+        const margin = PARAMS.formationTargetGoalMargin;
+        let tx = clamp(p.home.x + shift + run, -HALF.L + margin, HALF.L - margin);
+        let tz = clamp(
+          p.home.z + (this.ball.z - p.home.z) * (0.08 + press * 0.14) * (0.5 + p.ins.roaming),
+          -HALF.W + margin,
+          HALF.W - margin
+        );
         if (restricted) {
           // 킥오프 규정: 상대팀 선수는 볼이 움직이기 전까지 센터서클 밖에 있어야 한다
           const d = vlen(tx, tz);
@@ -354,8 +403,10 @@ export class Sim {
         p.vx = (p.vx / sp) * p.maxSpeed;
         p.vz = (p.vz / sp) * p.maxSpeed;
       }
-      p.x = clamp(p.x + p.vx * dt, -HALF.L - 1, HALF.L + 1);
-      p.z = clamp(p.z + p.vz * dt, -HALF.W, HALF.W);
+      // 선수는 어떤 전술·지시로도 경기장 밖에 서지 않는다. 라인을 밟고 서는 것도 막아
+      // 시각적으로 "밖으로 나간" 것처럼 보이지 않게 살짝 안쪽까지만 허용한다.
+      p.x = clamp(p.x + p.vx * dt, -HALF.L + PARAMS.playerLineInset, HALF.L - PARAMS.playerLineInset);
+      p.z = clamp(p.z + p.vz * dt, -HALF.W + PARAMS.playerLineInset, HALF.W - PARAMS.playerLineInset);
       if (isCarrier) {
         // 드리블로는 골라인을 절대 못 넘는다(골은 슛으로만) — mandatoryShotDistance가 미리
         // 슛을 강제하지만, 그 전에라도 몸으로 넘어가 버리는 걸 여기서 한 번 더 확실히 막는다.
@@ -508,6 +559,16 @@ export class Sim {
     }
   }
 
+  /**
+   * 팀 템포가 판단 주기를 바꾼다. 빠른 팀은 볼을 빨리 놓고(주기 짧게), 점유 팀은 오래 들고 있다.
+   * 템포 0.5에서 정확히 dribbleDecisionTicks라서 전술을 안 만진 경기는 예전 그대로 흐른다.
+   */
+  decisionTicksFor(p) {
+    const tempo = teamTacticsOf(this, p).tempo;
+    const scale = 1 + PARAMS.tempoDecisionScale / 2 - tempo * PARAMS.tempoDecisionScale;
+    return Math.max(6, Math.round(PARAMS.dribbleDecisionTicks * scale));
+  }
+
   /** 패스 실행 — 성공확률(§6.7)을 seededRandom으로 한 번만 굴린다. 실패해도 소멸 대신 큰 오차로 표현. */
   executePass(p, action) {
     const target = action.target;
@@ -518,7 +579,10 @@ export class Sim {
     const baseDeg = succeeded ? PARAMS.passBaseErrorDeg : PARAMS.passBaseErrorDeg * PARAMS.passFailErrorMultiplier;
     const errDeg = this.errorDegrees(p, { statValue: p.passSkill, distance: action.meta.distance, baseDeg });
     const [edx, edz] = this.rotateXZ(dx, dz, errDeg);
-    this.ball.kick(edx, edz, PARAMS.passForce, `${p.team}:${p.idx}`);
+    // 직선적인 팀은 패스를 더 세게 찬다 — 빨리 도착하는 대신 받기 어렵고 흐르기도 쉽다.
+    const tempo = teamTacticsOf(this, p).tempo;
+    const force = PARAMS.passForce * (1 - PARAMS.tempoPassForceScale / 2 + tempo * PARAMS.tempoPassForceScale);
+    this.ball.kick(edx, edz, force, `${p.team}:${p.idx}`);
     // 찬 직후에도 kc가 0으로 남아 있으면, 공이 발밑에서 채 1틱도 안 떨어진 사이에 본인이
     // 다시 "가장 가까운 선수"로 잡혀서 즉시 자기 패스를 자기가 재줍는 버그가 났다(실전에서
     // 확인함 — 패스가 나간 것처럼 보이지만 실제로는 계속 같은 선수가 캐리어로 남아 있었다).
@@ -542,13 +606,13 @@ export class Sim {
   /** 드리블 유지 — "계속 갈지"는 이미 판단(점수 비교)에서 끝났다. 확률 판정 없음. */
   executeDribble(p) {
     p.dribbleMode = 'advance';
-    p.kc = PARAMS.dribbleDecisionTicks;
+    p.kc = this.decisionTicksFor(p);
   }
 
   /** 키핑 — 다음 판단 주기까지 제자리에서 볼을 지킨다. 확률 판정 없음. */
   executeHold(p) {
     p.dribbleMode = 'hold';
-    p.kc = PARAMS.dribbleDecisionTicks;
+    p.kc = this.decisionTicksFor(p);
   }
 
   /** 클리어 — 압박에 밀린 캐리어가 무조건 앞으로 걷어낸다. 클리어링이라 오차를 크게 잡는다. */
@@ -620,7 +684,7 @@ export class Sim {
     // carrierDecide()가 판단 주기마다 한다 — 그래서 "잡자마자 반사적으로 패스"가 안 생긴다.
     this.ball.ownerKey = pKey;
     this.ball.carrierKey = pKey;
-    p.kc = PARAMS.dribbleDecisionTicks;
+    p.kc = this.decisionTicksFor(p);
   }
 
   /** @returns {boolean} 이번 틱에 골이 들어갔는지 — 아웃오브바운즈 판정을 건너뛸지 결정하는 데 쓴다. */
@@ -726,13 +790,19 @@ export class Sim {
 
   /**
    * 되감기 목표 tick. 실점 이벤트가 아직 기회(concedeRewindWindowSeconds) 안에 있을 때만
-   * 그 직전(EVENT_REWIND_LOOKBACK_SECONDS만큼 앞)을 계산한다. 되감기는 그 순간에만 쓸 수
+   * 그 직전(rewindLookbackSeconds만큼 앞)을 계산한다. 되감기는 그 순간에만 쓸 수
    * 있는 것이라 그 외에는 폴백 없이 null — 호출 전에 반드시 canRewind()로 확인해야 한다.
+   *
+   * 전반에 난 실점을 후반에서 되감지 않도록 그 하프의 시작보다 앞으로는 가지 않는다.
    */
   getRewindTargetTick() {
     const concede = this.getActiveConcedeEvent();
     if (!concede) return null;
-    return Math.max(0, concede.tick - EVENT_REWIND_LOOKBACK_SECONDS / PARAMS.dt);
+    const halfStartTick = this.half === 2 ? PARAMS.halfMinutes / PARAMS.dt : 0;
+    const target = concede.tick - PARAMS.rewindLookbackSeconds / PARAMS.dt;
+    // 하프 시작보다 앞으로는 가지 않되, 실점 시점보다 뒤로도 가지 않는다
+    // (하프 시작 직후에 실점하면 두 한계가 서로 엇갈릴 수 있다).
+    return Math.min(concede.tick, Math.max(halfStartTick, target));
   }
 
   /**

@@ -22,7 +22,7 @@
 }
 
 .screen.match::after {
-  content:"GROUP A · MATCH 54";
+  content:attr(data-match-tag);
   position:absolute;
   right:20px;
   bottom:82px;
@@ -49,6 +49,51 @@
   flex: 1;
   text-align: center;
 }
+/* 경기 종료 결과 — 승/무/패에 따라 테두리 색이 바뀐다. 다른 배너보다 크고 항상 위에 뜬다 */
+.result-banner {
+  z-index: 5;
+  min-width: min(420px, calc(100vw - 48px));
+  border-width: 2px;
+  padding: 22px 28px;
+  gap: 8px;
+  background: rgba(3, 12, 18, 0.95);
+}
+.result-banner[data-outcome="win"] { border-color: #3fd694; }
+.result-banner[data-outcome="draw"] { border-color: #e2b75f; }
+.result-banner[data-outcome="loss"] { border-color: #ef3d4d; }
+.result-title {
+  font-size: 26px;
+  font-weight: 900;
+  letter-spacing: .06em;
+}
+.result-banner[data-outcome="win"] .result-title { color: #71d9a5; }
+.result-banner[data-outcome="draw"] .result-title { color: #e2b75f; }
+.result-banner[data-outcome="loss"] .result-title { color: #ff8a92; }
+.result-score {
+  font-size: 32px;
+  font-weight: 900;
+  letter-spacing: .04em;
+}
+.result-banner .result-sub {
+  max-width: 34em;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #c5ced7;
+}
+.result-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+.result-actions .ctl { min-width: 132px; text-align: center; }
+.result-actions .primary-ctl {
+  border-color: rgba(91, 214, 255, .74);
+  background: linear-gradient(110deg, var(--game-accent-blue), var(--game-accent-red));
+  color: #fff;
+}
+
 /* 경로 지시 상태 문구 — 공용 .hint(bottom 78px)와 같은 자리에 겹치지 않도록 한 줄 더 띄운다 */
 .path-status {
   position: absolute;
@@ -58,4 +103,38 @@
   font-size: 11px;
   color: var(--accent, #ffd60a);
   text-shadow: 0 2px 4px #000;
+}
+
+/* 경기 중 전술 창 — 화면을 떠나지 않고 그 자리에서 전술을 바꾼다.
+   안쪽 조작판은 tactics 영역이 그린다(tactics.css). 여기서는 놓일 자리만 정한다.
+   HUD(좌상단) 아래, 컨트롤 바(하단) 위 공간을 쓴다. */
+.screen.match .live-tactics {
+  position: absolute;
+  left: 14px;
+  top: 196px;
+  bottom: 74px;
+  width: min(340px, calc(100vw - 300px));
+  overflow-y: auto;
+  padding: 12px 14px;
+  z-index: 4;
+  border: 1px solid var(--game-border-strong, var(--line));
+  border-radius: 0;
+  background:
+    linear-gradient(rgba(37, 128, 158, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(37, 128, 158, 0.04) 1px, transparent 1px),
+    rgba(2, 13, 20, 0.94);
+  background-size: 18px 18px;
+  clip-path: polygon(10px 0, calc(100% - 12px) 0, 100% 12px, 100% calc(100% - 10px), calc(100% - 10px) 100%, 10px 100%, 0 calc(100% - 10px), 0 10px);
+  box-shadow: inset 0 0 26px rgba(42, 172, 211, 0.06), 0 12px 30px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(10px);
+}
+
+@media (max-width: 720px) {
+  /* 좁은 화면에서는 사이드패널이 사라지므로 전술 창이 화면을 넓게 쓴다 */
+  .screen.match .live-tactics {
+    left: 8px;
+    right: 8px;
+    top: 150px;
+    width: auto;
+  }
 }

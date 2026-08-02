@@ -13,6 +13,29 @@ import { seededRandomPlayerId } from './rng.js';
 
 const sigmoid = (x) => 1 / (1 + Math.exp(-x));
 
+/**
+ * p가 속한 팀의 팀 전술(0..1 네 값).
+ * 감독이 만지는 건 홈뿐이지만 읽는 경로는 양 팀이 같다 — 그래야 "우리 전술 vs 상대 전술"이
+ * 실제 대결이 되고, 한쪽만 전술을 쓰는 비대칭이 사라진다.
+ */
+export function teamTacticsOf(sim, p) {
+  return (p.team === 'home' ? sim.tactics : sim.oppTactics) ?? { lineHeight: 0.5, pressing: 0.5, tempo: 0.5, width: 0.5 };
+}
+
+/**
+ * 팀 전술(뼈대) + 개인 지시(±0.3)를 합친 실효 지시.
+ * 팀 값이 중심이고 개인 지시는 그 위에서 밀거나 당긴다 — 개인 지시가 팀 전술을 뒤엎지 않는다.
+ */
+export const blendInstruction = (teamValue, insValue) => clamp(teamValue + (insValue - 0.5) * 0.6, 0, 1);
+
+/**
+ * 템포(0..1)가 판단 가중치를 흔드는 배수.
+ * `neutral`(0.5)에서 정확히 1이 되도록 잡아서, 전술을 안 만진 감독의 경기는 예전 그대로 흐른다.
+ * 템포가 높으면 전진·모험이 커지고, 낮으면 안전·점유가 커진다.
+ */
+const directness = (tempo) => 0.55 + tempo * 0.9; // 0.55 … 1.45
+const patience = (tempo) => 1.45 - tempo * 0.9; // 1.45 … 0.55
+
 /** 체력 0..1 → 실행력 배수. §6.7 "체력승수" 그대로. */
 export const staminaMult = (energy) => 0.55 + 0.45 * clamp(energy, 0, 1);
 
@@ -26,8 +49,7 @@ export function pressureCount(sim, p) {
 
 /** p 팀의 압박강도 지시 — 팀 전술(0..1) + 개인 지시(±0.3)를 합친, step()의 `press`와 같은 식. */
 export function effectivePressing(sim, p) {
-  if (p.team !== 'home') return 0.5;
-  return clamp(sim.tactics.pressing + (p.ins.pressing - 0.5) * 0.6, 0, 1);
+  return blendInstruction(teamTacticsOf(sim, p).pressing, p.ins.pressing);
 }
 
 /**
@@ -59,6 +81,17 @@ export function shootSuccessProb(sim, p, distance, angleFactor) {
   return sigmoid(x);
 }
 
+/** 그 선수에게 가장 가까운 상대와의 거리(m). 패스 대상이 "열려 있는지"를 재는 데 쓴다. */
+export function nearestOpponentDistance(sim, p) {
+  const opps = p.team === 'home' ? sim.awayP : sim.homeP;
+  let nearest = Infinity;
+  for (const o of opps) {
+    const d = vlen(o.x - p.x, o.z - p.z);
+    if (d < nearest) nearest = d;
+  }
+  return nearest;
+}
+
 /** 골문을 향한 각도 여유(0..1, 1=정면). 측면에서 쏠수록 낮아진다. */
 function shotAngleFactor(p) {
   return clamp(1 - Math.abs(p.z) / HALF.W, 0.15, 1);
@@ -67,12 +100,16 @@ function shotAngleFactor(p) {
 /** 패스 후보 — 동료마다 독립적으로 채점한다(§6.5 U(패스→j)). */
 export function scorePassCandidates(sim, p) {
   const mates = p.team === 'home' ? sim.homeP : sim.awayP;
+  const t = teamTacticsOf(sim, p);
   const gdSelf = vlen(p.atkX - p.x, 0 - p.z);
-  const wForward = p.ins.forwardness;
-  const wSafety = 1 - p.ins.risk;
-  const wWidth = p.ins.width;
-  const preferredPassLength = 8 + p.ins.passLength * 32;
-  const desiredZ = (p.ins.width - 0.5) * 2 * HALF.W * 0.6; // 폭 지시가 노리는 좌우 위치(중앙 기준)
+  // 팀 템포가 "앞으로 vs 안전하게"의 저울을 기울이고, 개인 지시가 그 위에서 선수차를 만든다.
+  const wForward = p.ins.forwardness * directness(t.tempo);
+  const wSafety = (1 - p.ins.risk) * patience(t.tempo);
+  // 진영 폭은 팀 전술이 뼈대다 — 좁은 팀은 중앙으로 모으고 넓은 팀은 측면으로 벌린다.
+  const wWidth = blendInstruction(t.width, p.ins.width);
+  // 패스 길이도 템포를 따른다. 짧은 패스 팀은 가까운 동료를, 롱볼 팀은 먼 동료를 고른다.
+  const preferredPassLength = 8 + blendInstruction(t.tempo, p.ins.passLength) * 32;
+  const desiredZ = (wWidth - 0.5) * 2 * HALF.W * 0.6; // 폭 지시가 노리는 좌우 위치(중앙 기준)
   const out = [];
   for (const m of mates) {
     if (m === p || m.role === 'GK') continue;
@@ -91,8 +128,17 @@ export function scorePassCandidates(sim, p) {
     const widthFit = 1 - clamp(Math.abs(Math.abs(m.z) - Math.abs(desiredZ)) / HALF.W, 0, 1);
     const lengthPenalty = Math.abs(d - preferredPassLength) / PARAMS.maxPass;
     const captainBonus = m.isCaptain ? 0.15 : 0;
+    // 동료가 얼마나 열려 있는지 — 붙어 있는 동료에게 주는 건 그냥 볼을 넘겨주는 짓이다.
+    // 이 항이 없으면 "혼자 몰고 가기"가 거의 항상 이긴다(실측: 드리블이 판단의 70%였다).
+    const openness = clamp(nearestOpponentDistance(sim, m) / PARAMS.openPassRadius, 0, 1);
 
-    const score = wForward * forwardGain + wSafety * successProb + wWidth * widthFit - lengthPenalty + captainBonus;
+    const score =
+      wForward * forwardGain +
+      wSafety * successProb +
+      wWidth * widthFit +
+      PARAMS.openPassWeight * openness -
+      lengthPenalty +
+      captainBonus;
     out.push({
       type: 'pass',
       target: m,
@@ -111,8 +157,9 @@ export function scoreShootCandidate(sim, p) {
   const gd = vlen(gdx, gdz);
   if (gd > 34) return null; // 사거리 밖 — 애초에 후보가 아니다(굳이 낮은 점수로 넣어 경쟁시킬 이유가 없다)
 
-  const wForward = p.ins.forwardness;
-  const wSafety = 1 - p.ins.risk;
+  const t = teamTacticsOf(sim, p);
+  const wForward = p.ins.forwardness * directness(t.tempo);
+  const wSafety = (1 - p.ins.risk) * patience(t.tempo);
   const angleFactor = shotAngleFactor(p);
   const distFactor = clamp(1 - gd / 34, 0, 1);
   const expectedGoalValue = distFactor * 0.7 + angleFactor * 0.3;
@@ -150,8 +197,11 @@ export function scoreDribbleCandidate(sim, p) {
   const breakExpect = clamp((p.dribbleSkill - nearestDefense) / 100 + 0.5, 0, 1);
   const pressureDensity = densityCount * 0.18;
 
-  const wForward = p.ins.forwardness;
-  const risk = p.ins.risk;
+  // 템포는 "볼을 빨리 앞으로 보낸다"는 뜻이다. 빠른 팀일수록 혼자 끌고 가는 선택의 매력이
+  // 줄고(patience가 작아짐), 점유 지향 팀일수록 발밑에 두고 가는 선택이 살아난다.
+  const w = patience(teamTacticsOf(sim, p).tempo);
+  const wForward = p.ins.forwardness * w;
+  const risk = p.ins.risk * w;
   const score = wForward * forwardGain + risk * breakExpect - pressureDensity;
   return { type: 'dribble', score, tiebreak: -2, meta: { densityCount } };
 }
@@ -159,7 +209,8 @@ export function scoreDribbleCandidate(sim, p) {
 /** 키핑(제자리 볼 지키기) 후보 — 압박이 세고 신중할수록 매력적인, 항상 존재하는 안전판. */
 export function scoreHoldCandidate(sim, p) {
   const density = pressureCount(sim, p);
-  const wSafety = 1 - p.ins.risk;
+  // 점유 지향(낮은 템포) 팀일수록 "일단 지킨다"가 매력적이다.
+  const wSafety = (1 - p.ins.risk) * patience(teamTacticsOf(sim, p).tempo);
   const score = wSafety * 0.5 + density * 0.15 - 0.1;
   return { type: 'hold', score, tiebreak: -3, meta: { density } };
 }

@@ -23,7 +23,7 @@
 - 위 목록을 바꾸려면 공개 계약을 먼저 협의한다.
 - 입력은 `src/roster/index.js`, `src/lineup/index.js`, 향후 `src/tournament/index.js`의 공개 값만 사용한다.
 - MatchSetup version 1에는 양 팀 SimulationPlayer, assignment의 `playerId`·`slotId`·`role`·`x`·`z`, tactics와 tournament 참조를 포함한다.
-- assignment의 `instruction`(자리별 전술 8축, 0..1)은 **선택 항목**이다. 감독이 지시를 준 홈팀 자리에만 실리고, 없으면 simulation이 0.5로 읽으므로 version은 1 그대로다. 축 이름은 `INSTRUCTION_KEYS`가 단일 출처이며, 감독이 만지는 1..5 단계 값은 `toPlayerInstruction()`으로만 0..1로 번역한다.
+- assignment의 `instruction`(자리별 전술 8축, 0..1)은 계약상 **선택 항목**이지만, `createMatchSetup`은 양 팀 모든 자리에 항상 싣는다. 감독이 만진 적 없는 자리는 `slotTacticsOf()`가 만드는 그 자리의 기본값이 실린다 — 안 실으면 simulation이 0.5로 읽어서 화면에 보이는 값과 경기가 어긋난다. 계약 자체는 version 1 그대로다. 축 이름은 `INSTRUCTION_KEYS`가 단일 출처이며, 감독이 만지는 1..5 단계 값은 `toPlayerInstruction()`으로만 0..1로 번역한다.
 - 개인 전술은 **자리(slotId)** 에 붙는다. 저장은 `state.slotTactics`이고 조회는 `slotTacticsOf(book, assignment)` 하나뿐이다. 선수를 바꿔 세워도 그 자리의 지시로 뛰고, 선수는 지시를 들고 다니지 않는다.
 - 개인 전술 화면은 8축을 다 보여 주지 않는다. `playerTacticGroup(role, z)`가 그 자리(골키퍼·센터백·풀백·중앙 미드·측면·중앙 공격수)에서 쓸 항목과 이름을 정하고, 화면에 없는 축은 그 자리의 기본값에 머문다. 계약은 늘 8축 그대로다.
 - 화면 이동은 `ctx.navigate()`를 사용하고 route params에 영속 상태를 저장하지 않는다.

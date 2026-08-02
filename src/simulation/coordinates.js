@@ -34,6 +34,15 @@ const FORWARD_RANGE = 0.12; // ±0.06 → 필드 기준 약 ±6m
 const WIDTH_RANGE = 0.5; // 0.75배(중앙) … 1.25배(측면)
 
 /**
+ * 정규화 좌표(±0.5)에서 라인 안쪽으로 남겨 두는 여유.
+ * 전술을 어떻게 밀어도 자리는 경기장 안에 있어야 한다 — 폭·전진성·팀 전술을 곱한 **뒤에**
+ * 이 한계로 자르기 때문에, 값을 끝까지 올려도 선수가 터치라인·골라인 밖에 서지 않는다.
+ */
+const PITCH_MARGIN = 0.04; // 길이 기준 약 4m, 폭 기준 약 2.7m
+const LIMIT = 0.5 - PITCH_MARGIN;
+const clampToPitch = (n) => Math.min(LIMIT, Math.max(-LIMIT, n));
+
+/**
  * MatchSetup의 정규화 좌표 → 월드 좌표.
  *
  * 입력은 항상 "자기 진영에서 상대 진영으로 공격"하는 기준의 [-0.5, 0.5] 값이다.
@@ -49,13 +58,15 @@ export function normalizedToWorld({ x, z }, { side = 'home', width = 0.5, instru
   const spread = 0.8 + width * 0.5;
   const ins = instruction ? normalizeInstruction(instruction) : INSTRUCTION_FALLBACK;
 
-  // 전진성은 자기 자리를 상대 골문 쪽으로 밀고, 개인 폭은 중앙에서 벌어진 거리를 늘린다.
+  // 전진성은 자기 자리를 상대 골문 쪽으로 밀고, 개인 폭과 팀 폭은 중앙에서 벌어진 거리를 늘린다.
+  // 팀 폭(spread)까지 곱한 뒤에 한 번만 자른다 — 곱하기 전에 자르면 폭을 올렸을 때
+  // 자리가 터치라인 밖으로 나가 버린다(예전에 실제로 그랬다).
   const px = x + (ins.forwardness - 0.5) * FORWARD_RANGE;
-  const pz = z * (1 + (ins.width - 0.5) * WIDTH_RANGE);
+  const pz = z * (1 + (ins.width - 0.5) * WIDTH_RANGE) * spread;
 
   return {
-    x: Math.min(0.5, Math.max(-0.5, px)) * FIELD.L * direction,
-    z: Math.min(0.5, Math.max(-0.5, pz)) * FIELD.W * spread * direction,
+    x: clampToPitch(px) * FIELD.L * direction,
+    z: clampToPitch(pz) * FIELD.W * direction,
   };
 }
 
