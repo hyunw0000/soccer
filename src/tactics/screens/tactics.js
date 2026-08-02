@@ -1,10 +1,8 @@
 import './tactics.css';
-import { el } from '../../shared/index.js';
+import { CountryFlag, el } from '../../shared/index.js';
 import { gameProgress, state, setState } from '../../app/public.js';
 import { findById } from '../../roster/index.js';
 import { getNextOpponent } from '../../tournament/index.js';
-import { CountryFlag, el } from "../../shared/index.js";
-import { state, setState } from "../../app/public.js";
 import {
   autoLineup,
   createLineupEditor,
@@ -323,9 +321,12 @@ export default function tacticsScreen(root, ctx) {
       }, 1600);
     },
   });
-  // 상대는 tournament의 공개 API에서만 가져온다. 상대 데이터를 여기서 만들지 않는다.
-  const opponent =
-    state.currentOpponent ?? getNextOpponent(state.tournamentBracket ?? null);
+  // 상대는 tournament의 공개 API에서만 가져온다. 저장된 결과에서 현재 라운드를 파생한다.
+  const runStep = gameProgress().activeStep;
+  const opponent = state.currentOpponent ?? getNextOpponent(runStep?.stage ?? 'group');
+  const tournamentRef = runStep
+    ? { tournamentId: 'world-championship-2026', roundId: runStep.roundId, bracketMatchId: runStep.matchId }
+    : null;
 
   const kickoffBtn = el("button", {
     class: "primary tactics-kickoff",
@@ -397,14 +398,6 @@ export default function tacticsScreen(root, ctx) {
       ]),
     ]),
   ]);
-
-  // 상대는 tournament의 공개 API에서만 가져온다. 상대 데이터를 여기서 만들지 않는다.
-  // 어느 라운드를 치르는지는 저장된 결과에서 파생한 진행 상태가 정한다.
-  const runStep = gameProgress().activeStep;
-  const opponent = state.currentOpponent ?? getNextOpponent(runStep?.stage ?? 'group');
-  const tournamentRef = runStep
-    ? { tournamentId: 'world-championship-2026', roundId: runStep.roundId, bracketMatchId: runStep.matchId }
-    : null;
 
   /**
    * 전술 목록이 바뀔 때 거치는 단 하나의 경로.
@@ -503,18 +496,6 @@ export default function tacticsScreen(root, ctx) {
           el('p', { class: 'eyebrow', text: `MATCH PLAN · ${runStep?.eyebrow ?? 'FRIENDLY MATCH'}` }),
           el('h2', { class: 'h2', text: '승부를 바꿀 전술' }),
           el('p',{class:'topbar-description',text:'포메이션과 팀 지시를 조정해 경기의 흐름을 설계합니다.'}),
-        ]),
-        el('div', { class: 'topbar-right' }, [
-          formationStatus,
-          el('button', {
-            class: 'ghost',
-            type: 'button',
-            text: '← 명단 수정',
-            onclick: () => {
-              persist();
-              ctx.navigate('squad');
-            },
-          }),
         ]),
         el("div", { class: "topbar-right" }, [
           kickoffCard,
