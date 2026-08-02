@@ -218,7 +218,7 @@ export class Sim {
       // tryKick()의 일반 패스 점수(전진 편향)에 맡기면 파트너가 아닌 다른 선수에게 갈 수 있어
       // 킥오프 첫 패스만은 taker -> partner로 직접 지정한다 (실제 킥오프는 항상 옆·뒤로 짧게 시작한다)
       taker.kc = PARAMS.kickCooldownTicks;
-      this.ball.kick(partner.x - taker.x, partner.z - taker.z, PARAMS.passForce);
+      this.ball.kick(partner.x - taker.x, partner.z - taker.z, PARAMS.passForce, `${taker.team}:${taker.idx}`);
     } else if (taker) {
       this.ball.ownerKey = `${taker.team}:${taker.idx}`;
       this.ball.carrierKey = `${taker.team}:${taker.idx}`;
@@ -383,10 +383,14 @@ export class Sim {
 
     for (const p of this.all) this.tryKick(p);
     // 드리블 중엔 이미 위(캐리어 처리)에서 매 틱 위치를 붙여놨다 — 마찰/관성 물리를 또 적용하면 안 된다.
-    if (!this.ball.carrierKey) this.ball.update(dt);
-    // 골은 슛(킥)으로만 넣는다 — 드리블로 공을 몰고 골라인을 그냥 지나가는 건 골이 아니다.
-    // 캐리어가 있는 동안은 골 판정을 아예 안 한다(아래 carrierDecide의 골문 근처 슛 강제와 짝).
-    if (!this.ball.carrierKey) this.checkGoal();
+    if (!this.ball.carrierKey) {
+      this.ball.update(dt);
+      // 골은 슛(킥)으로만 넣는다 — 드리블로 공을 몰고 골라인을 그냥 지나가는 건 골이 아니다.
+      // 캐리어가 있는 동안은 골 판정을 아예 안 한다(위 carrierDecide의 골문 근처 슛 강제와 짝).
+      // 골이 아니면(빗나간 슛/걷어낸 공 등) 필드 밖으로 나갔는지도 같이 본다 — 골 판정이
+      // 이미 kickoff()로 볼을 리셋했다면 아웃오브바운즈 판정은 의미가 없어 건너뛴다.
+      if (!this.checkGoal()) this.checkOutOfBounds();
+    }
     this.tick++;
     this.updatePhase();
   }
@@ -462,7 +466,7 @@ export class Sim {
       baseDeg: PARAMS.passBaseErrorDeg,
     });
     const [edx, edz] = this.rotateXZ(cdx, cdz, errDeg);
-    this.ball.kick(edx, edz, PARAMS.clearForce); // kick()이 carrierKey도 같이 지운다
+    this.ball.kick(edx, edz, PARAMS.clearForce, `${defender.team}:${defender.idx}`); // kick()이 carrierKey도 같이 지운다
     this.pushEvent('tackle', defender.team, `${defender.name} 볼 탈취`);
   }
 
@@ -514,7 +518,12 @@ export class Sim {
     const baseDeg = succeeded ? PARAMS.passBaseErrorDeg : PARAMS.passBaseErrorDeg * PARAMS.passFailErrorMultiplier;
     const errDeg = this.errorDegrees(p, { statValue: p.passSkill, distance: action.meta.distance, baseDeg });
     const [edx, edz] = this.rotateXZ(dx, dz, errDeg);
-    this.ball.kick(edx, edz, PARAMS.passForce);
+    this.ball.kick(edx, edz, PARAMS.passForce, `${p.team}:${p.idx}`);
+    // 찬 직후에도 kc가 0으로 남아 있으면, 공이 발밑에서 채 1틱도 안 떨어진 사이에 본인이
+    // 다시 "가장 가까운 선수"로 잡혀서 즉시 자기 패스를 자기가 재줍는 버그가 났다(실전에서
+    // 확인함 — 패스가 나간 것처럼 보이지만 실제로는 계속 같은 선수가 캐리어로 남아 있었다).
+    // 다른 킥/태클 경로는 전부 kc를 세팅하는데 여기만 빠져 있었다.
+    p.kc = PARAMS.kickCooldownTicks;
   }
 
   /** 슛 실행 — 마찬가지로 성공확률을 한 번만 굴려서 오차 폭을 정한다. */
@@ -526,7 +535,8 @@ export class Sim {
     const baseDeg = succeeded ? PARAMS.shotBaseErrorDeg : PARAMS.shotBaseErrorDeg * PARAMS.shotFailErrorMultiplier;
     const errDeg = this.errorDegrees(p, { statValue: p.shootSkill, distance: action.meta.distance, baseDeg });
     const [edx, edz] = this.rotateXZ(gdx, gdz, errDeg);
-    this.ball.kick(edx, edz, PARAMS.shootForce);
+    this.ball.kick(edx, edz, PARAMS.shootForce, `${p.team}:${p.idx}`);
+    p.kc = PARAMS.kickCooldownTicks; // 패스와 같은 이유 — 슛한 직후 본인이 바로 재줍는 걸 막는다
   }
 
   /** 드리블 유지 — "계속 갈지"는 이미 판단(점수 비교)에서 끝났다. 확률 판정 없음. */
@@ -547,7 +557,8 @@ export class Sim {
     const cdz = 0 - p.z;
     const errDeg = this.errorDegrees(p, { statValue: p.passSkill, distance: PARAMS.distanceErrorRef, baseDeg: PARAMS.clearBaseErrorDeg });
     const [edx, edz] = this.rotateXZ(cdx, cdz, errDeg);
-    this.ball.kick(edx, edz, PARAMS.clearForce);
+    this.ball.kick(edx, edz, PARAMS.clearForce, `${p.team}:${p.idx}`);
+    p.kc = PARAMS.kickCooldownTicks; // 마찬가지로 자기 클리어를 자기가 바로 재줍는 걸 막는다
     this.pushEvent('tackle', p.team, `${p.name} 압박에 클리어`);
   }
 
@@ -612,18 +623,79 @@ export class Sim {
     p.kc = PARAMS.dribbleDecisionTicks;
   }
 
+  /** @returns {boolean} 이번 틱에 골이 들어갔는지 — 아웃오브바운즈 판정을 건너뛸지 결정하는 데 쓴다. */
   checkGoal() {
     const b = this.ball;
     if (b.x <= -HALF.L && Math.abs(b.z) < GOAL_W / 2) {
       this.score.away++;
       this.pushEvent('goal', 'away', '실점');
       this.kickoff({ kickoffTeam: 'home' }); // 실점 팀이 킥오프한다
+      return true;
     } else if (b.x >= HALF.L && Math.abs(b.z) < GOAL_W / 2) {
       this.score.home++;
-      const scorer = this.playerByKey(b.ownerKey);
+      // ownerKey는 kick() 순간 바로 null이 돼서 득점자를 못 찾는다 — lastTouchKey를 쓴다.
+      const scorer = this.playerByKey(b.lastTouchKey);
       this.pushEvent('goal', 'home', scorer ? `${scorer.name} 득점` : '득점');
       this.kickoff({ kickoffTeam: 'away' }); // 실점 팀이 킥오프한다
+      return true;
     }
+    return false;
+  }
+
+  /**
+   * 필드 밖으로 나간 볼을 처리한다 — 스로인(터치라인)/코너킥·골킥(골라인, 골은 아닌 쪽).
+   * 마지막으로 볼을 건드린 팀(ball.lastTouchKey)으로 어느 팀에 주는지 정한다.
+   */
+  checkOutOfBounds() {
+    const b = this.ball;
+    const lastTeam = b.lastTouchKey ? b.lastTouchKey.split(':')[0] : null;
+
+    if (Math.abs(b.z) >= HALF.W) {
+      // 터치라인 아웃 — 마지막으로 안 건드린 팀이 스로인
+      const throwInTeam = lastTeam === 'home' ? 'away' : 'home';
+      const side = b.z > 0 ? 1 : -1;
+      this.restart(throwInTeam, b.x, side * (HALF.W - PARAMS.restartInset), 'throw-in', '스로인');
+      return true;
+    }
+
+    if (Math.abs(b.x) >= HALF.L) {
+      const end = b.x > 0 ? 1 : -1; // +1=away가 지키는 골라인, -1=home이 지키는 골라인
+      const defendingTeam = end > 0 ? 'away' : 'home';
+      const attackingTeam = defendingTeam === 'home' ? 'away' : 'home';
+      if (lastTeam === defendingTeam) {
+        // 수비 쪽이 마지막으로 건드리고 나갔다 — 공격 팀 코너킥
+        const cornerZ = (b.z > 0 ? 1 : -1) * (HALF.W - PARAMS.restartInset);
+        const cornerX = end * (HALF.L - PARAMS.restartInset);
+        this.restart(attackingTeam, cornerX, cornerZ, 'corner', '코너킥');
+      } else {
+        // 공격 쪽이 마지막으로 건드리고 나갔다(빗나간 슛 등) — 수비 팀 골킥
+        const goalKickX = defendingTeam === 'home' ? -HALF.L + PARAMS.goalKickDepth : HALF.L - PARAMS.goalKickDepth;
+        this.restart(defendingTeam, goalKickX, 0, 'goal-kick', '골킥');
+      }
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * 스로인/코너킥/골킥 공통 재개 처리 — 볼을 정지시켜 지정 위치에 놓고, 그 팀에서 가장
+   * 가까운 선수(골킥은 골키퍼 우선)를 새 캐리어로 세운다. 이후 판단은 기존 carrierDecide
+   * 파이프라인이 그대로 처리하므로 재개 전용 킥 로직을 따로 만들지 않는다.
+   */
+  restart(team, x, z, type, text) {
+    this.ball.reset();
+    this.ball.x = clamp(x, -HALF.L, HALF.L);
+    this.ball.z = clamp(z, -HALF.W, HALF.W);
+    const side = team === 'home' ? this.homeP : this.awayP;
+    const taker = type === 'goal-kick' ? side.find((p) => p.role === 'GK') ?? closest(side, this.ball) : closest(side, this.ball);
+    if (taker) {
+      taker.x = this.ball.x;
+      taker.z = this.ball.z;
+      this.ball.ownerKey = `${taker.team}:${taker.idx}`;
+      this.ball.carrierKey = `${taker.team}:${taker.idx}`;
+      taker.kc = PARAMS.kickCooldownTicks;
+    }
+    this.pushEvent(type, team, text);
   }
 
   pushEvent(type, team, text) {
@@ -708,6 +780,7 @@ export class Sim {
       ball: [this.ball.x, this.ball.z, this.ball.vx, this.ball.vz],
       ownerKey: this.ball.ownerKey,
       carrierKey: this.ball.carrierKey,
+      lastTouchKey: this.ball.lastTouchKey,
       score: { ...this.score },
       rng: this.rng.s,
       eventCount: this.events.length,
@@ -742,6 +815,7 @@ export class Sim {
     [this.ball.x, this.ball.z, this.ball.vx, this.ball.vz] = s.ball;
     this.ball.ownerKey = s.ownerKey;
     this.ball.carrierKey = 'carrierKey' in s ? s.carrierKey : null; // 옛 스냅샷 호환: 없으면 자유 상태로 취급
+    this.ball.lastTouchKey = 'lastTouchKey' in s ? s.lastTouchKey : null; // 옛 스냅샷 호환: 없으면 알 수 없음 취급
     this.score = { ...s.score };
     this.tick = s.tick;
     this.rng.s = s.rng;

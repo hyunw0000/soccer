@@ -53,8 +53,6 @@ export const PARAMS = {
   dribbleDecisionTicks: 24, // 판단 주기(틱) — 이 동안은 계속 드리블하며 재판단 안 함
   dribbleCarryOffset: 0.9, // 캐리어 발밑 앞쪽으로 볼을 붙여두는 거리(m)
   dribbleLookahead: 6, // 드리블 목표를 몇 m 앞으로 계속 갱신할지
-  dribbleBaseChance: 0.4, // 패스 후보가 있어도 그냥 계속 드리블할 기본 확률
-  dribbleRiskInfluence: 0.4, // risk 지시가 드리블 확률을 얼마나 더 흔드는지(±)
   mandatoryShotDistance: 12, // 골문에서 이 거리 안이면 확률 없이 무조건 슛 — 드리블로 골라인까지 걸어들어가는 걸 막는다
 
   // 판단/실행 분리 리팩터링(decision.js) — 실행 성공확률 sigmoid 계수. §6.7 공식의
@@ -81,4 +79,9 @@ export const PARAMS = {
   tackleDistanceDecayMin: 0.5, // 사거리(kickDist) 끝에서도 이 밑으로는 안 깎는다
 
   clearBaseErrorDeg: 6, // 캐리어가 압박에 밀려 그냥 걷어낼 때의 기본 오차각(패스보다 급하게 찬다)
+
+  // 아웃오브바운즈(스로인/코너킥/골킥) 재개 지점 — 라인 위에 정확히 두면 좌표 클램프 경계와
+  // 겹쳐서 다음 스텝에 다시 아웃으로 잡히는 경우가 생겨 살짝 안쪽으로 들여놓는다.
+  restartInset: 0.5,
+  goalKickDepth: 9, // 골킥 스팟이 자기 골라인에서 이만큼 앞(대략 골에어리어 거리감)
 };
