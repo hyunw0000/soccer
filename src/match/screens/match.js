@@ -1,4 +1,4 @@
-import { countries, el } from "../../shared/index.js";
+import { CountryFlag,countries, el } from "../../shared/index.js";
 import { gameProgress, recordKoreaMatch, retryKoreaMatch, setState, state } from "../../app/public.js";
 import {
   PARAMS,
@@ -7,6 +7,7 @@ import {
 } from "../../simulation/index.js";
 import { createLiveTacticsPanel } from "../../tactics/index.js";
 import { createMatchView, CAM_MODES } from "../render3d/index.js";
+import { getMatchSides } from "../matchSides.js";
 
 const REWIND_LIMIT = 2; // 감독의 '되감기'는 유한한 자원이다 — 이 서비스의 규칙
 const REWIND_IDLE_LABEL = "↶ 실점 시에만 되감기 가능"; // 겨냥할 실점이 없을 때(대기 상태)
@@ -35,10 +36,11 @@ export default function matchScreen(root, ctx) {
 
   const homeCode = matchSetup.homeTeam.code ?? matchSetup.homeTeam.id;
   const awayCode = matchSetup.awayTeam.code ?? matchSetup.awayTeam.id;
-  // 지금 치르는 대회 경기. 결과를 어디에 기록할지, 이기면 어디로 가는지가 여기서 나온다.
-  // 전술 화면이 만든 상대와 어긋나면 기록하지 않는다 — 엉뚱한 라운드에 점수가 남지 않게.
   const runStepCandidate = gameProgress().activeStep;
   const runStep = runStepCandidate?.opponentTeamId === matchSetup.awayTeam.id ? runStepCandidate : null;
+  const matchSides = getMatchSides(matchSetup);
+  const koreaEntry = Object.entries(matchSides).find(([,side]) => side.teamId === 'KOR');
+  const koreaSide = koreaEntry?.[1] ?? null;
   const captainNum =
     matchSetup.homeTeam.players.find((p) => p.id === matchSetup.homeTeam.lineup.captainId)?.num ?? null;
 
@@ -51,7 +53,7 @@ export default function matchScreen(root, ctx) {
     class: "score",
     text: `${homeCode} 0 : 0 ${awayCode}`,
   });
-  const clockEl = el("b", { text: "0'" });
+  const clockEl = el("b", { text: "00:00" });
   const possEl = el("b", { text: "-" });
   const camEl = el("b", { text: CAM_MODES.broadcast });
   const fpsEl = el("b", { text: "-" });
@@ -59,8 +61,8 @@ export default function matchScreen(root, ctx) {
   const feed = el("ul", { class: "feed" });
   const pathStatusEl = el("span", { class: "path-status" });
 
-  let paused = false;
-  let matchResult = null; // 경기 종료 후에만 채워진다 — 결과 화면이 떠 있다는 뜻이기도 하다
+  let matchPhase = 'kickoffBriefing';
+  let paused = true;
   let concedeChoicePending = false; // 실점 직후 "되돌릴지/진행할지" 명시적으로 물어보는 중인지
   let lastNotifiedConcedeTick = null; // 같은 실점에 배너를 두 번 띄우지 않으려는 표시
   let rewindsLeft = REWIND_LIMIT;
@@ -90,7 +92,7 @@ export default function matchScreen(root, ctx) {
 
   function setPaused(v) {
     // 하프타임/풀타임 중에는 '후반 시작' 버튼 없이 일반 재개로 넘어갈 수 없다
-    if (!v && sim.phase !== "playing") return;
+    if (!v && (sim.phase !== "playing" || matchPhase !== 'playing')) return;
     paused = v;
     pauseBtn.textContent = paused ? "▶ 재개" : "⏸ 일시정지";
     pauseBtn.classList.toggle("on", paused);
@@ -141,13 +143,10 @@ export default function matchScreen(root, ctx) {
   }
 
   function renderPhaseBanner() {
-    if (sim.phase === "halftime") {
-      phaseTitle.textContent = "전반 종료";
-      phaseSub.textContent =
-        "후반 시작을 누르면 원정팀 킥오프로 다시 시작합니다.";
-      phaseBanner.replaceChildren(phaseTitle, phaseSub, secondHalfBtn);
-    } else if (sim.phase === "fulltime") {
-      finishMatch();
+    if (sim.phase === "fulltime") {
+      phaseTitle.textContent = "경기 종료";
+      phaseSub.textContent = `최종 스코어 KOR ${sim.score.home} : ${sim.score.away} WLD`;
+      phaseBanner.replaceChildren(phaseTitle, phaseSub);
     }
   }
 
@@ -315,16 +314,7 @@ export default function matchScreen(root, ctx) {
     el("span", { text: "되감은 시점부터 새 전술로 경기가 다시 흘러갑니다." }),
   ]);
 
-  // 전/후반 전환 배너 — 일시정지 배너와 구분되는 별도 배너
-  const secondHalfBtn = el("button", {
-    class: "ctl",
-    text: "▶ 후반 시작",
-    onclick: () => {
-      sim.startSecondHalf();
-      setPaused(false);
-      view.sync(0);
-    },
-  });
+  // 경기 종료 안내 배너. 전반 종료는 별도 배너 없이 후반 안내 팝업으로 바로 전환한다.
   const phaseTitle = el("b", { text: "" });
   const phaseSub = el("span", { text: "" });
   const phaseBanner = el("div", { class: "banner phase-banner" }, [
@@ -515,7 +505,7 @@ export default function matchScreen(root, ctx) {
     const real = (now - last) / 1000;
     last = now;
 
-    if (!paused && sim.phase !== "fulltime") {
+    if (matchPhase === 'playing' && !paused && sim.phase !== "fulltime") {
       acc += Math.min(real, 0.1) * speed;
       let stepsThisFrame = 0;
       const MAX_STEPS_PER_FRAME = 6; // 브라우저가 못 따라갈 때 안전장치 (최대 배속 3x 기준)
@@ -532,7 +522,10 @@ export default function matchScreen(root, ctx) {
     if (sim.phase !== lastPhase) {
       lastPhase = sim.phase;
       renderPhaseBanner();
-      if (sim.phase === "halftime") setPaused(true);
+      if (sim.phase === "halftime") {
+        setPaused(true);
+        openKickoffBriefing('secondHalf');
+      }
       else updateBanners();
     }
 
@@ -548,7 +541,7 @@ export default function matchScreen(root, ctx) {
     }
 
     scoreEl.textContent = `${homeCode} ${sim.score.home} : ${sim.score.away} ${awayCode}`;
-    clockEl.textContent = `${sim.matchMinute}'`;
+    clockEl.textContent = formatMatchClock();
     updateRewindButton();
     const o = sim.playerByKey(sim.ball.ownerKey);
     possEl.textContent = o
@@ -568,6 +561,7 @@ export default function matchScreen(root, ctx) {
   }
 
   const onKey = (e) => {
+    if (matchPhase === 'kickoffBriefing') return;
     if (e.key === " ") {
       e.preventDefault();
       setPaused(!paused);
@@ -583,6 +577,106 @@ export default function matchScreen(root, ctx) {
   window.addEventListener("pointerdown", onWindowPointerDown);
   window.addEventListener("pointermove", onWindowPointerMove);
   window.addEventListener("pointerup", onWindowPointerUp);
+
+  const teamCard = (side,isKorea) => {
+    const country = countries[side.teamId];
+    return el('article',{class:`kickoff-team${isKorea?' is-korea':''}`},[
+      isKorea ? el('b',{class:'kickoff-team__badge',text:'내 팀'}) : null,
+      CountryFlag({teamId:side.teamId,size:'large'}),
+      el('h3',{text:country?.nameKo ?? side.code}),
+      el('div',{
+        class:'kickoff-shirt',
+        role:'img',
+        'aria-label':`${country?.nameKo ?? side.code} ${side.uniformLabel} 유니폼`,
+        style:`--uniform-color:${side.uniformColor}`,
+      }),
+      el('strong',{class:'kickoff-team__color',text:`${side.uniformLabel} 팀`}),
+      el('span',{class:'kickoff-team__label',text:side.teamLabel}),
+    ]);
+  };
+  const startMatchBtn = el('button',{
+    class:'primary kickoff-dialog__start',
+    type:'button',
+    text:'경기 시작 →',
+  });
+  const briefingEyebrow = el('p',{class:'kickoff-dialog__eyebrow'});
+  const briefingTitle = el('h2',{id:'kickoff-dialog-title'});
+  const briefingDescription = el('p');
+  const briefingTeams = el('div',{class:'kickoff-dialog__teams'});
+  const briefingNotice = el('p',{class:'kickoff-dialog__notice'});
+  const kickoffDialog = el('dialog',{
+    class:'kickoff-dialog',
+    role:'dialog',
+    'aria-modal':'true',
+    'aria-labelledby':'kickoff-dialog-title',
+  },[
+    el('div',{class:'kickoff-dialog__inner'},[
+      el('header',{class:'kickoff-dialog__header'},[
+        briefingEyebrow,
+        briefingTitle,
+        briefingDescription,
+      ]),
+      briefingTeams,
+      briefingNotice,
+      startMatchBtn,
+    ]),
+  ]);
+  const trapKickoffFocus = (event) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      return;
+    }
+    if (event.key === 'Tab') {
+      event.preventDefault();
+      startMatchBtn.focus();
+    }
+  };
+  kickoffDialog.addEventListener('cancel',(event)=>event.preventDefault());
+  kickoffDialog.addEventListener('keydown',trapKickoffFocus);
+  let briefingKind = 'firstHalf';
+  let briefingConfirming = false;
+  function openKickoffBriefing(kind) {
+    briefingKind = kind;
+    briefingConfirming = false;
+    const secondHalf = kind === 'secondHalf';
+    matchPhase = secondHalf ? 'halftimeBriefing' : 'kickoffBriefing';
+    paused = true;
+    briefingEyebrow.textContent = secondHalf ? 'GROUP A · MATCH 54 · SECOND HALF' : 'GROUP A · MATCH 54';
+    briefingTitle.textContent = secondHalf ? '후반전이 곧 시작됩니다' : '경기가 곧 시작됩니다';
+    briefingDescription.textContent = secondHalf
+      ? '후반전에는 양 팀의 진영과 골대 위치가 서로 바뀝니다.'
+      : '양 팀의 유니폼 색상을 확인한 뒤 경기를 시작하세요.';
+    const leftSide = secondHalf ? matchSides.away : matchSides.home;
+    const rightSide = secondHalf ? matchSides.home : matchSides.away;
+    briefingTeams.replaceChildren(
+      teamCard(leftSide,leftSide.teamId==='KOR'),
+      el('strong',{class:'kickoff-dialog__versus',text:'VS'}),
+      teamCard(rightSide,rightSide.teamId==='KOR'),
+    );
+    briefingNotice.textContent = secondHalf
+      ? `골대 위치가 바뀝니다. 대한민국은 오른쪽 진영의 ${koreaSide?.uniformLabel ?? ''} 팀입니다.`
+      : koreaSide
+        ? `대한민국은 왼쪽 진영의 ${koreaSide.uniformLabel} 팀입니다.`
+        : '대한민국의 유니폼 색상을 확인하세요.';
+    startMatchBtn.textContent = secondHalf ? '후반 시작 →' : '경기 시작 →';
+    if (!kickoffDialog.isConnected) document.body.append(kickoffDialog);
+    if (!kickoffDialog.open) kickoffDialog.showModal();
+    startMatchBtn.focus();
+  }
+  startMatchBtn.addEventListener('click',()=>{
+    if (briefingConfirming) return;
+    briefingConfirming = true;
+    if (briefingKind === 'secondHalf') {
+      sim.startSecondHalf();
+      view.sync(0);
+    }
+    matchPhase = 'playing';
+    paused = false;
+    kickoffDialog.close();
+    last = performance.now();
+    updateBanners();
+    pauseBtn.focus();
+  });
 
   root.append(
     el("div", { class: "screen match", "data-match-tag": runStep?.eyebrow ?? "FRIENDLY MATCH" }, [
@@ -647,6 +741,7 @@ export default function matchScreen(root, ctx) {
 
   view = createMatchView(stage, sim, captainNum);
   view.sync(0);
+  openKickoffBriefing('firstHalf');
   last = performance.now();
   raf = requestAnimationFrame(loop);
 
@@ -657,6 +752,8 @@ export default function matchScreen(root, ctx) {
     window.removeEventListener("pointerdown", onWindowPointerDown);
     window.removeEventListener("pointermove", onWindowPointerMove);
     window.removeEventListener("pointerup", onWindowPointerUp);
+    kickoffDialog.removeEventListener('keydown',trapKickoffFocus);
+    kickoffDialog.remove();
     view.dispose();
   };
 }

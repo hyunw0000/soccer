@@ -5,9 +5,7 @@ import { buildPitch } from './pitch.js';
 import { makePlayerRig, animateRig } from './playerRig.js';
 import { createCameraRig } from './cameraRig.js';
 import { createStadiumEnvironment } from './stadiumEnvironment.js';
-
-const HOME_COLOR = 0xc8102e;
-const AWAY_COLOR = 0x1f6feb;
+import { MATCH_SIDE_STYLES } from '../matchSides.js';
 
 /**
  * Sim(순수 상태) ↔ Three.js 씬을 잇는 얇은 어댑터.
@@ -23,7 +21,7 @@ export function createMatchView(container, sim, captainNum = null) {
   const rigToPlayer = new Map(); // rig → player (클릭 피킹 역참조용)
   for (const p of sim.homeP) {
     const rig = makePlayerRig({
-      color: HOME_COLOR,
+      color: MATCH_SIDE_STYLES.home.uniformHex,
       skin: 0xf0c9a0,
       num: p.num,
       isCaptain: p.num === captainNum,
@@ -33,7 +31,7 @@ export function createMatchView(container, sim, captainNum = null) {
     rigToPlayer.set(rig, p);
   }
   for (const p of sim.awayP) {
-    const rig = makePlayerRig({ color: AWAY_COLOR, skin: 0xd8b48a, num: p.num });
+    const rig = makePlayerRig({ color: MATCH_SIDE_STYLES.away.uniformHex, skin: 0xd8b48a, num: p.num });
     scene.add(rig);
     rigs.set(p, rig);
     rigToPlayer.set(rig, p);

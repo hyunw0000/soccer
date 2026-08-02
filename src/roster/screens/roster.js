@@ -67,6 +67,13 @@ export default function squadScreen(root, ctx) {
       ctx.navigate('lineup');
     },
   });
+  const floatingNext = el('button', {
+    class: 'primary roster-floating-next',
+    type: 'button',
+    text: '다음 →',
+    hidden: true,
+    onclick: () => next.click(),
+  });
 
   function refreshCounter() {
     counter.textContent = `${pool.size} / ${MAX_POOL}명`;
@@ -220,20 +227,21 @@ export default function squadScreen(root, ctx) {
   const panel = (title, body, cls) =>
     el('section', { class: `transfer-panel ${cls}` }, [title, body]);
 
+  const hero = el('header', { class: 'topbar' }, [
+    el('div', {}, [
+      el('p', { class: 'eyebrow', text: 'KOREA REPUBLIC · NATIONAL SQUAD' }),
+      el('h2', { class: 'h2', text: '역사를 바꿀 26인' }),
+      el('p',{class:'topbar-description',text:'대한민국의 운명을 함께할 선수단을 구성하고 주장을 선택합니다.'}),
+    ]),
+    el('div', { class: 'topbar-right' }, [
+      counter,
+      el('button', { class: 'ghost', text: '← 이전', onclick: () => ctx.navigate('tournament') }),
+      next,
+    ]),
+  ]);
   root.append(
     el('div', { class: 'screen page' }, [
-      el('header', { class: 'topbar' }, [
-        el('div', {}, [
-          el('p', { class: 'eyebrow', text: 'KOREA REPUBLIC · NATIONAL SQUAD' }),
-          el('h2', { class: 'h2', text: '역사를 바꿀 26인' }),
-          el('p',{class:'topbar-description',text:'대한민국의 운명을 함께할 선수단을 구성하고 주장을 선택합니다.'}),
-        ]),
-        el('div', { class: 'topbar-right' }, [
-          counter,
-          el('button', { class: 'ghost', text: '← 이전', onclick: () => ctx.navigate('tournament') }),
-          next,
-        ]),
-      ]),
+      hero,
       el('p', { class: 'lead' }, [
         `대한민국의 운명을 함께할 선수단입니다. 감독 `,
         el('b', { text: state.managerName || '이름 없음' }),
@@ -249,5 +257,18 @@ export default function squadScreen(root, ctx) {
     ])
   );
 
+  document.querySelector('.top-navigation')?.append(floatingNext);
+  const updateFloatingNext = () => {
+    const navigationHeight = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--app-navigation-height')) || 62;
+    floatingNext.hidden = hero.getBoundingClientRect().bottom > navigationHeight;
+  };
+  window.addEventListener('scroll',updateFloatingNext,{passive:true});
+  window.addEventListener('resize',updateFloatingNext);
+  updateFloatingNext();
   render();
+  return () => {
+    window.removeEventListener('scroll',updateFloatingNext);
+    window.removeEventListener('resize',updateFloatingNext);
+    floatingNext.remove();
+  };
 }

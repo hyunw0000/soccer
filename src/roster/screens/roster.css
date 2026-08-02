@@ -1,5 +1,19 @@
 /* Roster 페이지 전용 스타일. 공용 토큰만 사용하고 카드·버튼·색상은 재정의하지 않는다. */
 
+.roster-floating-next {
+  position:fixed;
+  z-index:110;
+  top:7px;
+  right:max(18px,calc((100vw - var(--game-page-max-width))/2 + 28px));
+  min-width:180px;
+  min-height:48px;
+  padding:10px 18px;
+  font-size:13px;
+  box-shadow:0 0 18px rgba(239,51,69,.22);
+}
+
+.roster-floating-next[hidden] { display:none; }
+
 /* 대회 화면의 조별리그/토너먼트 서브탭과 같은 포지션 필터 */
 .screen.page > .chips {
   display:flex;
@@ -127,6 +141,7 @@
 }
 
 @media (max-width: 900px) {
+  .roster-floating-next { display:none; }
   .transfer { grid-template-columns: 1fr; }
   .transfer-arrows { flex-direction: row; justify-content: center; }
   .move-btn { flex: 1; grid-auto-flow: column; padding: 10px 0; }

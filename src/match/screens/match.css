@@ -1,5 +1,56 @@
 /* Match 페이지 전용 스타일 예약 파일. 현재 UI는 공용 base.css를 유지한다. */
 
+.kickoff-dialog {
+  width:min(720px,calc(100vw - 40px));
+  max-width:none;
+  max-height:min(760px,calc(100vh - 48px));
+  margin:auto;
+  overflow:auto;
+  border:1px solid rgba(82,181,218,.68);
+  padding:0;
+  color:#edf6f8;
+  background:#06141e;
+  box-shadow:inset 3px 0 rgba(35,142,208,.55),inset -3px 0 rgba(239,51,69,.45),0 28px 80px rgba(0,0,0,.62);
+}
+.kickoff-dialog::backdrop { background:rgba(0,0,0,.76); backdrop-filter:blur(3px); }
+.kickoff-dialog__inner { padding:clamp(22px,4vw,36px); }
+.kickoff-dialog__header { text-align:center; }
+.kickoff-dialog__eyebrow { color:#5fcaef; font-size:11px; font-weight:900; letter-spacing:.22em; }
+.kickoff-dialog__header h2 { margin:8px 0 6px; font-size:clamp(26px,4vw,38px); letter-spacing:-.04em; }
+.kickoff-dialog__header>p:last-child { color:#8fa5b2; font-size:13px; }
+.kickoff-dialog__teams { display:grid; grid-template-columns:minmax(0,1fr) 54px minmax(0,1fr); align-items:center; gap:16px; margin-top:28px; }
+.kickoff-dialog__versus { color:#ef3d4d; font-size:30px; font-weight:950; text-align:center; }
+.kickoff-team { position:relative; display:grid; min-width:0; justify-items:center; gap:7px; border:1px solid rgba(80,139,164,.38); padding:20px 14px 17px; background:rgba(2,13,21,.74); text-align:center; }
+.kickoff-team.is-korea { border-color:rgba(91,214,255,.72); background:linear-gradient(135deg,rgba(25,118,174,.18),rgba(195,31,50,.16)); }
+.kickoff-team__badge { position:absolute; top:9px; right:9px; border:1px solid rgba(91,214,255,.62); padding:3px 7px; color:#fff; background:rgba(14,91,125,.66); font-size:10px; }
+.kickoff-team h3 { min-height:44px; font-size:clamp(17px,2.5vw,22px); line-height:1.25; overflow-wrap:anywhere; }
+.kickoff-shirt { position:relative; width:68px; height:64px; margin:5px 0 2px; clip-path:polygon(22% 0,38% 0,42% 8%,58% 8%,62% 0,78% 0,100% 20%,82% 40%,75% 32%,75% 100%,25% 100%,25% 32%,18% 40%,0 20%); background:var(--uniform-color); box-shadow:inset 0 0 0 2px rgba(255,255,255,.28); }
+.kickoff-shirt::after { content:""; position:absolute; top:0; left:38%; width:24%; height:14%; border-radius:0 0 50% 50%; background:#071620; }
+.kickoff-team__color { font-size:14px; }
+.kickoff-team__label { color:#859aa7; font-size:10px; font-weight:850; letter-spacing:.14em; }
+.kickoff-dialog__notice { margin:24px 0 16px; color:#73dda8; font-size:17px; font-weight:850; text-align:center; }
+.kickoff-dialog__start { display:block; width:min(100%,420px); min-height:54px; margin:0 auto; font-size:16px; }
+.kickoff-dialog__start:focus-visible { outline:2px solid #fff; outline-offset:3px; }
+
+@media (max-width:560px) {
+  .kickoff-dialog { width:calc(100vw - 24px); max-height:calc(100vh - 24px); }
+  .kickoff-dialog__inner { padding:20px 14px; }
+  .kickoff-dialog__teams { grid-template-columns:1fr; gap:10px; margin-top:20px; }
+  .kickoff-dialog__versus { font-size:22px; }
+  .kickoff-team { width:100%; grid-template-columns:auto minmax(0,1fr) auto; align-items:center; justify-items:start; gap:6px 12px; padding:14px; text-align:left; }
+  .kickoff-team>.country-flag { grid-row:1 / 4; }
+  .kickoff-team h3 { min-height:0; font-size:17px; }
+  .kickoff-shirt { grid-column:3; grid-row:1 / 4; width:54px; height:50px; margin:0; }
+  .kickoff-team__badge { position:static; grid-column:2; grid-row:1; justify-self:end; }
+  .kickoff-team__color,.kickoff-team__label { grid-column:2; }
+  .kickoff-dialog__notice { margin-block:18px 14px; font-size:15px; }
+  .kickoff-dialog__start { width:100%; }
+}
+
+@media (prefers-reduced-motion:reduce) {
+  .kickoff-dialog,.kickoff-dialog::backdrop { scroll-behavior:auto; }
+}
+
 /* 전반→후반 전환 배너 및 일시정지 배너(.banner)와 구분하기 위한 강조 테두리 */
 .phase-banner {
   border-color: var(--accent);
