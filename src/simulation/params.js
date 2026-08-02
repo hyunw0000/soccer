@@ -97,6 +97,12 @@ export const PARAMS = {
   gkParryShare: 0.45,
   gkPunchForce: 17,
   gkPunchBaseErrorDeg: 16, // 쳐내기는 방향을 고를 여유가 없다
+  // 쳐낸 볼의 방향은 "제대로 손을 댄 정도"(control)로 갈린다. 아래 셋은 control이 0일 때,
+  // 즉 강슛을 몸 던져 간신히 건드렸을 때 얼마나 손을 벗어나는지를 정한다.
+  gkParryLeak: 0.55, // 들어오던 속도가 그대로 남는 비율 — 이게 볼을 골라인 밖으로 흘려보낸다
+  gkParrySideBias: 0.9, // 손에 스치며 옆으로 밀리는 정도(골문 정면이면 최대 2배)
+  gkTipLoftBonus: 22, // 위로 뜨는 추가 각도 — 크로스바를 넘기면 그것도 코너킥이다
+  gkParryMinForce: 6, // 두 성분이 상쇄돼 볼이 발밑에 멈추는 걸 막는 하한
   gkHoldTicks: 40, // 잡은 뒤 다음 판단(패스/골킥)까지 들고 있는 시간
   gkSaveEventSpeed: 18, // 이 속도 이상으로 날아온 볼을 막았을 때만 "선방"으로 기록한다
   // 공중볼 낙하 예측으로 키퍼가 골문에서 나오는 최대 거리(m). 크게 잡으면 크로스에 다 나와서

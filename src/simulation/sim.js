@@ -552,9 +552,17 @@ export class Sim {
 
       if (isCarrier) {
         // 볼을 발밑 앞쪽에 붙여둔다 — 따로 물리 갱신하지 않고 매 틱 캐리어 위치로 스냅한다.
-        // 여기도 골라인 바로 앞(-0.5m 여유)까지만 허용해 위 클램프와 이중으로 막는다.
+        // 여기도 라인 바로 앞(-0.5m 여유)까지만 허용해 위 클램프와 이중으로 막는다.
+        //
+        // z에 여유가 없던 게 오래된 버그였다. 아웃 판정이 `|z| >= HALF.W`(경계 포함)인데
+        // 클램프 상한이 딱 HALF.W라, 터치라인 근처의 캐리어가 바깥을 보기만 하면 볼이 정확히
+        // 라인 위로 박혀 그 틱에 아웃으로 잡혔다. 그러면 스로인 → 상대 선수가 그 자리로
+        // 순간이동해 캐리어가 됨 → 다음 틱에 또 아웃 …이 반복된다.
+        // 실측: 스로인의 **99%가 직전 스로인 1틱 뒤**에 났고(24경기 263회, 간격 중앙값 1틱),
+        // 그래서 경기당 11회라는 숫자 자체가 사실은 두세 번의 무한 왕복이었다.
+        // x축은 원래부터 0.5m 여유가 있어 골라인에서는 이 현상이 없었다 — 그냥 z만 빠져 있었다.
         this.ball.x = clamp(p.x + Math.sin(p.heading) * PARAMS.dribbleCarryOffset, -HALF.L + 0.5, HALF.L - 0.5);
-        this.ball.z = clamp(p.z + Math.cos(p.heading) * PARAMS.dribbleCarryOffset, -HALF.W, HALF.W);
+        this.ball.z = clamp(p.z + Math.cos(p.heading) * PARAMS.dribbleCarryOffset, -HALF.W + 0.5, HALF.W - 0.5);
         this.ball.vx = p.vx;
         this.ball.vz = p.vz;
         // 발밑에 붙은 볼은 항상 땅에 있다 — 공중볼을 잡은 직후에도 높이를 여기서 확실히 죽인다.
@@ -1006,11 +1014,11 @@ export class Sim {
         0,
         1
       ) * PARAMS.gkCatchHeightPenalty;
-    const catchProb = clamp(
-      PARAMS.gkCatchBaseProb * handling * speedFactor * reachFactor * heightFactor,
-      PARAMS.gkCatchMin,
-      PARAMS.gkCatchMax
-    );
+    // 네 배수를 곱한 값이 곧 "이번 볼을 얼마나 제대로 다룰 수 있었나"다. 캐치 확률의 재료이자
+    // 쳐냈을 때 방향을 얼마나 통제했는지(아래 control)의 재료이기도 하다 — 둘이 같은 값에서
+    // 나와야 "간신히 손끝에 걸린 볼일수록 엉뚱한 데로 튄다"가 저절로 맞아떨어진다.
+    const quality = handling * speedFactor * reachFactor * heightFactor;
+    const catchProb = clamp(PARAMS.gkCatchBaseProb * quality, PARAMS.gkCatchMin, PARAMS.gkCatchMax);
     const parryProb = (1 - catchProb) * PARAMS.gkParryShare;
     const roll = seededRandom(this.tick, seededRandomPlayerId(gk.team, gk.idx), ACTION_ID.GK_CLAIM);
     const gkKey = `${gk.team}:${gk.idx}`;
@@ -1032,16 +1040,48 @@ export class Sim {
     }
 
     if (roll < catchProb + parryProb) {
-      // 펀칭 — 잡지는 못하고 옆으로 쳐냈다. 방향을 고를 여유가 없어 오차가 크다.
+      // 쳐내기 — 잡지는 못했지만 손끝에 걸렸다.
+      //
+      // 예전에는 방향이 언제나 (attackDirection, side), 즉 **전방 45도 대각선 하나뿐**이었다.
+      // 그래서 어떤 강슛을 막아도 볼이 앞으로만 튀어 나갔고, 24경기에서 쳐낸 51번 중 96%가
+      // 앞으로 갔다(옆 4%, 뒤 0%). 코너킥이 0.00회/경기였던 직접적인 원인이다.
+      //
+      // 이제 "얼마나 제대로 손을 댔나"(control)로 두 성분을 섞는다. 분기가 아니라 하나의 식이라
+      // 임계점이 생기지 않는다.
+      //   - 제대로 댄 몫(control)   : 키퍼가 의도한 방향 — 앞+옆으로 걷어낸다 (예전 동작)
+      //   - 못 댄 몫(1-control)     : 들어오던 기세가 그대로 남아 골문 쪽으로 흐르고,
+      //                              손에 스치며 옆으로 밀리고, 위로 뜬다
+      // 느린 볼을 정면에서 받으면 control이 1에 가까워 예전과 똑같은 펀칭이 되고,
+      // 강슛을 몸 던져 건드리면 control이 0에 가까워 볼이 옆/뒤로 빠진다 → 코너킥.
+      const control = clamp(quality, 0, 1);
       const side = b.z >= 0 ? 1 : -1;
+
+      // 키퍼가 의도한 몫. 단위벡터로 만들어 곱하므로 control=1이면 예전과 같은 세기(gkPunchForce)다.
+      const intended = 1 / Math.SQRT2;
+      const wx = gk.attackDirection * intended * PARAMS.gkPunchForce * control;
+      const wz = side * intended * PARAMS.gkPunchForce * control;
+
+      // 못 댄 몫. 골문 정면으로 온 볼일수록 옆으로 더 크게 밀어내야 포스트를 벗어난다 —
+      // 실제로도 정면 강슛은 옆으로 쳐내는 것 말고는 방법이 없다. 이게 없으면 손끝에 걸린
+      // 볼이 그대로 골문 안으로 흘러 들어가 "선방했는데 실점"이 잦아진다.
+      const centrality = 1 - clamp(Math.abs(b.z) / (GOAL_W / 2), 0, 1);
+      const leak = (1 - control) * PARAMS.gkParryLeak;
+      const lx = b.vx * leak;
+      const lz = b.vz * leak + side * speed * leak * PARAMS.gkParrySideBias * (1 + centrality);
+
       const errDeg = this.errorDegrees(gk, {
         statValue: gk.defenseSkill,
         distance: PARAMS.distanceErrorRef,
         baseDeg: PARAMS.gkPunchBaseErrorDeg,
       });
-      const [edx, edz] = this.rotateXZ(gk.attackDirection, side, errDeg);
-      b.kick(edx, edz, PARAMS.gkPunchForce, gkKey, PARAMS.gkPunchLoftDeg);
-      if (worthLogging) this.pushEvent('save', gk.team, `${gk.name} 펀칭`);
+      const [edx, edz] = this.rotateXZ(wx + lx, wz + lz, errDeg);
+      // 세기는 두 성분을 더한 크기를 그대로 쓴다. 최소값을 두는 건 두 성분이 서로 상쇄돼
+      // 볼이 키퍼 발밑에 멈추는 걸 막기 위한 것이다(그러면 곧바로 다시 잡아 버린다).
+      const force = Math.max(PARAMS.gkParryMinForce, vlen(wx + lx, wz + lz));
+      // 손끝에 걸린 볼일수록 위로 뜬다 — 크로스바를 넘기면 그것도 코너킥이다.
+      const loftDeg = PARAMS.gkPunchLoftDeg + (1 - control) * PARAMS.gkTipLoftBonus;
+      b.kick(edx, edz, force, gkKey, loftDeg);
+      if (worthLogging) this.pushEvent('save', gk.team, `${gk.name} 선방`);
       return true;
     }
 
