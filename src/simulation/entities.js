@@ -45,6 +45,9 @@ export class Player {
     // 되감기 후 드래그로 내리는 경로 지시. { waypoints: [{x,z},...], index } | null.
     // 있으면 기본 AI(추격/포메이션 유지) 대신 이 경로를 arrive()로 따라간다.
     this.command = null;
+    this.yellowCards = 0;
+    // 퇴장 여부 — true가 되면 그 순간부터 경기장 밖으로 빠져 다시는 판단/이동에 끼지 않는다.
+    this.sentOff = false;
   }
 
   /** 공격 방향 골라인의 x좌표 */
@@ -76,6 +79,9 @@ export class Ball {
     // 코너킥/골킥을 어느 팀에 줄지, 골 득점자가 누군지는 "날아가는 동안" 판정해야 하는데,
     // ownerKey는 킥하는 순간 바로 null이 돼서 그때는 이미 늦다).
     this.lastTouchKey = null;
+    // 슛으로 날아가는 중인지 표시 — GK가 이 상태의 볼을 잡으면 "선방"이다. 다른 킥(패스/
+    // 클리어)이나 아무나 다시 잡으면 사건이 끝난 것이므로 지운다.
+    this.shotBy = null;
   }
   /** 지면에서 떠 있는지 — 발로 잡을지/헤딩할지, 크로스바 밑으로 들어갔는지를 이걸로 가른다. */
   get airborne() {
@@ -95,6 +101,7 @@ export class Ball {
     this.vy = force * Math.sin(rad);
     this.ownerKey = null;
     this.carrierKey = null; // 패스/슛/클리어 — 어느 쪽이든 킥하면 드리블이 끝난다
+    this.shotBy = null; // 새 킥이 이전 슛을 대체한다 — 슛인 경우 호출부가 다시 세팅한다
     if (byKey) this.lastTouchKey = byKey;
   }
 

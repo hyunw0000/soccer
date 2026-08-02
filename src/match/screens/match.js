@@ -79,7 +79,9 @@ export default function matchScreen(root, ctx) {
   let fpsT = 0;
   let fpsN = 0;
   let raf = 0;
-  let renderedEvents = 0;
+  // events 배열은 50개가 넘으면 앞에서 shift()로 밀린다. 배열 인덱스로 "어디까지 그렸는지"를
+  // 세면 밀린 만큼 어긋나 이벤트가 중복되거나 씹힌다 — id(고유, 안 변함)로 추적한다.
+  let lastRenderedEventId = 0;
   let lastPhase = sim.phase;
   let speed = 1; // 1 | 2 | 3 — 재생 배속(UI 상태). Sim/RewindBuffer에는 저장하지 않는다.
   let matchResult = null; // fulltime 결과 기록. null인 동안만 경기 루프와 되감기를 허용한다.
@@ -268,8 +270,8 @@ export default function matchScreen(root, ctx) {
     sim.markRewindUsed();
     rewindsLeft--;
     rewindEl.textContent = `${rewindsLeft}회`;
-    renderedEvents = Math.min(renderedEvents, sim.events.length);
     feed.replaceChildren(...[...sim.events].map(eventNode));
+    lastRenderedEventId = sim.events.length ? sim.events[sim.events.length - 1].id : 0;
     // 스냅샷에는 되감은 시점의 전술이 들어 있다. 시계는 되돌리되 감독의 지시는 지금 것을 유지한다.
     sim.applyTactics(livePlan);
     syncTacticSliders();
@@ -794,8 +796,8 @@ export default function matchScreen(root, ctx) {
       ? `${o.team === "home" ? homeCode : awayCode} #${o.num} ${o.name}`
       : "경합 중";
 
-    while (renderedEvents < sim.events.length)
-      feed.prepend(eventNode(sim.events[renderedEvents++]));
+    for (const ev of newEvents) feed.prepend(eventNode(ev));
+    if (newEvents.length) lastRenderedEventId = newEvents[newEvents.length - 1].id;
 
     fpsN++;
     fpsT += real;
