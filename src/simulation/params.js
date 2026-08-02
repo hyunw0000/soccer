@@ -24,6 +24,9 @@ export const PARAMS = {
   centerCircleRadius: 9.15, // 킥오프 규정 거리
   kickoffUnlockSpeed: 0.5, // 이 이상으로 볼이 움직이면 킥오프 제한 해제
   rewindCooldownSeconds: 15, // 되감기 쿨다운(게임 시간 15분 스케일 = clockSeconds 15단위)
+  // 실점 순간에만 그 골을 겨냥한 되감기를 제안한다 — 이 시간(같은 단위)이 지나면
+  // "실점 직전으로" 제안이 사라지고 기회는 끝난다(감독이 그 자리에서 안 쓰면 그냥 지나감).
+  concedeRewindWindowSeconds: 10,
 
   // 실수는 성공/실패 주사위가 아니라 "방향 오차"로만 만든다 — errorDegrees()가 이 값들을 곱해 오차각을 낸다.
   passBaseErrorDeg: 3, // 압박 없음·전력·짧은 패스 기준 오차각

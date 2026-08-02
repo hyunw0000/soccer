@@ -17,8 +17,6 @@ const RUN_PUSH = 14;
 const SNAP_STRIDE = 7;
 // 실점 이벤트로부터 몇 초(clockSeconds 단위) 전을 되감기 목표로 삼을지
 const EVENT_REWIND_LOOKBACK_SECONDS = 3;
-// 아직 실점이 없을 때의 대체 되감기 폭 — match.js의 기존 "8초 되감기"와 같은 단위
-const FALLBACK_REWIND_SECONDS = 8;
 
 const inCoordRange = (n) => Number.isFinite(n) && n >= -COORD_LIMIT && n <= COORD_LIMIT;
 
@@ -546,20 +544,34 @@ export class Sim {
   }
 
   /**
-   * 되감기 목표 tick.
-   * 실점 이벤트가 있으면 그 직전(EVENT_REWIND_LOOKBACK_SECONDS만큼 앞)을,
-   * 없으면 지금으로부터 FALLBACK_REWIND_SECONDS만큼 앞을 목표로 한다.
+   * 되감기 버튼은 "그 실점이 일어난 순간"에만 그 골을 겨냥한다 — 감독이 그 자리에서
+   * 안 쓰고 넘어가면 기회가 지나간 것이지, 경기 끝까지 계속 그 골을 되감을 수 있는 게
+   * 아니다. PARAMS.concedeRewindWindowSeconds가 지나면 더는 이 이벤트를 겨냥하지 않는다.
    */
-  getRewindTargetTick() {
+  getActiveConcedeEvent() {
     const concede = this.getLastConcedeEvent();
-    if (concede) {
-      return Math.max(0, concede.tick - EVENT_REWIND_LOOKBACK_SECONDS / PARAMS.dt);
-    }
-    return Math.max(0, this.tick - FALLBACK_REWIND_SECONDS / PARAMS.dt);
+    if (!concede) return null;
+    const elapsed = (this.tick - concede.tick) * PARAMS.dt;
+    return elapsed <= PARAMS.concedeRewindWindowSeconds ? concede : null;
   }
 
-  /** 되감기를 지금 실행해도 되는지 — 후반 막판 잠금과 쿨다운을 검사한다. */
+  /**
+   * 되감기 목표 tick. 실점 이벤트가 아직 기회(concedeRewindWindowSeconds) 안에 있을 때만
+   * 그 직전(EVENT_REWIND_LOOKBACK_SECONDS만큼 앞)을 계산한다. 되감기는 그 순간에만 쓸 수
+   * 있는 것이라 그 외에는 폴백 없이 null — 호출 전에 반드시 canRewind()로 확인해야 한다.
+   */
+  getRewindTargetTick() {
+    const concede = this.getActiveConcedeEvent();
+    if (!concede) return null;
+    return Math.max(0, concede.tick - EVENT_REWIND_LOOKBACK_SECONDS / PARAMS.dt);
+  }
+
+  /**
+   * 되감기를 지금 실행해도 되는지 — 실점 이벤트가 기회 안에 있어야 하고(그 순간에만
+   * 되감기가 의미를 가진다), 후반 막판이 아니어야 하고, 쿨다운도 지나 있어야 한다.
+   */
   canRewind() {
+    if (!this.getActiveConcedeEvent()) return false; // 되감기는 실점 순간에만 쓸 수 있다
     if (this.half === 2 && this.matchMinute >= 85) return false; // 마지막 5분은 확정 — 되감기 불가
     if (
       this.lastRewindTick !== null &&

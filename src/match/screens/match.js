@@ -7,8 +7,8 @@ import {
 } from "../../simulation/index.js";
 import { createMatchView, CAM_MODES } from "../render3d/index.js";
 
-const REWIND_SECONDS = 8;
-const REWIND_LIMIT = 3; // 감독의 '되감기'는 유한한 자원이다 — 이 서비스의 규칙
+const REWIND_LIMIT = 2; // 감독의 '되감기'는 유한한 자원이다 — 이 서비스의 규칙
+const REWIND_IDLE_LABEL = "↶ 실점 시에만 되감기 가능"; // 겨냥할 실점이 없을 때(대기 상태)
 
 export default function matchScreen(root, ctx) {
   const matchSetup = state.pendingMatchSetup ?? null;
@@ -76,7 +76,7 @@ export default function matchScreen(root, ctx) {
   });
   const rewindBtn = el("button", {
     class: "ctl warn",
-    text: `↶ ${REWIND_SECONDS}분 되감기`,
+    text: REWIND_IDLE_LABEL,
     onclick: doRewind,
   });
 
@@ -142,14 +142,17 @@ export default function matchScreen(root, ctx) {
     return remaining > 0 ? Math.ceil(remaining) : 0;
   }
 
-  // 되감기 버튼의 라벨/활성 상태를 sim 상태에 맞춘다 — 매 프레임 loop()에서도 호출된다
+  // 되감기 버튼의 라벨/활성 상태를 sim 상태에 맞춘다 — 매 프레임 loop()에서도 호출된다.
+  // 되감기는 실점이 난 그 순간(concedeRewindWindowSeconds 안)에만 쓸 수 있다 — 그 외엔
+  // 항상 대기 라벨이고 버튼도 꺼져 있다. 폴백으로 아무 때나 되감는 경로는 없다.
   function updateRewindButton() {
-    const concede = sim.getLastConcedeEvent();
-    const baseLabel = concede
-      ? `⏪ ${formatEventClock(concede)} 실점 직전으로`
-      : `↶ ${REWIND_SECONDS}분 되감기`;
+    const concede = sim.getActiveConcedeEvent();
     const cooldownMinutes = cooldownRemainingMinutes();
-    rewindBtn.textContent = cooldownMinutes > 0 ? `⏳ ${cooldownMinutes}분 후 되감기 가능` : baseLabel;
+    rewindBtn.textContent = !concede
+      ? REWIND_IDLE_LABEL
+      : cooldownMinutes > 0
+        ? `⏳ ${cooldownMinutes}분 후 되감기 가능`
+        : `⏪ ${formatEventClock(concede)} 실점 직전으로`;
     rewindBtn.disabled = rewindsLeft <= 0 || !sim.canRewind();
   }
 
@@ -157,6 +160,7 @@ export default function matchScreen(root, ctx) {
     if (rewindsLeft <= 0) return;
     if (!sim.canRewind()) return;
     const targetTick = sim.getRewindTargetTick();
+    if (targetTick === null) return; // canRewind()가 true면 항상 있어야 하지만 방어적으로
     const snap = rewind.findNearestTick(targetTick);
     if (!snap) return;
     sim.restore(snap);
