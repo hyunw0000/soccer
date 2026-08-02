@@ -366,12 +366,19 @@ export default function tacticsScreen(root, ctx) {
       : runStep
         ? `승리 시 ${runStep.advanceLabel} 진출`
         : "";
+  const matchCardTitle = runStep?.stage === "group"
+    ? "운명을 가를 마지막 경기"
+    : runStep?.stage === "final"
+      ? "우승을 가를 마지막 경기"
+      : runStep
+        ? `${runStep.advanceLabel} 진출을 가를 경기`
+        : "경기 준비";
 
   const kickoffCard=el("section",{class:"tactics-match-card","aria-label":`${opponent.name} 대 대한민국 경기 준비`},[
     el("header",{},[
       el("div",{},[
         el("p",{class:"eyebrow",text:runStep?.eyebrow ?? "FRIENDLY MATCH"}),
-        el("h3",{text:runStep?.stage === "group" ? "운명을 가를 마지막 경기" : `${runStep?.roundLabel ?? ""} 진출을 가를 경기`}),
+        el("h3",{text:matchCardTitle}),
       ]),
       previousBtn,
     ]),
