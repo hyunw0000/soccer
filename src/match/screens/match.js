@@ -53,6 +53,12 @@ export default function matchScreen(root, ctx) {
     class: "score",
     text: `${homeCode} 0 : 0 ${awayCode}`,
   });
+  function updateScoreboard() {
+    const endsSwapped = sim.homeP[0]?.attackDirection === -1;
+    scoreEl.textContent = endsSwapped
+      ? `${awayCode} ${sim.score.away} : ${sim.score.home} ${homeCode}`
+      : `${homeCode} ${sim.score.home} : ${sim.score.away} ${awayCode}`;
+  }
   const clockEl = el("b", { text: "00:00" });
   const possEl = el("b", { text: "-" });
   const camEl = el("b", { text: CAM_MODES.broadcast });
@@ -548,7 +554,7 @@ export default function matchScreen(root, ctx) {
       }
     }
 
-    scoreEl.textContent = `${homeCode} ${sim.score.home} : ${sim.score.away} ${awayCode}`;
+    updateScoreboard();
     clockEl.textContent = formatTickClock(sim.tick);
     updateRewindButton();
     const o = sim.playerByKey(sim.ball.ownerKey);
@@ -676,6 +682,7 @@ export default function matchScreen(root, ctx) {
     briefingConfirming = true;
     if (briefingKind === 'secondHalf') {
       sim.startSecondHalf({ swapEnds:true });
+      updateScoreboard();
       view.sync(0);
     }
     matchPhase = 'playing';
