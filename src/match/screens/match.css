@@ -87,18 +87,99 @@
 @media (max-width:720px) {
   .screen.match::after { display:none; }
 }
-/* 실점 순간 "되돌릴지/진행할지" 묻는 배너 — 일시정지/전후반 배너와 구분되는 경고색 테두리 */
+/* 실점 순간의 선택 — 화면에서 가장 강한 경고와 되돌리기 액션으로 표현한다. */
 .concede-banner {
-  border-color: var(--bad, #ff565d);
+  z-index:8;
+  width:min(680px,calc(100vw - 32px));
+  gap:10px;
+  border:2px solid #ff4054;
+  padding:32px clamp(20px,4vw,42px) 28px;
+  overflow:visible;
+  background:
+    radial-gradient(circle at 50% 0,rgba(239,45,66,.24),transparent 52%),
+    linear-gradient(rgba(239,61,82,.055) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(239,61,82,.055) 1px,transparent 1px),
+    rgba(3,13,20,.97);
+  background-size:auto,20px 20px,20px 20px,auto;
+  box-shadow:inset 4px 0 #ef3345,inset -4px 0 #ef3345,0 0 0 9999px rgba(0,0,0,.52),0 20px 70px rgba(239,45,66,.35);
+  animation:concede-impact .28s cubic-bezier(.2,.9,.3,1.25) both;
+}
+.concede-banner::before {
+  content:"";
+  position:absolute;
+  inset:-7px 46px auto;
+  height:3px;
+  background:linear-gradient(90deg,transparent,#ff4054,transparent);
+  box-shadow:0 0 18px #ff4054;
+}
+.concede-banner .concede-eyebrow {
+  color:#ff6575;
+  font-size:11px;
+  font-weight:950;
+  letter-spacing:.2em;
+}
+.concede-title {
+  color:#fff;
+  font-size:clamp(25px,4vw,38px);
+  font-weight:950;
+  line-height:1.2;
+  letter-spacing:-.04em;
+}
+.concede-title span { color:inherit; font-size:inherit; }
+.concede-moment {
+  color:#ff4054;
+  font-size:1.15em;
+  text-shadow:0 0 22px rgba(255,64,84,.5);
+}
+.concede-banner .concede-sub {
+  margin:0;
+  color:#aec1ca;
+  font-size:14px;
+  line-height:1.65;
+}
+.concede-banner .concede-sub span { color:inherit; font-size:inherit; }
+.concede-target {
+  display:inline-block;
+  margin:0 4px;
+  border:1px solid rgba(91,214,255,.6);
+  padding:1px 7px;
+  color:#64dff5;
+  background:rgba(35,143,181,.14);
+  font-size:15px;
 }
 .concede-actions {
   display: flex;
-  gap: 8px;
-  margin-top: 6px;
+  width:100%;
+  gap:12px;
+  margin-top:12px;
 }
 .concede-actions .ctl {
   flex: 1;
+  min-height:58px;
+  border-radius:0;
+  font-size:15px;
+  font-weight:900;
   text-align: center;
+}
+.concede-actions .warn {
+  border-color:#ffca36;
+  color:#fff7c7;
+  background:linear-gradient(115deg,#6d5000,#ac7000 58%,#ef3d4d);
+  box-shadow:inset 0 0 0 1px rgba(255,232,126,.2),0 8px 26px rgba(226,132,0,.2);
+}
+.concede-actions .warn:hover { background:linear-gradient(115deg,#866300,#c98600 58%,#ff4054); }
+
+@keyframes concede-impact {
+  from { opacity:0; transform:translate(-50%,-50%) scale(.88); }
+  to { opacity:1; transform:translate(-50%,-50%) scale(1); }
+}
+@media (max-width:560px) {
+  .concede-banner { padding:26px 16px 18px; }
+  .concede-actions { flex-direction:column; }
+  .concede-actions .ctl { min-height:50px; }
+}
+@media (prefers-reduced-motion:reduce) {
+  .concede-banner { animation:none; }
 }
 /* 경기 종료 결과 — 킥오프/후반 안내와 같은 전체 모달 안에서 국가와 스코어를 강조한다. */
 .match-result-dialog[data-outcome="win"] { border-color: #3fd694; }

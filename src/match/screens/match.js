@@ -125,9 +125,9 @@ export default function matchScreen(root, ctx) {
   // 그냥 흘러가게 두면 되감기 기능이 있는 의미가 없다.
   function showConcedeChoice(ev) {
     concedeChoicePending = true;
-    concedeTitle.textContent = `${formatEventClock(ev)} 실점했습니다`;
-    concedeSub.textContent = `되돌리면 ${formatTickClock(sim.getRewindTargetTick() ?? ev.tick)}으로 돌아가 전술을 다시 짤 수 있습니다.`;
-    concedeRewindBtn.textContent = `⏪ 되돌리기 (${rewindsLeft}회 남음)`;
+    concedeMoment.textContent = formatEventClock(ev);
+    concedeTarget.textContent = formatTickClock(sim.getRewindTargetTick() ?? ev.tick);
+    concedeRewindBtn.textContent = `⏪ 운명 되돌리기 · ${rewindsLeft}회 남음`;
     concedeRewindBtn.disabled = rewindsLeft <= 0 || !sim.canRewind();
     setPaused(true); // setPaused가 updateBanners()를 호출해 concedeBanner도 같이 뜬다
   }
@@ -314,8 +314,17 @@ export default function matchScreen(root, ctx) {
   ]);
 
   // 실점 순간 "되돌릴지/진행할지" 명시적으로 묻는 배너 — 조용히 지나가지 않는다
-  const concedeTitle = el("b", { text: "" });
-  const concedeSub = el("span", { text: "" });
+  const concedeMoment = el("strong", { class: "concede-moment", text: "" });
+  const concedeTarget = el("strong", { class: "concede-target", text: "" });
+  const concedeTitle = el("b", { class: "concede-title" }, [
+    concedeMoment,
+    el("span", { text: " 실점했습니다" }),
+  ]);
+  const concedeSub = el("p", { class: "concede-sub" }, [
+    el("span", { text: "시간을 " }),
+    concedeTarget,
+    el("span", { text: "으로 되돌려 전술을 다시 설계할 수 있습니다." }),
+  ]);
   const concedeRewindBtn = el("button", {
     class: "ctl warn",
     text: "",
@@ -333,6 +342,7 @@ export default function matchScreen(root, ctx) {
     },
   });
   const concedeBanner = el("div", { class: "banner concede-banner" }, [
+    el("span", { class: "concede-eyebrow", text: "⚠ GOAL CONCEDED · DECISION MOMENT" }),
     concedeTitle,
     concedeSub,
     el("div", { class: "concede-actions" }, [concedeRewindBtn, concedeContinueBtn]),
