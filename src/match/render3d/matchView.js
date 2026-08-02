@@ -1,4 +1,10 @@
 import * as THREE from 'three';
+// 두꺼운 선. THREE.LineBasicMaterial의 linewidth는 WebGL에서 무시된다(거의 모든 플랫폼에서
+// 1px 고정) — 예전 코드가 linewidth:2를 줬는데도 실선이 항상 머리카락처럼 얇았던 이유다.
+// Line2는 선을 삼각형 띠로 그려서 굵기가 실제로 먹는다. OrbitControls와 같은 addons 경로다.
+import { Line2 } from 'three/addons/lines/Line2.js';
+import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
+import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 import { PARAMS } from '../../simulation/index.js';
 import { createScene } from './scene.js';
 import { buildPitch } from './pitch.js';
@@ -165,29 +171,109 @@ export function createMatchView(container, sim, captainNum = null) {
     return hit ? { x: groundHit.x, z: groundHit.z } : null;
   }
 
-  const pathLine = new THREE.Line(
-    new THREE.BufferGeometry(),
-    new THREE.LineBasicMaterial({ color: 0xffd60a, linewidth: 2, depthTest: false })
-  );
-  pathLine.renderOrder = 998;
-  pathLine.visible = false;
-  scene.add(pathLine);
+  const PATH_Y = 0.12; // 잔디에 파묻히지 않게 살짝 띄운다
+  const PATH_COLOR = 0xffd60a;
+  const PATH_OUTLINE_COLOR = 0x1a1206; // 밝은 잔디 위에서도 선이 뜨게 받쳐 주는 어두운 테두리
+  const PATH_WIDTH = 7; // 화면 픽셀 기준 굵기(worldUnits:false)
+  const PATH_OUTLINE_WIDTH = 13;
 
-  /** 드래그 중(또는 확정된) 경로를 필드 위에 선으로 그린다. null/1점 이하면 지운다. */
-  function setPathPoints(points) {
+  /** Line2 한 벌 만들기 — 본선과 테두리가 같은 좌표를 공유하므로 함수로 묶는다. */
+  const makePathLine = (color, linewidth, renderOrder) => {
+    const material = new LineMaterial({
+      color,
+      linewidth,
+      worldUnits: false, // 카메라가 멀어져도 화면에서 같은 굵기로 보인다
+      depthTest: false,
+      transparent: true,
+    });
+    const line = new Line2(new LineGeometry(), material);
+    line.renderOrder = renderOrder;
+    line.visible = false;
+    line.frustumCulled = false; // 좌표를 매번 갈아끼우므로 바운딩 계산에 맡기지 않는다
+    scene.add(line);
+    return line;
+  };
+  const ARROW_UP = new THREE.Vector3(0, 1, 0);
+
+  /**
+   * 선수별 경로 한 벌(본선 + 테두리 + 화살촉).
+   *
+   * 예전에는 이 세 개가 전역에 하나씩만 있어서, 두 번째 선수에게 경로를 그리면 첫 번째 선이
+   * 그대로 사라졌다. 지시 자체는 선수별로 남아 정상 적용되고 있었는데(실측: 4명에게 연달아
+   * 그리면 4명 모두 command를 받는다) 화면에 하나만 보여서 "한 명만 되는" 것처럼 느껴졌다.
+   * 그래서 선수 키별로 한 벌씩 만들어 둔다 — 그린 경로가 전부 동시에 남는다.
+   */
+  const pathSets = new Map(); // playerKey -> { line, outline, arrow }
+
+  const makePathSet = () => {
+    const outline = makePathLine(PATH_OUTLINE_COLOR, PATH_OUTLINE_WIDTH, 997);
+    const line = makePathLine(PATH_COLOR, PATH_WIDTH, 998);
+    const arrow = new THREE.Mesh(
+      new THREE.ConeGeometry(1.1, 2.6, 4),
+      new THREE.MeshBasicMaterial({ color: PATH_COLOR, depthTest: false })
+    );
+    arrow.renderOrder = 999;
+    arrow.visible = false;
+    scene.add(arrow);
+    return { line, outline, arrow };
+  };
+
+  const disposePathSet = (set) => {
+    for (const line of [set.line, set.outline]) {
+      scene.remove(line);
+      line.geometry.dispose();
+      line.material.dispose();
+    }
+    scene.remove(set.arrow);
+    set.arrow.geometry.dispose();
+    set.arrow.material.dispose();
+  };
+
+  /**
+   * 선수 한 명의 경로를 필드 위에 그린다. points가 없거나 1점 이하면 그 선수의 경로만 지운다.
+   * 다른 선수의 경로는 건드리지 않는다 — 전부 지우려면 clearPaths()를 쓴다.
+   */
+  function setPathPoints(playerKey, points) {
     if (!points || points.length < 2) {
-      pathLine.visible = false;
+      const set = pathSets.get(playerKey);
+      if (set) {
+        disposePathSet(set);
+        pathSets.delete(playerKey);
+      }
       return;
     }
-    const positions = new Float32Array(points.length * 3);
-    points.forEach((p, i) => {
-      positions[i * 3] = p.x;
-      positions[i * 3 + 1] = 0.12; // 잔디에 파묻히지 않게 살짝 띄운다
-      positions[i * 3 + 2] = p.z;
-    });
-    pathLine.geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    pathLine.geometry.computeBoundingSphere();
-    pathLine.visible = true;
+    let set = pathSets.get(playerKey);
+    if (!set) {
+      set = makePathSet();
+      pathSets.set(playerKey, set);
+    }
+
+    const flat = [];
+    for (const p of points) flat.push(p.x, PATH_Y, p.z);
+    for (const line of [set.line, set.outline]) {
+      line.geometry.dispose(); // LineGeometry는 setPositions로 점 개수를 못 바꿔서 새로 만든다
+      line.geometry = new LineGeometry();
+      line.geometry.setPositions(flat);
+      line.visible = true;
+    }
+
+    // 마지막 구간의 방향으로 화살촉을 세운다. ConeGeometry는 +Y를 향하므로 그 축을 진행
+    // 방향으로 돌려 준다.
+    const last = points[points.length - 1];
+    const prev = points[points.length - 2];
+    const dir = new THREE.Vector3(last.x - prev.x, 0, last.z - prev.z);
+    if (dir.lengthSq() > 1e-6) {
+      dir.normalize();
+      set.arrow.quaternion.setFromUnitVectors(ARROW_UP, dir);
+      set.arrow.position.set(last.x, PATH_Y, last.z);
+      set.arrow.visible = true;
+    }
+  }
+
+  /** 그려 둔 경로를 전부 지운다(재개할 때). 시뮬레이션의 지시 자체는 여기서 안 건드린다. */
+  function clearPaths() {
+    for (const set of pathSets.values()) disposePathSet(set);
+    pathSets.clear();
   }
 
   /** 경로를 드래그로 그리는 동안은 탑뷰 OrbitControls(드래그=회전)와 충돌하니 잠깐 꺼둔다. */
@@ -232,9 +318,19 @@ export function createMatchView(container, sim, captainNum = null) {
     ballShadow.material.opacity = 0.3 * (1 - spread * 0.7);
   }
 
+  const rendererSize = new THREE.Vector2();
+
   function render() {
     cam.update(sim.ball);
     controls.update();
+    // Line2는 굵기를 픽셀로 계산하므로 화면 해상도를 알아야 한다. 리사이즈 콜백에 걸지 않고
+    // 매 프레임 넣는다 — 창 크기 변경뿐 아니라 컨테이너 레이아웃 변화·DPR 변경까지 한 줄로
+    // 따라가고, 비용은 Vector2 대입 두 번뿐이다.
+    renderer.getSize(rendererSize);
+    for (const set of pathSets.values()) {
+      set.line.material.resolution.copy(rendererSize);
+      set.outline.material.resolution.copy(rendererSize);
+    }
     renderer.render(scene, camera);
   }
 
@@ -252,6 +348,7 @@ export function createMatchView(container, sim, captainNum = null) {
     pickPlayer,
     screenToField,
     setPathPoints,
+    clearPaths,
     setOrbitEnabled,
   };
 }

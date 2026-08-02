@@ -118,7 +118,7 @@ export default function matchScreen(root, ctx) {
       concedeChoicePending = false;
       // 재개하면 경로 지시 UI 흔적을 정리한다 — 이미 내려진 지시(sim.command) 자체는 그대로 진행된다
       pathStatusEl.textContent = "";
-      view?.setPathPoints(null);
+      view?.clearPaths();
     }
     updateBanners();
   }
@@ -326,7 +326,8 @@ export default function matchScreen(root, ctx) {
     // 너무 촘촘하게 찍으면 계산 낭비라 1.5m 간격으로 솎아낸다
     if (Math.hypot(pt.x - lastPt.x, pt.z - lastPt.z) > 1.5) {
       pathPoints.push(pt);
-      view.setPathPoints(pathPoints);
+      // 선수 키로 그린다 — 다른 선수에게 이미 그려 둔 경로는 그대로 남는다.
+      view.setPathPoints(`${pathPlayer.team}:${pathPlayer.idx}`, pathPoints);
     }
   }
 
@@ -336,8 +337,14 @@ export default function matchScreen(root, ctx) {
     view.setOrbitEnabled(true);
     if (pathPoints.length > 1 && pathPlayer) {
       sim.setCommand(`${pathPlayer.team}:${pathPlayer.idx}`, pathPoints.slice(1)); // 시작점(현재 위치) 제외
-      pathStatusEl.textContent = `#${pathPlayer.num} ${pathPlayer.name}에게 경로를 지시했습니다`;
-    } else {
+      // 몇 명에게 지시했는지 같이 보여 준다 — 선이 여러 개 남으니 그 수와 맞아야 헷갈리지 않는다.
+      const commanded = sim.homeP.filter((p) => p.command).length;
+      pathStatusEl.textContent =
+        `#${pathPlayer.num} ${pathPlayer.name}에게 경로를 지시했습니다` +
+        (commanded > 1 ? ` (총 ${commanded}명)` : "");
+    } else if (pathPlayer) {
+      // 그리다 말았으면(점이 하나뿐) 그 선수 선만 지운다. 다른 선수 경로는 남긴다.
+      view.setPathPoints(`${pathPlayer.team}:${pathPlayer.idx}`, null);
       pathStatusEl.textContent = "";
     }
     pathPlayer = null;

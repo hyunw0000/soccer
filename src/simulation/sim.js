@@ -153,13 +153,32 @@ export class Sim {
     const p = this.playerByKey(playerKey);
     if (!p || !Array.isArray(waypoints) || waypoints.length === 0) return false;
     p.command = { waypoints: waypoints.map((w) => ({ x: w.x, z: w.z })), index: 0 };
+    // 경로의 끝점을 그 선수의 새 기준 위치로 삼는다.
+    //
+    // 이게 없으면 경로를 다 걸어간 순간 command가 null이 되고, 다음 틱부터 스티어링이 다시
+    // 원래 대형 자리(p.home)를 목표로 잡아서 선수가 슬금슬금 걸어 돌아간다 — 드래그가
+    // "잠깐 다녀오는 심부름"이 돼 버린다. 기준 자체를 옮겨야 거기서부터 평소처럼 뛴다.
+    // 못박아 두는 게 아니라 기준만 옮기는 것이라, 라인 오르내림(blockShift)과 침투런(run)은
+    // 그 위에 그대로 얹혀서 자연스러운 움직임이 유지된다.
+    const last = waypoints[waypoints.length - 1];
+    p.homeOffset = { x: last.x - p.home.x, z: last.z - p.home.z };
     return true;
   }
 
-  /** 진행 중인 경로 지시를 취소하고 기본 AI로 되돌린다. */
+  /**
+   * 진행 중인 경로 지시를 취소하고 기본 AI로 되돌린다.
+   * 기준 위치(homeOffset)는 건드리지 않는다 — "가던 길을 멈춘다"와 "옮겨 놓은 자리를
+   * 되돌린다"는 다른 일이다. 대형을 원래대로 돌리려면 resetHomeOffset()을 쓴다.
+   */
   clearCommand(playerKey) {
     const p = this.playerByKey(playerKey);
     if (p) p.command = null;
+  }
+
+  /** 드래그로 옮겨 놓은 기준 위치를 원래 대형으로 되돌린다. playerKey가 없으면 전원. */
+  resetHomeOffset(playerKey = null) {
+    const targets = playerKey ? [this.playerByKey(playerKey)] : this.all;
+    for (const p of targets) if (p) p.homeOffset = { x: 0, z: 0 };
   }
 
   /** 전술만 갈아끼운다 (경기 중 실시간 지시). 배치는 현재 assignment를 그대로 쓴다. */
@@ -211,6 +230,9 @@ export class Sim {
       slot: { x: outPlayer.home.x, z: outPlayer.home.z, role: outPlayer.role, instruction: outPlayer.ins },
     });
     incoming.attackDirection = outPlayer.attackDirection;
+    // 들어오는 선수는 그 자리의 지시를 물려받는다 — 감독이 옮겨 놓은 기준 위치는 사람이
+    // 아니라 그 포지션에 내린 지시라서, 교체로 리셋되면 대형이 저절로 흐트러진다.
+    incoming.homeOffset = { ...outPlayer.homeOffset };
     incoming.x = outPlayer.x;
     incoming.z = outPlayer.z;
     incoming.heading = outPlayer.heading;
@@ -262,7 +284,10 @@ export class Sim {
     let scale = 1;
     for (const p of team === 'home' ? this.homeP : this.awayP) {
       if (p.role === 'GK') continue; // 골키퍼는 대형이 아니라 자기 골문을 따른다
-      const room = raw > 0 ? limit - p.home.x : p.home.x + limit;
+      // 여유 계산도 실제 기준 위치(드래그 변위 포함)로 해야 한다 — 앞으로 끌어다 놓은
+      // 선수를 빼고 재면 라인을 올렸을 때 그 선수만 골라인 밖으로 밀린다.
+      const baseX = p.home.x + p.homeOffset.x;
+      const room = raw > 0 ? limit - baseX : baseX + limit;
       scale = Math.min(scale, clamp(room / Math.abs(raw), 0, 1));
     }
     return raw * scale;
@@ -280,8 +305,10 @@ export class Sim {
   kickoff({ kickoffTeam = 'home' } = {}) {
     this.ball.reset();
     for (const p of this.all) {
-      p.x = p.home.x;
-      p.z = p.home.z;
+      // 골이 들어가 킥오프로 돌아가도 감독이 옮겨 놓은 대형은 유지된다 — 드래그가
+      // "이번 한 번"이 아니라 새 기준이라는 뜻이므로 킥오프 정렬도 그 기준을 따른다.
+      p.x = p.home.x + p.homeOffset.x;
+      p.z = p.home.z + p.homeOffset.z;
       // 킥오프 규정: 휘슬 전에는 양 팀 모두 자기 진영 안에 있어야 한다. 공격 대형의 기준
       // 위치(전방 포지션 줄)는 하프라인을 넘어가 있을 수 있어(공격 중 전진하는 모양이라
       // 원래 그렇게 설계됐다), 킥오프 순간에만 자기 진영 안쪽으로 당겨 세운다.
@@ -332,6 +359,10 @@ export class Sim {
       for (const p of this.all) {
         p.home.x *= -1;
         p.home.z *= -1;
+        // 감독이 옮겨 놓은 변위도 같이 뒤집는다 — 안 뒤집으면 진영이 바뀐 뒤에 지시가
+        // 좌우/전후로 정반대인 자리를 가리킨다(왼쪽으로 벌려 놓은 선수가 오른쪽에 선다).
+        p.homeOffset.x *= -1;
+        p.homeOffset.z *= -1;
         p.attackDirection *= -1;
         p.heading = (p.heading + Math.PI) % (Math.PI * 2);
         p.command = null;
@@ -404,8 +435,10 @@ export class Sim {
 
       const isCarrier = this.ball.carrierKey === `${p.team}:${p.idx}`;
 
-      if (p.command) {
+      if (p.command && !this.commandYieldsToBall(p, isCarrier)) {
         // 감독이 되감기 후 드래그로 내린 경로 지시 — 기본 AI보다 우선한다.
+        // 단, 볼이 코앞이면 축구가 먼저다(commandYieldsToBall). 예전에는 이 조건이 없어서
+        // 지시받은 선수가 목적지에 닿을 때까지 옆으로 지나가는 볼을 완전히 무시했다.
         const wp = p.command.waypoints[p.command.index];
         [fx, fz] = arrive(p, wp.x, wp.z);
         if (vlen(wp.x - p.x, wp.z - p.z) < PARAMS.comfortZone) {
@@ -445,9 +478,13 @@ export class Sim {
         // 침투런까지 더한 뒤 마지막으로 한 번 더 라인 안쪽으로 자른다 — 어떤 지시를 줘도
         // 목표 지점은 경기장 안이어야 한다.
         const margin = PARAMS.formationTargetGoalMargin;
-        let tx = clamp(p.home.x + shift + run, -HALF.L + margin, HALF.L - margin);
+        // 감독이 드래그로 옮겨 놓은 자리를 기준으로 삼는다(homeOffset). 라인 오르내림(shift)과
+        // 침투런(run)은 그 위에 그대로 얹히므로, 옮긴 자리에 못박히지 않고 거기서부터 뛴다.
+        const baseX = p.home.x + p.homeOffset.x;
+        const baseZ = p.home.z + p.homeOffset.z;
+        let tx = clamp(baseX + shift + run, -HALF.L + margin, HALF.L - margin);
         let tz = clamp(
-          p.home.z + (this.ball.z - p.home.z) * (0.08 + press * 0.14) * (0.15 + p.ins.roaming * 1.7),
+          baseZ + (this.ball.z - baseZ) * (0.08 + press * 0.14) * (0.15 + p.ins.roaming * 1.7),
           -HALF.W + margin,
           HALF.W - margin
         );
@@ -556,6 +593,24 @@ export class Sim {
    * 에어리어로 떨어지는 중이면(크로스·롱볼·클리어) 낙하 지점까지 마중 나간다 — 다만 골라인에서
    * gkComeOutRange 밖으로는 절대 안 나간다. 나갔다가 골문이 비면 그게 더 큰 실점이다.
    */
+  /**
+   * 경로 지시를 받은 선수가 지금은 지시를 잠시 미루고 축구를 해야 하는가.
+   *
+   * 경로 지시는 "여기로 가라"는 위치 지시이지 "볼을 무시하라"는 뜻이 아니다. 예전에는
+   * 스티어링 분기에서 p.command가 맨 앞에 있어서, 지시받은 선수가 목적지에 닿을 때까지
+   * 바로 옆으로 지나가는 볼도 안 쫓았다.
+   *
+   * 지시를 취소하지는 않는다 — 볼 상황이 지나가면 하던 경로를 이어서 간다. 어차피
+   * setCommand()가 도착 지점을 새 기준 위치(homeOffset)로 잡아 두므로, 중간에 끊겨도
+   * 결국 감독이 찍은 자리로 수렴한다.
+   *
+   * @returns {boolean} true면 이번 틱은 일반 AI(추격·드리블·대형)에 맡긴다
+   */
+  commandYieldsToBall(p, isCarrier) {
+    if (isCarrier) return true; // 발밑에 볼이 있는데 경로만 따라 걷는 건 말이 안 된다
+    return vlen(this.ball.x - p.x, this.ball.z - p.z) <= PARAMS.commandBallReactRadius;
+  }
+
   goalkeeperTarget(gk) {
     const b = this.ball;
     let gx = -gk.attackDirection * (HALF.L - 2);
@@ -624,7 +679,24 @@ export class Sim {
   resolveTackle(defender, attacker, actionId = ACTION_ID.TACKLE_LOOSE_BALL) {
     const staminaMult = 0.55 + 0.45 * defender.energy;
     const def = defender.defenseSkill * staminaMult;
-    const base = def / (def + attacker.dribbleSkill);
+    // 스탯 비교를 지수로 날카롭게 만든다.
+    //
+    // 문제는 압박 보너스(중립에서도 3.5배)가 승률을 상한(tackleWinMax)까지 밀어 올려서,
+    // 스탯 차이가 상한에 눌려 사라지는 것이었다 — 4000회 실측으로 강수비(90 vs 30) 84.9%,
+    // 약수비(20 vs 90) 51.4%. 70이나 벌어진 스탯인데 격차가 33%p뿐이었다.
+    //
+    // 해결로 두 가지를 먼저 시도했다가 되돌렸다.
+    //   · 압박 계수를 낮춤(divisor 100) → 스탯은 갈리지만 태클이 약해져 드리블 편중이
+    //     재발했다(검증기: 폭 0에서 드리블 시간 37.2%, 단독 드리블 70.8m).
+    //   · 압박을 수비 능력치 쪽에 곱함 → 태클이 전반적으로 약해져 같은 재발.
+    // 둘 다 "태클을 약하게 만들어" 스탯을 살리려 한 게 원인이었다.
+    //
+    // 지수를 쓰면 강한 수비는 여전히 상한까지 가고(드리블 편중이 안 생기고), 약한 수비만
+    // 아래로 크게 내려간다 — 태클 총량을 안 줄이고 스탯만 갈라 낸다.
+    const k = PARAMS.tackleSkillExponent;
+    const dp = Math.pow(def, k);
+    const ap = Math.pow(attacker.dribbleSkill, k);
+    const base = dp / (dp + ap);
     const pressingPct = effectivePressing(this, defender) * PARAMS.tacklePressingScale;
     const pressureBonus = 1 + pressingPct / PARAMS.tacklePressingDivisor;
     const dist = vlen(defender.x - attacker.x, defender.z - attacker.z);
@@ -636,7 +708,6 @@ export class Sim {
 
   /** 태클 성공 시 수비가 그 자리에서 걷어낸다 — 클리어링도 킥이라 같은 오차 모델을 그대로 쓴다. */
   clearBall(defender) {
-    this.ball.ownerKey = `${defender.team}:${defender.idx}`;
     const cdx = defender.atkX - defender.x;
     const cdz = 0 - defender.z;
     const errDeg = this.errorDegrees(defender, {
@@ -647,6 +718,11 @@ export class Sim {
     const [edx, edz] = this.rotateXZ(cdx, cdz, errDeg);
     // 걷어내기는 높이 띄운다 — 태클로 빼앗은 볼을 땅으로 굴리면 압박 안에서 바로 다시 뺏긴다.
     this.ball.kick(edx, edz, PARAMS.clearForce, `${defender.team}:${defender.idx}`, PARAMS.clearLoftDeg); // kick()이 carrierKey도 같이 지운다
+    // 볼을 되찾은 쪽에 소유를 넘긴다. 원래 이 대입이 kick() **앞**에 있었는데 kick()이
+    // ownerKey를 null로 덮어써서 아무 효과가 없었다 — 즉 태클로 볼을 뺏어도 "누가 갖고
+    // 있는가"가 상대 팀에 그대로 남았다. 압박의 가장 직접적인 성과가 통째로 기록되지 않던
+    // 자리다(볼에 소유자가 없는 시간이 경기의 82~85%라 영향이 크다).
+    this.ball.ownerKey = `${defender.team}:${defender.idx}`;
     this.pushEvent('tackle', defender.team, `${defender.name} 볼 탈취`);
   }
 
@@ -1313,6 +1389,10 @@ export class Sim {
       commands: this.all.map((p) =>
         p.command ? { waypoints: p.command.waypoints.map((w) => ({ x: w.x, z: w.z })), index: p.command.index } : null
       ),
+      // 드래그로 옮겨 놓은 기준 위치. 경로 지시(commands)와 달리 이건 도착한 뒤에도 계속
+      // 남는 상태라, 안 담으면 "드래그 이전으로 되감았는데 대형은 드래그 후 그대로"인
+      // 모순이 생긴다. 되감기가 이 게임의 핵심이라 반드시 시점별로 정확히 복원돼야 한다.
+      homeOffsets: this.all.map((p) => ({ x: p.homeOffset.x, z: p.homeOffset.z })),
       // 키핑(hold) vs 전진 드리블(advance) — 다음 판단 주기까지 유지되는 캐리어 상태라
       // 되감기 후에도 그대로 재현돼야 한다. 1/0 숫자 배열로 담아 SNAP_STRIDE 구조를 안 건드린다.
       dribbleModes: this.all.map((p) => (p.dribbleMode === 'hold' ? 1 : 0)),
@@ -1372,6 +1452,14 @@ export class Sim {
         p.command = c ? { waypoints: c.waypoints.map((w) => ({ ...w })), index: c.index } : null;
       });
     }
+    // 옛 스냅샷 호환: homeOffsets가 없던 시절의 스냅샷은 드래그 기준 이동이 아예 없었으므로
+    // 0으로 되돌리는 게 그 시점의 정확한 상태다(현재 값을 남겨 두면 오히려 어긋난다).
+    // 위 refreshHomeSlots()는 p.home만 다시 계산하고 homeOffset은 건드리지 않으므로,
+    // 여기서 복원하는 값이 그대로 유효하다.
+    this.all.forEach((p, i) => {
+      const o = s.homeOffsets?.[i];
+      p.homeOffset = o ? { x: o.x, z: o.z } : { x: 0, z: 0 };
+    });
     // 옛 스냅샷 호환: dribbleModes가 없으면 기본값('advance')을 그대로 둔다.
     if (s.dribbleModes) {
       this.all.forEach((p, i) => {
