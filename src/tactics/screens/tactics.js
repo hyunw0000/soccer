@@ -241,11 +241,13 @@ export default function tacticsScreen(root, ctx) {
       teamPanel.node,
       el("aside", { class: "tac-side" }, [teamHint.node, miniPitch.node]),
     ]),
+    // 보드 아래에 소집 명단을 둔다. 선수단에서 뽑은 선수를 여기서 골라 필드의 자리에 세운다.
     formation: el("div", { class: "tac-pane formation" }, [
       editor.formationChips,
       editor.descNode,
       editor.board,
       editor.boardTools,
+      editor.squadNode,
     ]),
     // 왼쪽에서 자리를 고르고 오른쪽에서 그 자리에 지시를 준다.
     personal: el("div", { class: "tac-pane personal" }, [

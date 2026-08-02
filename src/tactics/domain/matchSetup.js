@@ -35,15 +35,37 @@ export class MatchSetupError extends Error {
   }
 }
 
+/**
+ * 로스터가 들고 있는 세부 스탯 → simulation이 읽는 이름.
+ * 없는 스탯은 싣지 않는다 — simulation의 Player가 pace를 대리 지표로 쓰기 때문에,
+ * 0으로 채워 보내면 "능력치 없음"이 아니라 "능력치 0"이 돼 버린다.
+ */
+const SIM_STAT_SOURCE = Object.freeze({
+  pass: 'pass',
+  shoot: 'shoot',
+  defense: 'defense',
+  // 로스터에 드리블·시야 스탯은 따로 없다. 가장 가까운 스탯을 대리로 쓴다 —
+  // pace 하나로 뭉뚱그리는 것보다 감독이 고른 선수의 색깔이 경기에 남는다.
+  dribble: 'attack',
+  vision: 'pass',
+});
+
 /** RawPlayer/Player/SimulationPlayer 어느 형태로 들어와도 SimulationPlayer로 맞춘다. */
 export function toSimulationPlayer(player) {
-  return {
+  const out = {
     id: player.id,
     num: Number(player.num) || 0,
     name: player.name,
     pace: Number(player.pace ?? player.stats?.pace) || 0,
     stamina: Number(player.stamina ?? player.stats?.stamina) || 0,
   };
+  // 패스·슛·수비 스탯까지 실어야 감독이 뽑은 선수가 경기 내용에 드러난다.
+  // 이 값들이 없으면 simulation은 모든 판단을 pace로만 굴린다.
+  for (const [key, source] of Object.entries(SIM_STAT_SOURCE)) {
+    const value = Number(player[key] ?? player.stats?.[source]);
+    if (Number.isFinite(value)) out[key] = value;
+  }
+  return out;
 }
 
 /** 문자열에서 안정적인 32비트 seed를 만든다. 같은 경기면 항상 같은 값이 나온다. */

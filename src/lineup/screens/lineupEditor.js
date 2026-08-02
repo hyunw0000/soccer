@@ -35,6 +35,7 @@ import {
   positionName,
   positionOf,
   roleAtX,
+  roleFits,
 } from '../domain/roles.js';
 import { createProjection } from './boardProjection.js';
 
@@ -144,6 +145,20 @@ export function createLineupEditor({
   const errorsNode = el('ul', { class: 'lineup-errors' });
   const subsNode = el('div', { class: 'lineup-subs' });
 
+  // 소집 명단 전체를 카드로 늘어놓는 판. 여기서 고른 선수가 보드의 자리로 들어간다.
+  const squadTitle = el('b', { class: 'squad-title' });
+  const squadGrid = el('div', { class: 'squad-grid' });
+  const squadNode = el('div', { class: 'lineup-squad' }, [
+    el('div', { class: 'squad-head' }, [
+      squadTitle,
+      el('span', {
+        class: 'squad-guide',
+        text: '선수를 누른 뒤 필드의 자리를 누르면 그 자리에 들어갑니다. 카드로 바로 끌어다 놓아도 됩니다.',
+      }),
+    ]),
+    squadGrid,
+  ]);
+
   const autoBtn = el('button', {
     class: 'ghost',
     type: 'button',
@@ -162,13 +177,24 @@ export function createLineupEditor({
     text: '기본 배치로',
     onclick: () => commit(resetPositions(current)),
   });
+  const BOARD_HINT = '카드를 끌어 원하는 구역에 놓으세요. 놓인 구역이 그 선수의 역할이 됩니다.';
+  const boardHint = el('span', { class: 'board-hint', text: BOARD_HINT });
   const boardTools = el('div', { class: 'board-tools' }, [
-    el('span', {
-      class: 'board-hint',
-      text: '카드를 끌어 원하는 구역에 놓으세요. 놓인 구역이 그 선수의 역할이 됩니다.',
-    }),
+    boardHint,
     el('span', { class: 'board-actions' }, [resetBtn, autoBtn]),
   ]);
+
+  // 세울 수 없는 자리에 놓았을 때 이유를 그 자리에서 알려 준다. 잠시 뒤 원래 안내로 돌아간다.
+  let noticeTimer = 0;
+  function notify(message) {
+    clearTimeout(noticeTimer);
+    boardHint.textContent = message;
+    boardHint.classList.add('warn');
+    noticeTimer = setTimeout(() => {
+      boardHint.textContent = BOARD_HINT;
+      boardHint.classList.remove('warn');
+    }, 2600);
+  }
 
   /** 슬롯 정의의 역할. 골키퍼 슬롯만 구역과 무관하게 GK로 남는다. */
   function slotRole(slotId) {
@@ -185,8 +211,101 @@ export function createLineupEditor({
     for (const [key, node] of zoneNodes) node.classList.toggle('hot', key === role);
   }
 
+  // ---------- 명단 → 보드 ----------
+  // 명단에서 고른 선수. 이 값이 있으면 보드의 자리를 누르는 순간 그 자리에 들어간다.
+  let pickedPlayerId = null;
+
+  /**
+   * 그 선수를 그 자리에 세울 수 없는 이유. 세울 수 있으면 null.
+   * 골키퍼만은 구역 규칙과 무관하게 자리를 지킨다 — validateStartingLineup이 같은 선을 긋는다.
+   */
+  function assignBlockReason(playerId, slotId) {
+    const player = playerId ? lookup(playerId) : null;
+    if (!player) return '명단에 없는 선수입니다.';
+    const keeperSlot = slotRole(slotId) === 'GK';
+    const keeper = roleFits(player, 'GK');
+    if (keeperSlot && !keeper) return '골키퍼 자리에는 골키퍼만 세울 수 있습니다.';
+    if (!keeperSlot && keeper) return '골키퍼는 골키퍼 자리에만 설 수 있습니다.';
+    return null;
+  }
+
+  /** 선수를 자리에 세운다. 이미 다른 자리에 있던 선수면 도메인이 두 자리를 맞바꾼다. */
+  function placePlayer(playerId, slotId) {
+    const reason = assignBlockReason(playerId, slotId);
+    if (reason) {
+      notify(reason);
+      return false;
+    }
+    pickedPlayerId = null;
+    // 그 자리에 세운 선수를 바로 이어서 볼 수 있게 고른 자리도 옮긴다.
+    selectedSlotId = slotId;
+    commit(assignPlayer(current, playerId, slotId));
+    onSelect(getAssignment(current, selectedSlotId));
+    return true;
+  }
+
+  /**
+   * 보드의 자리를 짚었을 때. 명단에서 고른 선수가 있으면 그 자리에 세우고,
+   * 없으면 그 자리를 고르기만 한다. 배치를 바꿨으면 true.
+   */
+  function tapSlot(slotId) {
+    if (!pickedPlayerId) {
+      selectSlot(slotId);
+      return false;
+    }
+    return placePlayer(pickedPlayerId, slotId);
+  }
+
+  /** 화면 좌표 → 놓을 자리. 카드 사이 빈 곳에 놓아도 가장 가까운 자리로 들어간다. */
+  function slotAtPoint(clientX, clientY) {
+    const rect = board.getBoundingClientRect();
+    if (clientX < rect.left || clientX > rect.right || clientY < rect.top || clientY > rect.bottom) return null;
+    let best = null;
+    let bestDistance = Infinity;
+    for (const card of cardLayer.children) {
+      const r = card.getBoundingClientRect();
+      const d = Math.hypot(clientX - (r.left + r.width / 2), clientY - (r.top + r.height / 2));
+      if (d < bestDistance) {
+        bestDistance = d;
+        best = card.dataset.slotId;
+      }
+    }
+    return best;
+  }
+
+  /** 끌고 있는 선수가 어느 카드로 들어가는지(또는 못 들어가는지) 보드에 표시한다. */
+  function highlightDrop(playerId, slotId) {
+    for (const card of cardLayer.children) {
+      const target = Boolean(slotId) && card.dataset.slotId === slotId;
+      const blocked = target && Boolean(assignBlockReason(playerId, slotId));
+      card.classList.toggle('drop', target && !blocked);
+      card.classList.toggle('drop-blocked', blocked);
+    }
+  }
+
   /** 전술 폭은 좌우 배치를 넓히거나 좁힌다. 실제 월드 좌표 변환은 simulation이 한다. */
   const spreadOf = () => 0.8 + boardWidth * 0.5;
+
+  /**
+   * 포인터를 붙잡는다. 이미 손을 뗀 뒤라면 브라우저가 던지므로 삼킨다 —
+   * 여기서 예외가 새어 나가면 드래그 시작만 하고 끝내지 못하는 상태로 굳는다.
+   */
+  function capturePointer(node, pointerId) {
+    try {
+      node.setPointerCapture(pointerId);
+    } catch {
+      /* 잡지 못해도 드래그 자체는 이어진다 — 이벤트가 노드 밖으로 새는 것만 감수한다 */
+    }
+  }
+
+  /** 붙잡은 포인터를 놓는다. 잡은 적이 없으면 아무 일도 하지 않는다. */
+  function releasePointer(node, pointerId) {
+    try {
+      if (node.hasPointerCapture(pointerId)) node.releasePointerCapture(pointerId);
+    } catch {
+      /* 이미 풀렸다 */
+    }
+  }
 
   /** 보드 크기가 정해져야 투영을 만들 수 있다. 레이아웃이 잡힌 뒤/리사이즈마다 다시 만든다. */
   function measure() {
@@ -243,7 +362,11 @@ export function createLineupEditor({
   function makeDraggable(card, slotId) {
     // 골키퍼는 골문을 지키는 자리다. 보드에서 끌어 올릴 수 있으면
     // 필드 플레이어와 구분이 없어지므로 자리 자체를 고정한다.
-    if (slotRole(slotId) === 'GK') return;
+    // 자리는 고정이어도 그 자리에 설 선수는 바꿀 수 있어야 하므로 짚는 것까지 막지는 않는다.
+    if (slotRole(slotId) === 'GK') {
+      card.addEventListener('pointerup', () => tapSlot(slotId));
+      return;
+    }
 
     let origin = null; // 잡은 순간의 { x, z, grabX, grabZ }
 
@@ -263,7 +386,7 @@ export function createLineupEditor({
       if (!start || !projection) return;
       const p = toNormalized(e);
       origin = { x: start.x, z: start.z, grabX: start.x - p.x, grabZ: start.z - p.z };
-      card.setPointerCapture(e.pointerId);
+      capturePointer(card, e.pointerId);
       card.classList.add('dragging');
       e.preventDefault();
     });
@@ -291,10 +414,10 @@ export function createLineupEditor({
       origin = null;
       card.classList.remove('dragging');
       highlightZone(null);
-      if (card.hasPointerCapture(e.pointerId)) card.releasePointerCapture(e.pointerId);
-      // 움직이지 않았으면 원래 자리로 되돌리기만 한다.
+      releasePointer(card, e.pointerId);
+      // 움직이지 않았으면 배치는 그대로다 — 짚은 것으로 보고 자리를 고르거나 선수를 세운다.
       if (moved) commit(moveAssignment(current, slotId, next));
-      else drawBoard();
+      else if (!tapSlot(slotId)) drawBoard();
     };
     card.addEventListener('pointerup', finish);
     // 시스템이 포인터를 가져가도(스크롤 제스처 등) 마지막 위치는 잃지 않는다.
@@ -358,14 +481,23 @@ export function createLineupEditor({
         const captain = player && player.id === current.captainId;
         const label = labelOf(a);
         const fixed = slotRole(a.slotId) === 'GK';
+        // 명단에서 선수를 고른 동안에는 그 선수를 받을 수 있는 자리와 아닌 자리를 구분해 보여 준다.
+        const picked = pickedPlayerId
+          ? assignBlockReason(pickedPlayerId, a.slotId)
+            ? ' no-drop'
+            : ' can-drop'
+          : '';
         const card = el(
           'div',
           {
-            class: `fcard ${a.role}${captain ? ' cap' : ''}${player ? '' : ' empty'}${fixed ? ' fixed' : ''}`,
+            class: `fcard ${a.role}${captain ? ' cap' : ''}${player ? '' : ' empty'}${fixed ? ' fixed' : ''}${picked}`,
+            'data-slot-id': a.slotId,
             style: { left: pos.left, top: pos.top },
-            title: player
-              ? `${player.name} (${player.detail || player.pos}) · 현재 ${label} ${positionName(label)} OVR ${playerOverall(player)}${fixed ? ' · 골키퍼는 자리를 옮길 수 없습니다' : ' · 끌어서 이동'}`
-              : `${label} ${positionName(label)} 빈 자리`,
+            title: pickedPlayerId
+              ? `${lookup(pickedPlayerId)?.name ?? ''} 선수를 이 자리에 세우려면 누르세요`
+              : player
+                ? `${player.name} (${player.detail || player.pos}) · 현재 ${label} ${positionName(label)} OVR ${playerOverall(player)}${fixed ? ' · 골키퍼는 자리를 옮길 수 없습니다' : ' · 끌어서 이동'}`
+                : `${label} ${positionName(label)} 빈 자리`,
           },
           [
             el('span', { class: 'fcard-top' }, [
@@ -448,6 +580,126 @@ export function createLineupEditor({
     );
   }
 
+  // 명단 카드를 보드로 끌어 놓는 동안의 상태. 끄는 대상은 한 번에 하나뿐이다.
+  let dragPlayerId = null;
+  let dragStart = null;
+  let dragGhost = null;
+
+  function endGhost() {
+    dragGhost?.remove();
+    dragGhost = null;
+    dragPlayerId = null;
+    dragStart = null;
+    highlightDrop(null, null);
+  }
+
+  /** 명단 카드를 보드로 끌어다 놓을 수 있게 한다. 끌지 않고 누르기만 하면 click이 고르기를 맡는다. */
+  function makeSquadDraggable(chip, playerId) {
+    // 끌어서 놓은 뒤에 따라오는 click은 "고르기"가 아니다 — 이 카드에서 한 번만 삼킨다.
+    // 카드마다 따로 두는 이유는, 놓는 순간 판이 다시 그려져 이 카드가 사라지기 때문이다.
+    let swallowClick = false;
+
+    chip.addEventListener('pointerdown', (e) => {
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      dragPlayerId = playerId;
+      dragStart = { x: e.clientX, y: e.clientY };
+      swallowClick = false;
+      capturePointer(chip, e.pointerId);
+    });
+
+    chip.addEventListener('pointermove', (e) => {
+      if (dragPlayerId !== playerId) return;
+      if (!dragGhost) {
+        // 손가락이 살짝 흔들린 것까지 드래그로 보면 누르기가 사라진다.
+        if (Math.hypot(e.clientX - dragStart.x, e.clientY - dragStart.y) < 6) return;
+        dragGhost = el('div', { class: 'squad-ghost', text: lookup(playerId)?.name ?? '' });
+        document.body.append(dragGhost);
+        chip.classList.add('dragging');
+      }
+      dragGhost.style.left = `${e.clientX}px`;
+      dragGhost.style.top = `${e.clientY}px`;
+      highlightDrop(playerId, slotAtPoint(e.clientX, e.clientY));
+    });
+
+    const finishDrag = (e) => {
+      if (dragPlayerId !== playerId) return;
+      const dragged = Boolean(dragGhost);
+      const slotId = dragged ? slotAtPoint(e.clientX, e.clientY) : null;
+      releasePointer(chip, e.pointerId);
+      chip.classList.remove('dragging');
+      endGhost();
+      if (!dragged) return; // 끌지 않았다 — click이 고르기를 맡는다
+      swallowClick = true;
+      if (slotId) placePlayer(playerId, slotId);
+    };
+    chip.addEventListener('pointerup', finishDrag);
+    chip.addEventListener('pointercancel', finishDrag);
+
+    // 키보드로도 고를 수 있도록 고르기는 click에 둔다.
+    chip.addEventListener('click', () => {
+      if (swallowClick) {
+        swallowClick = false;
+        return;
+      }
+      pickedPlayerId = pickedPlayerId === playerId ? null : playerId;
+      drawSquad();
+      drawBoard();
+    });
+  }
+
+  function squadChip(player, assignment) {
+    const chip = el(
+      'button',
+      {
+        class: [
+          'squad-chip',
+          assignment ? 'on' : '',
+          player.id === pickedPlayerId ? 'sel' : '',
+          player.id === current.captainId ? 'cap' : '',
+        ]
+          .filter(Boolean)
+          .join(' '),
+        type: 'button',
+        'aria-pressed': player.id === pickedPlayerId ? 'true' : 'false',
+        title: assignment
+          ? `${player.name} · 지금 ${positionOf(assignment)} ${positionName(positionOf(assignment))} — 다른 자리에 놓으면 그 자리 선수와 맞바꿉니다`
+          : `${player.name} (${player.detail || player.pos}) · 대기 — 누른 뒤 필드의 자리를 누르거나 끌어다 놓으세요`,
+      },
+      [
+        el('i', {
+          class: `pos ${player.pos}`,
+          text: assignment ? positionOf(assignment) : player.detail || player.pos,
+        }),
+        el('span', { class: 'squad-chip-name', text: player.name }),
+        el('b', { text: String(playerOverall(player)) }),
+      ]
+    );
+    makeSquadDraggable(chip, player.id);
+    return chip;
+  }
+
+  /**
+   * 소집 명단 전체를 보여 준다. 대기 선수를 먼저 두는 이유는
+   * 이 판을 여는 목적이 "지금 안 뛰는 선수를 넣는 것"이기 때문이다.
+   */
+  function drawSquad() {
+    const onField = new Map(current.assignments.filter((a) => a.playerId).map((a) => [a.playerId, a]));
+    const players = [...new Set(squadPlayerIds)].map(lookup).filter(Boolean);
+    const byOverall = (a, b) => playerOverall(b) - playerOverall(a);
+    const bench = players.filter((p) => !onField.has(p.id)).sort(byOverall);
+    const starters = players.filter((p) => onField.has(p.id)).sort(byOverall);
+
+    squadTitle.textContent = `소집 명단 ${players.length}명 · 선발 ${starters.length} · 대기 ${bench.length}`;
+    squadGrid.replaceChildren(
+      el('span', { class: 'squad-group', text: `대기 ${bench.length}명` }),
+      ...(bench.length
+        ? bench.map((p) => squadChip(p, null))
+        : [el('span', { class: 'squad-empty', text: '대기 중인 선수가 없습니다.' })]),
+      el('span', { class: 'squad-group', text: `선발 ${starters.length}명` }),
+      ...starters.map((p) => squadChip(p, onField.get(p.id)))
+    );
+  }
+
   function drawStatus() {
     const { errors } = validation();
     errorsNode.replaceChildren(...errors.map((e) => el('li', { text: e.message })));
@@ -470,6 +722,7 @@ export function createLineupEditor({
     drawFormations();
     drawBoard();
     drawSlots();
+    drawSquad();
     drawStatus();
   }
 
@@ -501,6 +754,8 @@ export function createLineupEditor({
     slotList,
     errorsNode,
     subsNode,
+    /** 소집 명단 판. 보드와 함께 붙이면 명단에서 고른 선수를 그 자리에 세울 수 있다. */
+    squadNode,
     getLineup: () => current,
     /** 명단에서 지금 고른 자리. 없으면 null. */
     getSelectedAssignment: () => getAssignment(current, selectedSlotId),
@@ -514,10 +769,12 @@ export function createLineupEditor({
     setLineup(next) {
       commit(next);
     },
-    /** 화면이 사라질 때 호출한다. ResizeObserver를 남기지 않는다. */
+    /** 화면이 사라질 때 호출한다. ResizeObserver도 끌던 카드도 남기지 않는다. */
     destroy() {
       observer?.disconnect();
       firstDraw = Infinity;
+      clearTimeout(noticeTimer);
+      endGhost();
     },
   };
 }
