@@ -55,6 +55,8 @@ export default function matchScreen(root, ctx) {
   const pathStatusEl = el("span", { class: "path-status" });
 
   let paused = false;
+  let concedeChoicePending = false; // 실점 직후 "되돌릴지/진행할지" 명시적으로 물어보는 중인지
+  let lastNotifiedConcedeTick = null; // 같은 실점에 배너를 두 번 띄우지 않으려는 표시
   let rewindsLeft = REWIND_LIMIT;
   let acc = 0;
   let last = performance.now();
@@ -87,6 +89,8 @@ export default function matchScreen(root, ctx) {
     pauseBtn.textContent = paused ? "▶ 재개" : "⏸ 일시정지";
     pauseBtn.classList.toggle("on", paused);
     if (!paused) {
+      // 어떤 경로(버튼/스페이스바)로 재개하든 실점 선택 배너는 닫힌다 — 재개 = "이대로 진행"
+      concedeChoicePending = false;
       // 재개하면 경로 지시 UI 흔적을 정리한다 — 이미 내려진 지시(sim.command) 자체는 그대로 진행된다
       pathStatusEl.textContent = "";
       view?.setPathPoints(null);
@@ -94,11 +98,23 @@ export default function matchScreen(root, ctx) {
     updateBanners();
   }
 
-  // 일시정지 배너와 전/후반 배너는 동시에 뜨지 않는다 — phase가 playing일 때만 일시정지 배너를 쓴다
+  // 배너 세 개(일시정지/전후반/실점 선택)는 동시에 뜨지 않는다 — 실점 선택이 최우선이다
   function updateBanners() {
-    banner.classList.toggle("show", paused && sim.phase === "playing");
-    phaseBanner.classList.toggle("show", sim.phase !== "playing");
+    banner.classList.toggle("show", paused && sim.phase === "playing" && !concedeChoicePending);
+    phaseBanner.classList.toggle("show", sim.phase !== "playing" && !concedeChoicePending);
+    concedeBanner.classList.toggle("show", concedeChoicePending);
     updateSpeedButtons();
+  }
+
+  // 실점한 그 순간 자동으로 멈추고 "되돌릴지/진행할지"를 명시적으로 물어본다 —
+  // 그냥 흘러가게 두면 되감기 기능이 있는 의미가 없다.
+  function showConcedeChoice(ev) {
+    concedeChoicePending = true;
+    concedeTitle.textContent = `${formatEventClock(ev)} 실점했습니다`;
+    concedeSub.textContent = "이 순간으로 되돌리시겠습니까?";
+    concedeRewindBtn.textContent = `⏪ 되돌리기 (${rewindsLeft}회 남음)`;
+    concedeRewindBtn.disabled = rewindsLeft <= 0 || !sim.canRewind();
+    setPaused(true); // setPaused가 updateBanners()를 호출해 concedeBanner도 같이 뜬다
   }
 
   function setSpeed(v) {
@@ -163,6 +179,7 @@ export default function matchScreen(root, ctx) {
     if (targetTick === null) return; // canRewind()가 true면 항상 있어야 하지만 방어적으로
     const snap = rewind.findNearestTick(targetTick);
     if (!snap) return;
+    concedeChoicePending = false; // R키로 바로 되감아도 실점 선택 배너는 닫아야 한다
     sim.restore(snap);
     sim.markRewindUsed();
     rewindsLeft--;
@@ -253,6 +270,36 @@ export default function matchScreen(root, ctx) {
     phaseSub,
   ]);
 
+  // 실점 순간 "되돌릴지/진행할지" 명시적으로 묻는 배너 — 조용히 지나가지 않는다
+  const concedeTitle = el("b", { text: "" });
+  const concedeSub = el("span", { text: "" });
+  const concedeRewindBtn = el("button", {
+    class: "ctl warn",
+    text: "",
+    onclick: () => {
+      hideConcedeChoice();
+      doRewind();
+    },
+  });
+  const concedeContinueBtn = el("button", {
+    class: "ctl",
+    text: "▶ 이대로 진행",
+    onclick: () => {
+      hideConcedeChoice();
+      setPaused(false);
+    },
+  });
+  const concedeBanner = el("div", { class: "banner concede-banner" }, [
+    concedeTitle,
+    concedeSub,
+    el("div", { class: "concede-actions" }, [concedeRewindBtn, concedeContinueBtn]),
+  ]);
+
+  function hideConcedeChoice() {
+    concedeChoicePending = false;
+    updateBanners();
+  }
+
   // 경기 중 실시간 전술 변경
   const liveTactics = ["lineHeight", "pressing", "tempo", "width"].map(
     (key) => {
@@ -336,6 +383,17 @@ export default function matchScreen(root, ctx) {
       else updateBanners();
     }
 
+    // 실점 감지 — 방금 돈 틱들 사이에 우리 팀 실점이 새로 생겼으면 자동 정지하고 선택을 받는다.
+    // 그냥 지나가면 되감기 기능이 있는 의미가 없다.
+    for (let i = renderedEvents; i < sim.events.length; i++) {
+      const ev = sim.events[i];
+      if (ev.type === "goal" && ev.team === "away" && ev.tick !== lastNotifiedConcedeTick) {
+        lastNotifiedConcedeTick = ev.tick;
+        showConcedeChoice(ev);
+        break;
+      }
+    }
+
     scoreEl.textContent = `${homeCode} ${sim.score.home} : ${sim.score.away} ${awayCode}`;
     clockEl.textContent = `${sim.matchMinute}'`;
     updateRewindButton();
@@ -373,6 +431,7 @@ export default function matchScreen(root, ctx) {
       stage,
       banner,
       phaseBanner,
+      concedeBanner,
       el("div", { class: "hud" }, [
         scoreEl,
         el("div", { class: "row" }, [

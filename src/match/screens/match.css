@@ -20,6 +20,19 @@
   min-height: 0;
   background-color: #03080c;
 }
+/* 실점 순간 "되돌릴지/진행할지" 묻는 배너 — 일시정지/전후반 배너와 구분되는 경고색 테두리 */
+.concede-banner {
+  border-color: var(--bad, #ff565d);
+}
+.concede-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+}
+.concede-actions .ctl {
+  flex: 1;
+  text-align: center;
+}
 /* 경로 지시 상태 문구 — 공용 .hint(bottom 78px)와 같은 자리에 겹치지 않도록 한 줄 더 띄운다 */
 .path-status {
   position: absolute;
