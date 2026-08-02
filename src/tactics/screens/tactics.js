@@ -376,7 +376,6 @@ export default function tacticsScreen(root, ctx) {
     el('div', { class: 'screen page' }, [
       el('header', { class: 'topbar' }, [
         el('div', {}, [
-          el('p', { class: 'eyebrow', text: 'STEP 3 / 3' }),
           el('h2', { class: 'h2', text: '상대를 보고 전술을 짜세요' }),
         ]),
         el('div', { class: 'topbar-right' }, [
