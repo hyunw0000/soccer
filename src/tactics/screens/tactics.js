@@ -10,7 +10,7 @@ import {
   resolveFormationId,
   setCaptain,
 } from "../../lineup/index.js";
-import { BUILT_IN_PRESET_COUNT, createPreset, toTactics } from "../domain/presets.js";
+import { createPreset, toTactics } from "../domain/presets.js";
 import {
   activePreset,
   loadBook,
@@ -136,23 +136,12 @@ export default function tacticsScreen(root, ctx) {
   // ---------- 전술 목록(사이드바) ----------
   const presetList = el("ol", { class: "tac-presets" });
 
-  function deletePreset(index) {
-    if (index < BUILT_IN_PRESET_COUNT) return;
-    const preset = book.sets[book.activeSet][index];
-    if (!window.confirm(`'${preset.name}' 전술을 삭제할까요?`)) return;
-    const setKey = book.activeSet;
-    const wasSelected = book.selected[setKey] === index;
-    applyPreset({
-      ...book,
-      sets: {
-        ...book.sets,
-        [setKey]: book.sets[setKey].map((item,i) => i === index ? createPreset(i) : item),
-      },
-      selected: wasSelected
-        ? { ...book.selected, [setKey]:0 }
-        : book.selected,
-    });
-  }
+  // NOTE: 예전에는 여기에 `내 전술` 슬롯용 "삭제" 버튼과 deletePreset()이 있었는데 지웠다.
+  // 목록 길이(PRESET_COUNT)가 고정이고 번호·선택 인덱스가 거기 묶여 있어서, 그 함수는
+  // 목록에서 빼는 게 아니라 createPreset()으로 공장 초기값을 되돌리기만 했다. 그런데
+  // 그 초기값이 이름까지 '내 전술 N'에 값도 BASE 그대로라, 눌러도 목록이 그대로여서
+  // "삭제가 안 된다"고 오해를 샀다. 같은 동작을 하는 "초기화" 버튼이 아래에 이미 있어
+  // 기능이 겹치기도 했다. 진짜 삭제가 필요해지면 목록을 가변 길이로 바꾸는 것부터 해야 한다.
 
   function drawSidebar() {
     const set = book.sets[book.activeSet];
@@ -176,19 +165,6 @@ export default function tacticsScreen(root, ctx) {
               el("span", { class: "tac-preset-name", text: preset.name }),
             ],
           ),
-          i >= BUILT_IN_PRESET_COUNT
-            ? el("button",{
-              class:"tac-preset-delete",
-              type:"button",
-              text:"삭제",
-              title:`${preset.name} 삭제`,
-              'aria-label':`${preset.name} 전술 삭제`,
-              onclick:(event)=>{
-                event.stopPropagation();
-                deletePreset(i);
-              },
-            })
-            : null,
         ]),
       ),
     );

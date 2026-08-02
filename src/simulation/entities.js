@@ -36,6 +36,13 @@ export class Player {
     this.energy = 1; // 1 → 0 으로 소모, 속도에 곱해진다
     this.distanceRun = 0; // 누적 주행거리(m) — 체력 소모와 별개로 감독이 확인할 측정값
     this.home = { x: slot.x, z: slot.z };
+    // 감독이 드래그로 옮겨 놓은 "새 기준 위치"의 변위(m). home에 더해져서 쓰인다.
+    //
+    // home을 직접 덮어쓰지 않는 이유가 있다 — refreshHomeSlots()가 라인업과 전술 폭에서
+    // home을 다시 계산하는데, 그게 전술 변경 때와 되감기 복원 때 매번 불린다. home을
+    // 덮어쓰면 감독이 폭 슬라이더를 건드리거나 되감기를 하는 순간 옮겨 놓은 자리가 조용히
+    // 사라진다. 변위로 따로 두면 기준이 다시 계산돼도 지시는 그 위에 그대로 얹힌다.
+    this.homeOffset = { x: 0, z: 0 };
     this.x = slot.x;
     this.z = slot.z;
     this.vx = 0;

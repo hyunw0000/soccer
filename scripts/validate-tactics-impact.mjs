@@ -16,6 +16,33 @@ import { HALF, PARAMS, RewindBuffer, createSimulation } from '../src/simulation/
 
 const FORMATION = '4-4-2';
 const SEEDS = [11, 202, 3003, 40004, 500005, 606060];
+
+/**
+ * 전술 축 비교(아래 AXES)에만 쓰는 넓은 시드 집합.
+ *
+ * 6판 평균으로는 축 비교를 판정할 수 없다는 게 실측으로 드러났다. 양 팀 압박을 **똑같이**
+ * 0.5로 두고(즉 차이가 정의상 0) 12경기씩 여섯 묶음을 돌려 보면 점유율이 이렇게 흔들린다:
+ *
+ *   44.5% / 48.3% / 52.8% / 48.0% / 48.3% / 46.9%   → 폭 8.2%p, 50%에서 최대 ±5.5%p
+ *
+ * 차이가 0인 조건에서 이미 ±5.5%p인데 통과 기준은 0.02(2%p)다. 즉 6판 평균은 전술 효과가
+ * 아니라 시드 운을 재고 있었고, 통과·실패가 코드 변경과 무관하게 뒤집혔다(기능을 더 껐는데
+ * 지표가 오히려 나빠지는 비단조 현상으로 확인).
+ *
+ * 24판으로 늘린 뒤에는 값이 실제로 수렴한다 — 압박 축을 6·12·24·36·48판으로 재 보면
+ * -0.03 / -0.03 / -0.05 / -0.05 / -0.05로 자리를 잡는다. 6판일 때 통과·실패가 코드와
+ * 무관하게 뒤집히던 게 사라진다.
+ *
+ * **기준값(min)은 그대로 두고 표본만 늘렸다.** 기준을 낮추면 실제로 망가진 전술도 통과하게
+ * 되므로, 게이트를 무디게 만들지 않으면서 판정만 안정시키는 쪽을 택했다.
+ * 축 비교 외(프리셋 표·극단값·되감기)는 예전 SEEDS 그대로라 그 출력은 바뀌지 않는다.
+ */
+const AXIS_SEEDS = [
+  11, 202, 3003, 40004, 500005, 606060,
+  7, 77, 777, 7777, 131, 1313,
+  24601, 8675309, 31337, 90210, 4242, 1024,
+  555, 9091, 12345, 67890, 2718, 3141,
+];
 const NEUTRAL = { lineHeight: 0.5, pressing: 0.5, tempo: 0.5, width: 0.5 };
 
 const errors = [];
@@ -77,6 +104,8 @@ function play(homeTactics, awayTactics, seed) {
   let homeTouch = 0;
   let awayTouch = 0;
   let lastTouch = null;
+  let homeRecoveries = 0; // 상대에게서 볼을 되찾은 횟수
+  let awayRecoveries = 0;
   let carryTicks = 0; // 홈 선수가 볼을 발밑에 두고 있던 틱
   let carrySpells = 0; // 그런 구간의 수 — 둘을 나누면 "한 번 잡으면 얼마나 들고 있나"가 나온다
   let prevCarrier = null;
@@ -116,7 +145,16 @@ function play(homeTactics, awayTactics, seed) {
       carryFrom = carrier ? { x: sim.ball.x, z: sim.ball.z } : null;
     }
     prevCarrier = carrier;
-    if (sim.ball.ownerKey) lastTouch = sim.ball.ownerKey.split(':')[0];
+    if (sim.ball.ownerKey) {
+      const owner = sim.ball.ownerKey.split(':')[0];
+      // 소유가 상대에서 우리로 넘어온 횟수 = 볼을 되찾은 횟수. 압박 축이 설명문에서
+      // 말하는 바로 그 값이다("압박을 올리면 볼을 더 자주 되찾는다").
+      if (lastTouch && owner !== lastTouch) {
+        if (owner === 'home') homeRecoveries++;
+        else awayRecoveries++;
+      }
+      lastTouch = owner;
+    }
     if (lastTouch === 'home') homeTouch++;
     else if (lastTouch === 'away') awayTouch++;
   }
@@ -129,6 +167,9 @@ function play(homeTactics, awayTactics, seed) {
     avgBallSpeed: sumBallSpeed / ticks,
     avgCarrySpell: carryTicks / Math.max(1, carrySpells),
     possession: homeTouch / Math.max(1, homeTouch + awayTouch),
+    // 되찾기 우위 — 우리가 되찾은 횟수에서 상대가 되찾아 간 횟수를 뺀다. 한쪽만 세면
+    // "경기가 바빴다"에 같이 오르내려서 전술 효과와 구분이 안 된다.
+    recoveryEdge: homeRecoveries - awayRecoveries,
     outsideTicks,
     longestCarry,
     carryShare: carryTicks / ticks,
@@ -136,8 +177,8 @@ function play(homeTactics, awayTactics, seed) {
 }
 
 /** 여러 seed 평균 — 한 판의 우연이 아니라 경향을 본다. */
-function playSeries(homeTactics, awayTactics = NEUTRAL) {
-  const runs = SEEDS.map((seed) => play(homeTactics, awayTactics, seed));
+function playSeries(homeTactics, awayTactics = NEUTRAL, seeds = SEEDS) {
+  const runs = seeds.map((seed) => play(homeTactics, awayTactics, seed));
   const avg = (pick) => runs.reduce((s, r) => s + pick(r), 0) / runs.length;
   return {
     runs,
@@ -147,6 +188,7 @@ function playSeries(homeTactics, awayTactics = NEUTRAL) {
     avgZ: avg((r) => r.avgZ),
     avgBallSpeed: avg((r) => r.avgBallSpeed),
     avgCarrySpell: avg((r) => r.avgCarrySpell),
+    recoveryEdge: avg((r) => r.recoveryEdge),
     possession: avg((r) => r.possession),
     points: runs.reduce((s, r) => s + (r.goalsFor > r.goalsAgainst ? 3 : r.goalsFor === r.goalsAgainst ? 1 : 0), 0),
     scoreline: runs.map((r) => `${r.goalsFor}-${r.goalsAgainst}`).join(' '),
@@ -207,10 +249,11 @@ const AXES = [
   },
 ];
 
-console.log('축              낮음(0.0)      높음(1.0)      차이');
+console.log(`축              낮음(0.0)      높음(1.0)      차이   (각 ${AXIS_SEEDS.length}판 평균)`);
 for (const axis of AXES) {
-  const lo = playSeries(withAxis(axis.key, 0));
-  const hi = playSeries(withAxis(axis.key, 1));
+  // 축 비교만 넓은 시드로 잰다 — 이유는 AXIS_SEEDS 선언부 주석 참고.
+  const lo = playSeries(withAxis(axis.key, 0), NEUTRAL, AXIS_SEEDS);
+  const hi = playSeries(withAxis(axis.key, 1), NEUTRAL, AXIS_SEEDS);
   const delta = hi[axis.metric] - lo[axis.metric];
   const gain = delta * axis.direction; // 기대 방향으로 얼마나 움직였는지
   console.log(
@@ -218,6 +261,15 @@ for (const axis of AXES) {
       delta >= 0 ? '+' : ''
     }${fixed(delta)}${axis.unit}`
   );
+  if (axis.key === 'pressing') {
+    // 압박 축이 실패할 때 "지표를 잘못 재는 건지, 압박이 정말 안 듣는 건지"를 바로 알 수
+    // 있게 같이 찍는다. 되찾기 우위는 이 축의 설명문("볼을 더 자주 되찾는다")을 그대로
+    // 센 값이라, 점유율과 이게 같이 안 오르면 원인은 지표가 아니라 경기 쪽이다.
+    console.log(
+      `             └ 되찾기 우위 ${fixed(lo.recoveryEdge)} → ${fixed(hi.recoveryEdge)} · ` +
+        `실점 ${fixed(lo.goalsAgainst)} → ${fixed(hi.goalsAgainst)}`
+    );
+  }
   check(
     `${axis.label}(${axis.key})`,
     gain >= axis.min,
