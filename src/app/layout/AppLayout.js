@@ -5,7 +5,6 @@ const NAV_ITEMS = Object.freeze([
   ['선수단', '/roster'],
   ['라인업', '/lineup'],
   ['전술', '/tactics'],
-  ['시뮬레이션', '/simulation'],
   ['경기', '/match'],
 ]);
 
