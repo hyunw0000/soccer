@@ -17,6 +17,15 @@ export class Player {
     this.ins = slot.instruction ?? { ...INSTRUCTION_FALLBACK };
     this.pace = meta.pace;
     this.stamina = meta.stamina ?? 75;
+    // 패스/슛 전용 스탯은 아직 MatchSetup 계약에 없다(SimulationPlayer는 현재 pace/stamina만 싣는다).
+    // 들어오면 그대로 쓰고, 없으면 pace를 대리 지표로 쓴다 — 계약이 넓어지면 자동으로 더 정확해진다.
+    this.passSkill = meta.pass ?? meta.pace;
+    this.shootSkill = meta.shoot ?? meta.pace;
+    this.defenseSkill = meta.defense ?? meta.pace;
+    this.dribbleSkill = meta.dribble ?? meta.pace;
+    this.visionSkill = meta.vision ?? meta.pace;
+    // 0..1, 0.5=중립(항상 점수 1등을 고름). 계약에 없으면 중립 — 기존 동작을 그대로 보존한다.
+    this.boldness = meta.boldness ?? 0.5;
     this.maxSpeedBase = PARAMS.maxSpeed * (0.82 + meta.pace / 100 * 0.36);
     this.maxSpeed = this.maxSpeedBase;
     this.energy = 1; // 1 → 0 으로 소모, 속도에 곱해진다
@@ -27,6 +36,9 @@ export class Player {
     this.vz = 0;
     this.kc = 0; // kick cooldown
     this.heading = team === 'home' ? 0 : Math.PI;
+    // 되감기 후 드래그로 내리는 경로 지시. { waypoints: [{x,z},...], index } | null.
+    // 있으면 기본 AI(추격/포메이션 유지) 대신 이 경로를 arrive()로 따라간다.
+    this.command = null;
   }
 
   /** 공격 방향 골라인의 x좌표 */
