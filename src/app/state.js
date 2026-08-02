@@ -25,8 +25,10 @@ const initial = {
   startingLineup: null,
   currentOpponent: null,
   pendingMatchSetup: null,
-  // TournamentBracket version 1. 남아공전 결과 확정 전에는 null로 둔다.
+  // TournamentBracket version 2. 공식 원본과 게임 시간선을 구분한다.
   tournamentBracket: null,
+  // 남아공전이 끝난 뒤에만 { homeScore, awayScore }를 저장한다.
+  groupAFinalResult: null,
 };
 
 export const state = { ...initial, ...load() };
@@ -47,6 +49,7 @@ export function resetState() {
     currentOpponent: null,
     pendingMatchSetup: null,
     tournamentBracket: null,
+    groupAFinalResult: null,
   });
   save();
 }
@@ -70,6 +73,7 @@ function save() {
         lineupPositions: state.lineupPositions,
         slotTactics: state.slotTactics,
         tournamentBracket: state.tournamentBracket,
+        groupAFinalResult: state.groupAFinalResult,
       })
     );
   } catch {
@@ -118,8 +122,11 @@ function load() {
         Object.entries(v.slotTactics).filter(([, t]) => t && typeof t === 'object')
       );
     }
-    if (v.tournamentBracket?.version === 1 && Array.isArray(v.tournamentBracket.matches)) {
+    if (v.tournamentBracket?.version === 2 && Array.isArray(v.tournamentBracket.matches)) {
       out.tournamentBracket = v.tournamentBracket;
+    }
+    if (v.groupAFinalResult && Number.isInteger(v.groupAFinalResult.homeScore) && v.groupAFinalResult.homeScore >= 0 && Number.isInteger(v.groupAFinalResult.awayScore) && v.groupAFinalResult.awayScore >= 0) {
+      out.groupAFinalResult = { homeScore:v.groupAFinalResult.homeScore, awayScore:v.groupAFinalResult.awayScore };
     }
     if (v.tactics && typeof v.tactics === 'object') {
       out.tactics = { ...TACTIC_DEFAULT };

@@ -6,7 +6,11 @@
   "description": "3D 축구 감독 시뮬레이터 — 전술을 짜고, 경기를 보고, 되감아서 다시 지시한다",
   "scripts": {
     "dev": "vite",
+    "test": "npm run validate:flags && npm run validate:group-history",
+    "prebuild": "npm test",
     "build": "vite build",
+    "validate:flags": "node scripts/validate-flags.mjs",
+    "validate:group-history": "node scripts/validate-group-history.mjs",
     "preview": "vite preview",
     "audit": "npm audit --omit=dev"
   },

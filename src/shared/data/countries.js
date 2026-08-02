@@ -6,6 +6,7 @@ export const countries = Object.freeze({
   KOR: Object.freeze({ fifaCode: 'KOR', nameKo: '대한민국', nameEn: 'Korea Republic', iso2: 'kr' }),
   RSA: Object.freeze({ fifaCode: 'RSA', nameKo: '남아프리카공화국', nameEn: 'South Africa', iso2: 'za' }),
   CAN: Object.freeze({ fifaCode: 'CAN', nameKo: '캐나다', nameEn: 'Canada', iso2: 'ca' }),
+  CZE: Object.freeze({ fifaCode: 'CZE', nameKo: '체코', nameEn: 'Czechia', iso2: 'cz' }),
   GER: Object.freeze({ fifaCode: 'GER', nameKo: '독일', nameEn: 'Germany', iso2: 'de' }),
   PAR: Object.freeze({ fifaCode: 'PAR', nameKo: '파라과이', nameEn: 'Paraguay', iso2: 'py' }),
   NED: Object.freeze({ fifaCode: 'NED', nameKo: '네덜란드', nameEn: 'Netherlands', iso2: 'nl' }),

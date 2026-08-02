@@ -43,7 +43,11 @@ export function createRouter(root, screens, { canAccess = () => true } = {}) {
     } else if (fromHistory && guarded && typeof window !== 'undefined') {
       window.history.replaceState({ route: resolved, params: null }, '', path);
     }
+    const routeChanged = currentName !== resolved;
     render(resolved, params);
+    // 새 화면이 이전 화면의 긴 스크롤 위치 아래에서 시작하지 않게 한다.
+    // 같은 라우트의 하위 탭과 브라우저 히스토리 복원은 건드리지 않는다.
+    if (routeChanged && !fromHistory) window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
   }
 
   const onPopState = (event) => {

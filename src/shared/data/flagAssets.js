@@ -12,6 +12,7 @@ import ch from 'flag-icons/flags/4x3/ch.svg?url';
 import ci from 'flag-icons/flags/4x3/ci.svg?url';
 import co from 'flag-icons/flags/4x3/co.svg?url';
 import cv from 'flag-icons/flags/4x3/cv.svg?url';
+import cz from 'flag-icons/flags/4x3/cz.svg?url';
 import de from 'flag-icons/flags/4x3/de.svg?url';
 import dz from 'flag-icons/flags/4x3/dz.svg?url';
 import ec from 'flag-icons/flags/4x3/ec.svg?url';
@@ -35,7 +36,7 @@ import us from 'flag-icons/flags/4x3/us.svg?url';
 import za from 'flag-icons/flags/4x3/za.svg?url';
 
 export const flagAssets = Object.freeze({
-  ar, at, au, ba, be, br, ca, cd, ch, ci, co, cv, de, dz, ec, eg, es, fr,
+  ar, at, au, ba, be, br, ca, cd, ch, ci, co, cv, cz, de, dz, ec, eg, es, fr,
   'gb-eng': gbEng,
   gh, hr, jp, kr, ma, mx, nl, no, pt, py, se, sn, us, za,
 });

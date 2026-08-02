@@ -77,11 +77,12 @@ button { font: inherit; cursor: pointer; }
   box-shadow: 0 3px 9px rgba(0, 0, 0, 0.28);
   vertical-align: middle;
 }
-.country-flag--small { width: 28px; }
-.country-flag--medium { width: 42px; }
-.country-flag--large { width: 58px; }
+.country-flag--small { width: 24px; }
+.country-flag--medium { width: 36px; }
+.country-flag--large { width: 52px; }
 .country-flag__image { position: absolute; inset: 0; z-index: 1; display: block; width: 100%; height: 100%; object-fit: contain; }
 .country-flag__fallback { color: #344251; font-size: 9px; font-weight: 900; letter-spacing: 0.04em; }
+.country-flag.has-asset:not(.is-error) .country-flag__fallback { visibility: hidden; }
 .primary {
   background: var(--accent);
   border: 1px solid var(--accent);

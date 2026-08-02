@@ -1,118 +1,98 @@
-import { knockoutRoundTemplates, roundOf32Matches, tournamentRounds } from '../data/bracket.js';
+import { officialTournamentMatches, tournamentRounds } from '../data/bracket.js';
+import { countries } from '../../shared/data/countries.js';
 
-export const QUALIFICATION_STATUSES = Object.freeze(['pending', 'qualified', 'eliminated']);
+export const QUALIFICATION_STATUSES = Object.freeze(['pending','qualified','eliminated']);
+const clone = (value) => structuredClone(value);
+const team = (teamId) => ({ type:'TEAM', teamId });
+const winner = (matchId) => ({ type:'WINNER', matchId });
+const loser = (matchId) => ({ type:'LOSER', matchId });
+const dynamicIds = new Set([73,90,97,101,103,104]);
 
-const copyMatch = (match) => ({ ...match, score: match.score ? { ...match.score } : null });
-const registeredTeamIds = new Set(roundOf32Matches.flatMap(({ homeTeamId, awayTeamId, originalHomeTeamId }) => [homeTeamId, awayTeamId, originalHomeTeamId].filter(Boolean)));
+export function createOfficialBracket() {
+  return { version:2, tournamentId:'world-championship-2026', timeline:'official', qualificationStatus:'eliminated', matches:clone(officialTournamentMatches) };
+}
 
-export function createInitialBracket({ qualificationStatus = 'pending' } = {}) {
-  if (!QUALIFICATION_STATUSES.includes(qualificationStatus)) {
-    throw new TypeError(`알 수 없는 진출 상태: ${qualificationStatus}`);
-  }
+function resolveSource(source, matches) {
+  if (!source) return null;
+  if (source.type === 'TEAM') return source.teamId;
+  if (!['WINNER','LOSER'].includes(source.type)) return null;
+  const match = matches.find((item) => item.matchId === source.matchId);
+  if (!match || match.status !== 'completed') return null;
+  if (source.type === 'WINNER') return match.winnerTeamId;
+  return match.winnerTeamId === match.homeTeamId ? match.awayTeamId : match.homeTeamId;
+}
 
-  const firstRound = roundOf32Matches.map((match) => {
-    const isHistoryMatch = match.matchId === 73;
-    const koreaQualified = qualificationStatus === 'qualified';
-    return {
-      ...match,
-      roundId: 'roundOf32',
-      homeTeamId: isHistoryMatch && !koreaQualified ? match.originalHomeTeamId : match.homeTeamId,
-      status: isHistoryMatch && qualificationStatus === 'pending' ? 'locked' : 'scheduled',
-      score: null,
-      winnerTeamId: null,
-      sourceMatchIds: null,
-      historyChanged: isHistoryMatch && koreaQualified,
-    };
-  });
-  const laterRounds = knockoutRoundTemplates.flatMap(({ roundId, matches }) => matches.map((match) => ({
-    ...match,
-    roundId,
-    homeTeamId: null,
-    awayTeamId: null,
-    status: 'pending',
-    score: null,
-    winnerTeamId: null,
-    historyChanged: false,
-  })));
-
+/** 조별리그 결과와 시간선 미리 보기를 분리해 Match 73의 홈 슬롯을 결정한다. */
+export function resolveMatch73HomeTeam(qualificationStatus = 'pending') {
+  if (!QUALIFICATION_STATUSES.includes(qualificationStatus)) throw new TypeError(`알 수 없는 진출 상태: ${qualificationStatus}`);
+  if (qualificationStatus === 'qualified') return { teamId:'KOR', source:team('KOR'), slotLabel:null, status:'playable' };
   return {
-    version: 1,
-    tournamentId: 'world-championship-2026',
-    qualificationStatus,
-    matches: [...firstRound, ...laterRounds],
+    teamId:null,
+    source:{ type:'GROUP_POSITION', groupId:'A', position:2, label:'A조 2위' },
+    slotLabel:'A조 2위',
+    status:'waiting',
   };
 }
 
-export function applyKoreaQualification(bracket, qualificationStatus) {
-  if (!QUALIFICATION_STATUSES.includes(qualificationStatus)) throw new TypeError('유효하지 않은 진출 상태입니다.');
-  const match73 = bracket?.matches?.find(({ matchId }) => matchId === 73);
-  if (match73?.status === 'completed') throw new Error('완료된 Match 73의 진출 상태는 바꿀 수 없습니다.');
-  return createInitialBracket({ qualificationStatus });
+function resolveGameMatches(matches) {
+  return matches.map((match) => {
+    if (!dynamicIds.has(match.matchId) || match.status === 'completed') return match;
+    const homeTeamId = resolveSource(match.homeSource, matches);
+    const awayTeamId = resolveSource(match.awaySource, matches);
+    return { ...match, homeTeamId, awayTeamId, status: homeTeamId && awayTeamId ? 'playable' : 'waiting' };
+  });
 }
+
+export function createGameTimelineBracket({ qualificationStatus = 'pending' } = {}) {
+  const match73Home = resolveMatch73HomeTeam(qualificationStatus);
+  const pathState = qualificationStatus === 'qualified' ? 'confirmed' : 'preview';
+  const dynamic = {
+    73:{roundId:'roundOf32',homeSource:match73Home.source,homeSlotLabel:match73Home.slotLabel,awaySource:team('CAN'),nextMatchId:90},
+    90:{roundId:'roundOf16',homeSource:winner(73),awaySource:team('MAR'),nextMatchId:97},
+    97:{roundId:'quarterFinal',homeSource:team('FRA'),awaySource:winner(90),nextMatchId:101},
+    101:{roundId:'semiFinal',homeSource:winner(97),awaySource:team('ESP'),nextMatchId:104},
+    103:{roundId:'thirdPlace',homeSource:loser(101),awaySource:loser(102),nextMatchId:null},
+    104:{roundId:'final',homeSource:winner(101),awaySource:winner(102),nextMatchId:null},
+  };
+  let matches = clone(officialTournamentMatches).map((match) => dynamicIds.has(match.matchId) ? {
+    matchId:match.matchId, ...dynamic[match.matchId], homeTeamId:null, awayTeamId:null, homeScore:null, awayScore:null,
+    homePenaltyScore:null, awayPenaltyScore:null, winnerTeamId:null, resultType:null, status:'waiting', source:'GAME_TIMELINE',
+    historyChanged:qualificationStatus==='qualified', pathState,
+  } : match);
+  matches = resolveGameMatches(matches);
+  return { version:2, tournamentId:'world-championship-2026', timeline:'game', qualificationStatus, matches };
+}
+
+export function createInitialBracket({qualificationStatus='pending'}={}) {
+  if (!QUALIFICATION_STATUSES.includes(qualificationStatus)) throw new TypeError(`알 수 없는 진출 상태: ${qualificationStatus}`);
+  return createGameTimelineBracket({ qualificationStatus });
+}
+export function applyKoreaQualification(_bracket,status) { return createGameTimelineBracket({qualificationStatus:status}); }
 
 export function validateBracket(bracket) {
-  const errors = [];
-  if (!bracket || bracket.version !== 1 || !Array.isArray(bracket.matches)) return { valid: false, errors: ['TournamentBracket version 1이 아닙니다.'] };
-  const ids = bracket.matches.map(({ matchId }) => matchId);
-  const uniqueIds = new Set(ids);
-  if (ids.length !== 31 || uniqueIds.size !== 31) errors.push('토너먼트는 중복 없는 31경기여야 합니다.');
+  const errors=[];
+  if (!bracket || bracket.version!==2 || !Array.isArray(bracket.matches)) return {valid:false,errors:['TournamentBracket version 2가 아닙니다.']};
+  const ids=new Set(bracket.matches.map((m)=>m.matchId));
+  if (bracket.matches.length!==32 || ids.size!==32) errors.push('토너먼트는 3위 결정전을 포함한 중복 없는 32경기여야 합니다.');
   for (const match of bracket.matches) {
-    if (match.homeTeamId && !registeredTeamIds.has(match.homeTeamId)) errors.push(`Match ${match.matchId}: 알 수 없는 홈팀입니다.`);
-    if (match.awayTeamId && !registeredTeamIds.has(match.awayTeamId)) errors.push(`Match ${match.matchId}: 알 수 없는 원정팀입니다.`);
-    if (match.nextMatchId != null && !uniqueIds.has(match.nextMatchId)) errors.push(`Match ${match.matchId}: 다음 경기 ${match.nextMatchId}가 없습니다.`);
-    if (match.nextMatchId != null) {
-      const target = bracket.matches.find(({ matchId }) => matchId === match.nextMatchId);
-      if (target && !target.sourceMatchIds?.includes(match.matchId)) errors.push(`Match ${match.matchId}: 다음 경기 연결이 서로 일치하지 않습니다.`);
-    }
-    if (match.sourceMatchIds) {
-      for (const sourceId of match.sourceMatchIds) {
-        const source = bracket.matches.find(({ matchId }) => matchId === sourceId);
-        if (!source || source.nextMatchId !== match.matchId) errors.push(`Match ${match.matchId}: 이전 경기 ${sourceId} 연결이 올바르지 않습니다.`);
-      }
-    }
-    if (match.winnerTeamId && ![match.homeTeamId, match.awayTeamId].includes(match.winnerTeamId)) errors.push(`Match ${match.matchId}: 승자가 참가팀이 아닙니다.`);
+    for (const id of [match.homeTeamId,match.awayTeamId,match.winnerTeamId].filter(Boolean)) if (!countries[id]) errors.push(`Match ${match.matchId}: 알 수 없는 팀 ${id}`);
+    if (match.nextMatchId!=null && !ids.has(match.nextMatchId)) errors.push(`Match ${match.matchId}: 다음 경기가 없습니다.`);
+    if (match.status==='completed' && ![match.homeTeamId,match.awayTeamId].includes(match.winnerTeamId)) errors.push(`Match ${match.matchId}: 승자가 올바르지 않습니다.`);
+    if (match.resultType==='PENALTIES' && (!Number.isInteger(match.homePenaltyScore)||!Number.isInteger(match.awayPenaltyScore))) errors.push(`Match ${match.matchId}: 승부차기 결과가 없습니다.`);
   }
-  for (const round of tournamentRounds) {
-    if (round.matchIds.some((id) => !uniqueIds.has(id))) errors.push(`${round.label} 경기 구성이 불완전합니다.`);
-  }
-  return { valid: errors.length === 0, errors };
+  for (const round of tournamentRounds) if ([...round.matchIds,...(round.auxiliaryMatchIds??[])].some((id)=>!ids.has(id))) errors.push(`${round.label} 구성이 불완전합니다.`);
+  return {valid:!errors.length,errors};
 }
 
-export function recordMatchResult(bracket, result) {
-  const validation = validateBracket(bracket);
-  if (!validation.valid) throw new Error(validation.errors.join(' '));
-  const index = bracket.matches.findIndex(({ matchId }) => matchId === result?.matchId);
-  if (index < 0) throw new Error('존재하지 않는 경기입니다.');
-  const current = bracket.matches[index];
-  if (current.status === 'completed') throw new Error('완료된 경기 결과는 다시 기록할 수 없습니다.');
-  if (!current.homeTeamId || !current.awayTeamId || current.status === 'locked') throw new Error('아직 진행할 수 없는 경기입니다.');
-  if (![current.homeTeamId, current.awayTeamId].includes(result.winnerTeamId)) throw new Error('승자는 경기 참가팀이어야 합니다.');
-  const home = Number(result.homeScore);
-  const away = Number(result.awayScore);
-  if (!Number.isInteger(home) || home < 0 || !Number.isInteger(away) || away < 0) throw new Error('점수는 0 이상의 정수여야 합니다.');
-
-  const matches = bracket.matches.map(copyMatch);
-  matches[index] = { ...matches[index], status: 'completed', score: { home, away }, winnerTeamId: result.winnerTeamId };
-  if (current.nextMatchId != null) {
-    const targetIndex = matches.findIndex(({ matchId }) => matchId === current.nextMatchId);
-    const target = matches[targetIndex];
-    const slot = target.sourceMatchIds.indexOf(current.matchId);
-    matches[targetIndex] = {
-      ...target,
-      [slot === 0 ? 'homeTeamId' : 'awayTeamId']: result.winnerTeamId,
-      status: (slot === 0 ? target.awayTeamId : target.homeTeamId) ? 'scheduled' : 'pending',
-      historyChanged: target.historyChanged || result.winnerTeamId === 'KOR',
-    };
-  }
-  return { ...bracket, matches };
+export function recordMatchResult(bracket,result) {
+  const check=validateBracket(bracket); if(!check.valid) throw new Error(check.errors.join(' '));
+  if (bracket.timeline!=='game' || !dynamicIds.has(result?.matchId)) throw new Error('공식 대회 원본 결과는 변경할 수 없습니다.');
+  const matches=clone(bracket.matches); const index=matches.findIndex((m)=>m.matchId===result.matchId); const match=matches[index];
+  if (!match || match.status!=='playable') throw new Error('아직 진행할 수 없는 경기입니다.');
+  const homeScore=Number(result.homeScore), awayScore=Number(result.awayScore);
+  if (![match.homeTeamId,match.awayTeamId].includes(result.winnerTeamId)||!Number.isInteger(homeScore)||!Number.isInteger(awayScore)||homeScore<0||awayScore<0) throw new Error('유효하지 않은 경기 결과입니다.');
+  matches[index]={...match,status:'completed',homeScore,awayScore,winnerTeamId:result.winnerTeamId,resultType:result.resultType??'REGULATION',homePenaltyScore:result.homePenaltyScore??null,awayPenaltyScore:result.awayPenaltyScore??null};
+  return {...bracket,matches:resolveGameMatches(matches)};
 }
-
-export function getCurrentRound(bracket) {
-  return tournamentRounds.find((round) => round.matchIds.some((id) => bracket.matches.find((match) => match.matchId === id)?.status !== 'completed')) ?? tournamentRounds.at(-1);
-}
-
-export function getTournamentNextOpponent(bracket, teamId) {
-  const match = bracket?.matches?.find(({ status, homeTeamId, awayTeamId }) => status !== 'completed' && [homeTeamId, awayTeamId].includes(teamId));
-  if (!match) return null;
-  return match.homeTeamId === teamId ? match.awayTeamId : match.homeTeamId;
-}
+export function getCurrentRound(bracket) { return tournamentRounds.find((round)=>round.matchIds.some((id)=>bracket.matches.find((m)=>m.matchId===id)?.status!=='completed'))??tournamentRounds.at(-1); }
+export function getTournamentNextOpponent(bracket,teamId) { const match=bracket?.matches?.find((m)=>m.status!=='completed'&&[m.homeTeamId,m.awayTeamId].includes(teamId)); return match ? (match.homeTeamId===teamId?match.awayTeamId:match.homeTeamId) : null; }

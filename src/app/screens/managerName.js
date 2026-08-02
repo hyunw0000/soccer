@@ -1,4 +1,4 @@
-import { CountryFlag, countries, el } from '../../shared/index.js';
+import { CountryFlag, el } from '../../shared/index.js';
 import { resetState, state, setState } from '../public.js';
 import './opening.css';
 
@@ -20,15 +20,13 @@ const STAGES = Object.freeze({
 
 const isReducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-function flag(countryCode) {
-  const fifaCode = countryCode === 'KR' ? 'KOR' : 'RSA';
-  const country = countries[fifaCode];
-  return CountryFlag({ ...country, fifaCode, size: 'medium' });
+function flag(teamId) {
+  return CountryFlag({ teamId, size:'medium' });
 }
 
 function teamRow(side, team) {
   return el('div', { class: `op-team op-team--${side}` }, [
-    flag(team.countryCode),
+    flag(team.code),
     el('div', { class: 'op-team__name' }, [
       el('b', { text: team.code }),
       el('span', { text: team.name }),
@@ -230,7 +228,7 @@ export default function managerNameScreen(root, ctx) {
         }
         managerName = name;
         setState({ managerName: name, hasCompletedSetup: true });
-        ctx.navigate('/roster');
+        ctx.navigate('/tournament');
       };
       input.addEventListener('input', () => {
         error.textContent = '';
@@ -275,7 +273,7 @@ export default function managerNameScreen(root, ctx) {
         el('p', { class: 'op-lead', text: '대한민국의 운명이 걸린 남아프리카공화국전을 준비하십시오.' }),
         el('article', { class: 'op-fixture' }, [
           el('span', { text: 'GROUP STAGE · MATCHDAY 3' }),
-          el('div', {}, [flag('KR'), el('b', { text: 'KOR' }), el('i', { text: 'VS' }), el('b', { text: 'RSA' }), flag('ZA')]),
+          el('div', {}, [flag('KOR'), el('b', { text: 'KOR' }), el('i', { text: 'VS' }), el('b', { text: 'RSA' }), flag('RSA')]),
           el('p', { text: '킥오프까지 D-1 · 전술 브리핑 대기 중' }),
         ]),
         prepare,

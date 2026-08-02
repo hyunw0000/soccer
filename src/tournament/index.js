@@ -41,14 +41,19 @@ export function getNextOpponent(bracket = null) {
 }
 
 export { countries, countryByFifaCode } from '../shared/index.js';
-export { roundOf32Matches, knockoutRoundTemplates, qualificationRules, tournamentRounds } from './data/bracket.js';
+export { bracketLayout, officialTournamentMatches, roundOf32Matches, knockoutRoundTemplates, qualificationRules, tournamentRounds } from './data/bracket.js';
+export { GROUP_A_TEAM_IDS, groupACompletedMatches, koreaSouthAfricaMatch } from './data/groupA.js';
+export { calculateGroupStandings, createGroupAState, createTournamentProgress, getMatchesForTeam, normalizeGroupAFinalResult, resolveKoreaQualification } from './domain/groupStandings.js';
 export {
   QUALIFICATION_STATUSES,
   applyKoreaQualification,
   createInitialBracket,
+  createOfficialBracket,
+  createGameTimelineBracket,
   getCurrentRound,
   getTournamentNextOpponent,
   recordMatchResult,
+  resolveMatch73HomeTeam,
   validateBracket,
 } from './domain/bracket.js';
 export { default as tournamentScreen } from './screens/tournament.js';
