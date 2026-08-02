@@ -1,17 +1,19 @@
 /**
  * 상대 스카우팅 패널.
  *
- * 라인업 화면 아래에 붙어서 "다음 상대가 어떤 모양으로 서는가"를 보여 준다.
+ * 라인업 화면에서 "이번 상대가 어떤 모양으로 서는가"를 보여 준다.
  * 왼쪽은 상대 포메이션 구상도, 오른쪽은 26인 명단이다.
  *
+ * 보여 주는 상대는 넘겨받은 스테이지 하나뿐이다 — 뒤 라운드 상대는
+ * 그 라운드에 올라가야 드러나므로 여기서 고르게 하지 않는다.
+ *
  * 상대 데이터는 tournament의 공개 API에서만 읽는다 — 여기서 팀을 만들지 않는다.
- * 좌표도 포메이션 정의에서 그대로 읽어 배치를 다시 적지 않는다.
- * 표시 전용이며, 다른 상대를 고르면 onSelect로만 알린다.
+ * 좌표도 포메이션 정의에서 그대로 읽어 배치를 다시 적지 않는다. 표시 전용이다.
  */
 
 import './lineup.css';
 import { el } from '../../shared/index.js';
-import { OPPONENT_TEAMS, getOpponentTeam } from '../../tournament/index.js';
+import { getOpponentTeam } from '../../tournament/index.js';
 import { getNormalizedSlots } from '../formations.js';
 import { positionName, positionOf } from '../domain/roles.js';
 
@@ -33,13 +35,11 @@ const shortName = (player) => player.name.split(' ').at(-1);
 
 /**
  * @param {object} [options]
- * @param {string} [options.stage] 처음 보여 줄 상대의 스테이지 id
- * @param {(team: object) => void} [options.onSelect] 다른 상대를 고르면 호출된다
+ * @param {string} [options.stage] 보여 줄 상대의 스테이지 id
  */
-export function createOpponentScouting({ stage = null, onSelect = () => {} } = {}) {
-  let current = getOpponentTeam(stage);
+export function createOpponentScouting({ stage = null } = {}) {
+  const current = getOpponentTeam(stage);
 
-  const chips = el('div', { class: 'chips scout-chips' });
   const teamLine = el('div', { class: 'scout-team' });
   const shape = el('div', { class: 'scout-pitch' }, [
     el('div', { class: 'scout-lines' }, [
@@ -55,21 +55,6 @@ export function createOpponentScouting({ stage = null, onSelect = () => {} } = {
   shape.append(dots);
   const styleNote = el('p', { class: 'lead small scout-style' });
   const squad = el('div', { class: 'scout-squad' });
-
-  /** 대회에서 만나는 순서대로의 상대. 눌러서 어느 라운드 상대든 미리 볼 수 있다. */
-  function drawChips() {
-    chips.replaceChildren(
-      ...OPPONENT_TEAMS.map((team) =>
-        el('button', {
-          class: `chip${team.id === current.id ? ' on' : ''}`,
-          type: 'button',
-          title: `${team.stageLabel} · ${team.name} (${team.formationId})`,
-          text: `${team.stageLabel} ${team.shortName}`,
-          onclick: () => select(team),
-        })
-      )
-    );
-  }
 
   function drawTeam() {
     teamLine.replaceChildren(
@@ -143,15 +128,7 @@ export function createOpponentScouting({ stage = null, onSelect = () => {} } = {
     );
   }
 
-  function select(team) {
-    if (team.id === current.id) return;
-    current = team;
-    render();
-    onSelect(current);
-  }
-
   function render() {
-    drawChips();
     drawTeam();
     drawShape();
     drawSquad();
@@ -163,10 +140,9 @@ export function createOpponentScouting({ stage = null, onSelect = () => {} } = {
   const node = el('section', { class: 'scouting' }, [
     el('header', { class: 'scout-head' }, [
       el('div', {}, [
-        el('p', { class: 'eyebrow', text: 'SCOUTING' }),
-        el('h3', { class: 'h3 scout-title', text: '다음 상대는 이렇게 선다' }),
+        el('p', { class: 'eyebrow', text: `${current.stageLabel} · 이번 상대` }),
+        el('h3', { class: 'h3 scout-title', text: `${current.name}는 이렇게 선다` }),
       ]),
-      chips,
     ]),
     el('div', { class: 'tactics-grid scout-grid' }, [
       el('section', { class: 'panel scout-panel' }, [teamLine, shape, styleNote]),

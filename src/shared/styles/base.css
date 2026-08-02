@@ -61,6 +61,28 @@ html, body {
 .field:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
 
 button { font: inherit; cursor: pointer; }
+
+/* flag-icons 7.5.0 (MIT) 기반 공용 국기. 원본 4:3 비율을 자르지 않는다. */
+.country-flag {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+  aspect-ratio: 4 / 3;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: 1px solid rgba(183, 198, 211, 0.62);
+  border-radius: 2px;
+  background: #e8edf1;
+  box-shadow: 0 3px 9px rgba(0, 0, 0, 0.28);
+  vertical-align: middle;
+}
+.country-flag--small { width: 24px; }
+.country-flag--medium { width: 36px; }
+.country-flag--large { width: 52px; }
+.country-flag__image { position: absolute; inset: 0; z-index: 1; display: block; width: 100%; height: 100%; object-fit: contain; }
+.country-flag__fallback { color: #344251; font-size: 9px; font-weight: 900; letter-spacing: 0.04em; }
+.country-flag.has-asset:not(.is-error) .country-flag__fallback { visibility: hidden; }
 .primary {
   background: var(--accent);
   border: 1px solid var(--accent);
