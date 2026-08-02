@@ -1,6 +1,6 @@
 /**
  * 대회 진행 규칙 검증.
- * 규칙은 하나다 — 이겨야만 다음 라운드가 열린다. 무승부는 패배와 같다.
+ * 남아공전은 승리 또는 무승부 시 진출하고, 토너먼트는 승리해야 진출한다.
  */
 import {
   KOREA_RUN,
@@ -25,13 +25,14 @@ check('경기 전 진출 상태', initial.qualificationStatus, 'pending');
 check('경기 전 다음 경기', initial.nextStep?.matchId, 54);
 check('경기 전 상대', initial.nextStep?.opponentTeamId, 'RSA');
 
-// 2. 남아공전 무승부 → 탈락
+// 2. 남아공전 무승부 → A조 2위로 32강 진출
 const drawn = createGameProgress(play({}, 54, 1, 1));
-check('무승부 status', drawn.status, 'eliminated');
-check('무승부 진출 상태', drawn.qualificationStatus, 'eliminated');
-check('무승부 다음 경기', drawn.nextStep, null);
-check('무승부 다시 시도 대상', drawn.activeStep?.matchId, 54);
+check('무승부 status', drawn.status, 'playing');
+check('무승부 진출 상태', drawn.qualificationStatus, 'qualified');
+check('무승부 다음 경기', drawn.nextStep?.matchId, 73);
+check('무승부 다음 상대', drawn.nextStep?.opponentTeamId, 'CAN');
 check('무승부 조 순위', drawn.group.standings.find((r) => r.teamId === 'KOR')?.position, 2);
+check('무승부 Match 73 상태', drawn.bracket.matches.find((m) => m.matchId === 73)?.status, 'playable');
 
 // 3. 남아공전 패배 → 탈락
 const lost = createGameProgress(play({}, 54, 0, 2));
@@ -90,4 +91,4 @@ check('준결승 패배 마지막 경기', lostSemi.lastPlayed?.matchId, 101);
 check('준결승 패배 결승 상태', lostSemi.bracket.matches.find((m) => m.matchId === 104)?.homeTeamId, 'ESP');
 
 if (errors.length) { console.error(errors.join('\n')); process.exitCode = 1; }
-else console.log(`대회 진행 규칙 검증 통과 · 승리만 진출 · 무승부/패배 탈락 · 다시 시도 · 전승 우승 (${KOREA_RUN.length}경기 경로)`);
+else console.log(`대회 진행 규칙 검증 통과 · 조별리그 승/무 진출 · 토너먼트 승리 진출 · 다시 시도 · 전승 우승 (${KOREA_RUN.length}경기 경로)`);
