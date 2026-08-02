@@ -26,7 +26,7 @@ export function startApp(root = document.getElementById('app')) {
     setup: managerScreen,
     roster: withAppLayout(rosterScreen, '/roster'),
     tournament: withAppLayout((outlet, ctx) => tournamentScreen(outlet, ctx, { bracket: state.tournamentBracket, groupAFinalResult:state.groupAFinalResult }), '/tournament'),
-    lineup: withAppLayout(lineupPlaceholder, '/lineup'),
+    lineup: withAppLayout(lineupScreen, '/lineup'),
     tactics: withAppLayout(tacticsScreen, '/tactics'),
     simulation: withAppLayout(simulationPlaceholder, '/simulation'),
     match: withAppLayout(matchScreen, '/match'),
