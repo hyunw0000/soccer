@@ -136,9 +136,12 @@ export default function squadScreen(root, ctx) {
       [
         el('span', { class: `pos ${p.pos}`, text: p.detail || p.pos }),
         el('span', { class: 'pname', text: p.name }),
-        el('span', { class: 'pclub', text: p.club }),
+        // 26 배지는 소속팀 줄 안에 둔다 — 카드 밖으로 나가면 모서리에서 잘린다.
+        el('span', { class: 'pclub' }, [
+          el('span', { class: 'pclub-name', text: p.club }),
+          p.squad2026 ? el('span', { class: 'tag', text: '26', title: '2026 대표팀 소집' }) : null,
+        ]),
         el('span', { class: 'povr', text: String(overall(p)) }),
-        p.squad2026 ? el('span', { class: 'tag', text: '26' }) : null,
         el('span', {
           class: 'cap-btn',
           title: '주장으로 지정',

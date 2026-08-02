@@ -141,7 +141,6 @@ export function createOpponentScouting({ stage = null } = {}) {
     el('header', { class: 'scout-head' }, [
       el('div', {}, [
         el('p', { class: 'eyebrow', text: `${current.stageLabel} · 이번 상대` }),
-        el('h3', { class: 'h3 scout-title', text: `${current.name}는 이렇게 선다` }),
       ]),
     ]),
     el('div', { class: 'tactics-grid scout-grid' }, [
