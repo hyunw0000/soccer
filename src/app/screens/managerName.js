@@ -1,277 +1,292 @@
 import { el } from '../../shared/index.js';
-import { state, setState } from '../public.js';
+import { resetState, state, setState } from '../public.js';
+import './opening.css';
 
-const playerDots = [
-  ['home', 8, 74], ['home', 20, 57], ['home', 28, 33], ['home', 39, 25],
-  ['home', 42, 68], ['home', 53, 48], ['home', 62, 20], ['home', 70, 65],
-  ['away', 13, 45], ['away', 27, 23], ['away', 45, 70], ['away', 63, 30],
-  ['away', 72, 13], ['away', 82, 56], ['away', 91, 34], ['away', 95, 64],
-  ['target', 98, 50],
-];
+export const OPENING_MATCH = Object.freeze({
+  competition: 'WORLD CHAMPIONSHIP 2026',
+  stage: 'GROUP STAGE · MATCHDAY 3',
+  venue: 'NORTH AMERICA · STADIUM 07',
+  home: { code: 'RSA', name: '남아프리카공화국', score: 1 },
+  away: { code: 'KOR', name: '대한민국', score: 0 },
+});
 
-function svgEl(tag, attrs = {}, children = []) {
-  const node = document.createElementNS('http://www.w3.org/2000/svg', tag);
-  for (const [key, value] of Object.entries(attrs)) node.setAttribute(key, String(value));
-  for (const child of children) node.append(child);
-  return node;
+const STAGES = Object.freeze({
+  DEFEAT: 'defeat',
+  OFFER: 'offer',
+  REWINDING: 'rewinding',
+  MANAGER_SETUP: 'managerSetup',
+  MISSION: 'mission',
+});
+
+const isReducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+function flag(type) {
+  return el('span', { class: `op-flag op-flag--${type}`, 'aria-hidden': 'true' });
 }
 
-function brand() {
-  return el('div', { class: 'start-brand', 'aria-label': 'REWIND' }, [
-    el('span', { text: 'REWIND' }),
-    el('b', { text: '◀◀', 'aria-hidden': 'true' }),
+function teamRow(side, team) {
+  return el('div', { class: `op-team op-team--${side}` }, [
+    flag(side === 'home' ? 'rsa' : 'kor'),
+    el('div', { class: 'op-team__name' }, [
+      el('b', { text: team.code }),
+      el('span', { text: team.name }),
+    ]),
+    el('strong', { class: 'op-score', text: team.score }),
   ]);
 }
 
-function gameIntroDialog(onClose) {
-  const flow = [
-    ['01', '감독 취임', '감독명을 정하고 대한민국 대표팀의 지휘봉을 잡습니다.'],
-    ['02', '선수단 구성', '55명의 선수 풀에서 최대 23명을 소집하고 주장을 선택합니다.'],
-    ['03', '전술 설계', '상대를 분석해 포메이션, 선발 11인, 압박·템포·수비 라인을 정합니다.'],
-    ['04', '3D 경기 지휘', '경기를 관전하며 실시간으로 전술을 바꾸고 결정적 순간을 되감습니다.'],
-  ];
-
-  const modal = el('section', {
-    class: 'intro-modal',
-    role: 'dialog',
-    'aria-modal': 'true',
-    'aria-labelledby': 'intro-title',
-    hidden: true,
-  }, [
-    el('div', { class: 'intro-panel' }, [
-      el('div', { class: 'intro-panel-head' }, [
-        el('div', {}, [
-          el('span', { class: 'intro-kicker', text: '3D FOOTBALL TACTICS' }),
-          el('h2', { id: 'intro-title', text: '게임 소개' }),
-        ]),
-        el('button', {
-          class: 'intro-close',
-          type: 'button',
-          text: '×',
-          'aria-label': '게임 소개 닫기',
-          onclick: onClose,
-        }),
-      ]),
-      el('p', { class: 'intro-lead' }, [
-        '전술을 짜고, 3D로 경기를 지켜보고, ',
-        el('strong', { text: '되감아서 다시 지시하는' }),
-        ' 축구 감독 시뮬레이터입니다.',
-      ]),
-      el('p', { class: 'intro-quote', text: '“내가 감독이었다면?” 그 아쉬운 순간으로 돌아가 결과를 바꿔보세요.' }),
-      el('div', { class: 'intro-flow' }, flow.map(([number, title, description]) =>
-        el('article', { class: 'intro-step' }, [
-          el('b', { text: number }),
-          el('div', {}, [
-            el('h3', { text: title }),
-            el('p', { text: description }),
-          ]),
-        ]))),
-      el('div', { class: 'intro-details' }, [
-        el('article', { class: 'intro-feature' }, [
-          el('span', { text: '핵심 시스템' }),
-          el('h3', { text: '8초 되감기 · 경기당 3회' }),
-          el('p', { text: '과거 상태로 복원한 뒤 새로운 전술로 다른 경기 흐름을 만듭니다.' }),
-        ]),
-        el('article', { class: 'intro-feature' }, [
-          el('span', { text: '경기 관전' }),
-          el('h3', { text: '방송캠 · 탑뷰 · 공 추적' }),
-          el('p', { text: '세 가지 카메라로 22명의 움직임과 체력 변화를 확인합니다.' }),
-        ]),
-        el('article', { class: 'intro-feature' }, [
-          el('span', { text: '전술 선택' }),
-          el('h3', { text: '4-3-3 · 4-4-2 · 4-2-3-1 · 3-4-3' }),
-          el('p', { text: '상대 스카우팅 정보를 바탕으로 선발과 세부 전술을 직접 구성합니다.' }),
-        ]),
-      ]),
-      el('div', { class: 'intro-shortcuts' }, [
-        el('span', { text: '경기 단축키' }),
-        el('kbd', { text: 'SPACE' }),
-        el('b', { text: '일시정지' }),
-        el('kbd', { text: 'R' }),
-        el('b', { text: '8초 되감기' }),
-      ]),
-      el('p', { class: 'intro-note', text: '회원가입과 별도 설치 없이 브라우저에서 바로 플레이할 수 있습니다.' }),
+function scoreboard(match) {
+  return el('section', { class: 'op-scoreboard', 'aria-label': `${match.home.name} ${match.home.score} 대 ${match.away.score} ${match.away.name}` }, [
+    el('div', { class: 'op-scoreboard__meta' }, [
+      el('span', { text: match.stage }),
+      el('b', { class: 'op-clock', text: '90:00' }),
+      el('span', { text: match.venue }),
     ]),
-  ]);
-
-  modal.addEventListener('click', (event) => {
-    if (event.target === modal) onClose();
-  });
-  return modal;
-}
-
-function tacticsBoard() {
-  const board = el('div', { class: 'start-pitch', 'aria-label': '공격 전술 시뮬레이션' });
-
-  for (const [index, [team, x, y]] of playerDots.entries()) {
-    const dot = el('i', { class: `start-dot ${team}`, 'aria-hidden': 'true' });
-    dot.style.left = `${x}%`;
-    dot.style.top = `${y}%`;
-    dot.style.setProperty('--move-x', `${((index * 13) % 35) - 17}px`);
-    dot.style.setProperty('--move-y', `${((index * 17) % 29) - 14}px`);
-    dot.style.setProperty('--move-x-back', `${((index * 11) % 25) - 12}px`);
-    dot.style.setProperty('--move-y-back', `${((index * 7) % 21) - 10}px`);
-    dot.style.setProperty('--move-duration', `${5 + (index % 6) * 0.5}s`);
-    dot.style.setProperty('--move-delay', `${-(index % 7) * 0.65}s`);
-    board.append(dot);
-  }
-
-  board.append(
-    svgEl('svg', {
-      class: 'start-run',
-      viewBox: '0 0 1000 500',
-      preserveAspectRatio: 'none',
-      'aria-hidden': 'true',
-    }, [
-      svgEl('defs', {}, [
-        svgEl('linearGradient', { id: 'run-gradient', x1: '0%', y1: '0%', x2: '100%', y2: '0%' }, [
-          svgEl('stop', { offset: '0%', 'stop-color': '#75ff45' }),
-          svgEl('stop', { offset: '55%', 'stop-color': '#f7f04b' }),
-          svgEl('stop', { offset: '100%', 'stop-color': '#ff3434' }),
-        ]),
-      ]),
-      svgEl('path', {
-        d: 'M 90 370 C 250 350, 280 310, 340 220 S 430 100, 500 135 S 650 220, 720 245 S 850 275, 950 245',
-        fill: 'none',
-        stroke: 'url(#run-gradient)',
-        'stroke-width': '5',
-        'stroke-linecap': 'round',
-        'stroke-dasharray': '11 7',
-      }),
-      svgEl('path', {
-        d: 'M 934 231 L 957 245 L 935 258',
-        fill: 'none',
-        stroke: '#ff3434',
-        'stroke-width': '6',
-        'stroke-linecap': 'round',
-        'stroke-linejoin': 'round',
-      }),
+    el('div', { class: 'op-final-tag' }, [
+      el('i', { 'aria-hidden': 'true' }),
+      el('strong', { text: '경기 종료' }),
+      el('i', { 'aria-hidden': 'true' }),
     ]),
-  );
-
-  return el('section', { class: 'start-analysis' }, [
-    el('div', { class: 'analysis-corner', 'aria-hidden': 'true' }),
-    board,
-    el('div', { class: 'success-box' }, [
-      el('span', { text: '공격 성공 확률' }),
-      el('strong', { text: '23%' }),
-    ]),
-    el('div', { class: 'probability' }, [
-      el('span', { text: '공격 성공 확률 변화' }),
-      el('div', { class: 'probability-line' }, [el('i'), el('b')]),
-      el('div', { class: 'probability-values' }, [
-        el('b', { text: '12%' }),
-        el('b', { text: '23%' }),
-        el('b', { text: '8%' }),
-      ]),
+    el('div', { class: 'op-scoreboard__teams' }, [
+      teamRow('home', match.home),
+      el('span', { class: 'op-score-divider', text: ':' }),
+      teamRow('away', match.away),
     ]),
   ]);
 }
 
-/** 시작 화면: 감독 이름 입력 */
-export default function managerNameScreen(root, ctx) {
-  const input = el('input', {
-    class: 'start-input',
-    type: 'text',
-    maxlength: 20,
-    placeholder: '홍길동',
-    value: state.managerName,
-    autocomplete: 'off',
-    spellcheck: 'false',
-    'aria-label': '감독명',
-  });
+function stadiumScene() {
+  return el('div', { class: 'op-stadium', 'aria-hidden': 'true' }, [
+    el('div', { class: 'op-floodlights' }),
+    el('div', { class: 'op-stands' }),
+    el('div', { class: 'op-pitch' }),
+    el('div', { class: 'op-players' }, [
+      el('i', { class: 'op-player op-player--1' }),
+      el('i', { class: 'op-player op-player--2' }),
+      el('i', { class: 'op-player op-player--3' }),
+    ]),
+  ]);
+}
 
-  const error = el('p', { class: 'start-error', text: '', role: 'alert' });
-
-  const submit = () => {
-    const name = input.value.trim();
-    if (!name) {
-      error.textContent = '감독명을 입력해 주세요.';
-      input.focus();
-      return;
-    }
-    setState({ managerName: name, hasCompletedSetup: true });
-    ctx.navigate('/roster');
-  };
-
-  let introButton;
-  let introModal;
-  const closeIntro = () => {
-    introModal.hidden = true;
-    introButton?.focus();
-  };
-  introModal = gameIntroDialog(closeIntro);
-  introButton = el('button', {
+function resetButton(onReset) {
+  return el('button', {
+    class: 'op-reset',
     type: 'button',
-    text: '게임 소개',
-    'aria-haspopup': 'dialog',
-    onclick: () => {
-      introModal.hidden = false;
-      introModal.querySelector('.intro-close')?.focus();
-    },
+    text: '오프닝 다시 보기',
+    'aria-label': '게임 진행 상태를 초기화하고 오프닝 다시 보기',
+    onclick: onReset,
+  });
+}
+
+/** 2026 대회 탈락 직후부터 시작하는 게임 오프닝. */
+export default function managerNameScreen(root, ctx) {
+  let stage = STAGES.DEFEAT;
+  let managerName = state.managerName;
+  let stageTimer = null;
+  let rewindTimer = null;
+  let destroyed = false;
+
+  const screen = el('main', {
+    class: 'screen op-screen',
+    'data-stage': stage,
+    'aria-live': 'polite',
   });
 
-  const onKeyDown = (event) => {
-    if (event.key === 'Escape' && !introModal.hidden) closeIntro();
+  const clearTimers = () => {
+    window.clearTimeout(stageTimer);
+    window.clearInterval(rewindTimer);
   };
-  document.addEventListener('keydown', onKeyDown);
 
-  const screen = el('main', { class: 'screen start-screen' }, [
-    el('header', { class: 'start-header' }, [
-      brand(),
-      el('nav', { class: 'start-nav', 'aria-label': '시작 메뉴' }, [
-        introButton,
+  const render = () => {
+    if (destroyed) return;
+    clearTimers();
+    screen.dataset.stage = stage;
+    screen.replaceChildren();
+
+    const onReset = () => {
+      resetState();
+      managerName = '';
+      stage = STAGES.DEFEAT;
+      render();
+    };
+
+    const chrome = el('header', { class: 'op-header' }, [
+      el('a', { class: 'op-brand', href: '/', 'aria-label': 'REWIND FC 홈' }, [
+        el('span', { text: 'REWIND' }),
+        el('b', { text: 'FC' }),
       ]),
-    ]),
-    el('div', { class: 'start-layout' }, [
-      el('section', { class: 'start-hero' }, [
-        el('h1', {}, [
-          el('span', { class: 'start-title-line', text: '대한민국의 역사를' }),
-          el('span', { class: 'start-title-line' }, [
-            el('strong', { text: '다시' }),
-            ' 쓰세요',
-          ]),
+      el('div', { class: 'op-tournament' }, [
+        el('span', { text: 'GLOBAL FOOTBALL' }),
+        el('strong', { text: OPENING_MATCH.competition }),
+      ]),
+      resetButton(onReset),
+    ]);
+
+    const progress = el('div', { class: 'op-progress', 'aria-label': '오프닝 진행 단계' }, [
+      ...['경기 종료', '결정', '되감기', '감독 등록', '첫 임무'].map((label, index) =>
+        el('span', { class: index <= Object.values(STAGES).indexOf(stage) ? 'is-active' : '', text: label })),
+    ]);
+
+    const shell = el('div', { class: 'op-shell' }, [stadiumScene(), chrome, progress]);
+    screen.append(shell);
+
+    if (stage === STAGES.DEFEAT) {
+      const content = el('div', { class: 'op-content op-content--defeat' }, [
+        el('p', { class: 'op-kicker', text: 'FULL TIME · GROUP STAGE EXIT' }),
+        scoreboard(OPENING_MATCH),
+        el('div', { class: 'op-eliminated' }, [
+          el('span', { text: '대한민국' }),
+          el('h1', { text: '32강 진출 실패' }),
+          el('p', { text: '모든 경우의 수가 끝났습니다. 대한민국의 2026년 여정이 여기서 멈춥니다.' }),
         ]),
-        el('div', { class: 'start-rule', 'aria-hidden': 'true' }),
-        el('p', { class: 'start-subtitle' }, [
-          el('b', { text: '당신' }),
-          '은 대한민국 감독입니다',
+      ]);
+      shell.append(content);
+      stageTimer = window.setTimeout(() => {
+        stage = STAGES.OFFER;
+        render();
+      }, isReducedMotion() ? 900 : 3300);
+    }
+
+    if (stage === STAGES.OFFER) {
+      const rewindButton = el('button', {
+        class: 'op-primary op-primary--rewind',
+        type: 'button',
+        'aria-label': '시간을 되감아 대한민국의 감독이 되기',
+        onclick: () => {
+          stage = STAGES.REWINDING;
+          render();
+        },
+      }, [el('span', { 'aria-hidden': 'true', text: '«' }), '시간을 되감기']);
+
+      shell.append(el('section', { class: 'op-content op-offer', 'aria-labelledby': 'offer-title' }, [
+        el('p', { class: 'op-kicker', text: 'ONE MORE CHANCE' }),
+        el('h1', { id: 'offer-title' }, [
+          el('span', { text: '대한민국의 감독이 되어' }),
+          el('strong', { text: '새 역사를 쓰시겠습니까?' }),
         ]),
-        el('div', { class: 'start-form' }, [
-          el('label', { for: 'manager-name', text: '감독명을 입력하세요' }),
-          el('div', { class: 'start-input-wrap' }, [
-            el('span', { class: 'manager-icon', 'aria-hidden': 'true' }),
-            input,
-          ]),
+        el('p', { text: '끝난 경기를 되돌릴 단 한 번의 선택.' }),
+        rewindButton,
+      ]));
+      window.requestAnimationFrame(() => rewindButton.focus({ preventScroll: true }));
+    }
+
+    if (stage === STAGES.REWINDING) {
+      const clock = el('strong', { class: 'op-rewind-clock', text: '90:00' });
+      const homeScore = el('b', { text: OPENING_MATCH.home.score });
+      const awayScore = el('b', { text: OPENING_MATCH.away.score });
+      shell.append(el('section', { class: 'op-content op-rewinding', 'aria-label': '경기 시간을 되감는 중' }, [
+        el('p', { class: 'op-kicker', text: 'TIMELINE OVERRIDE' }),
+        el('div', { class: 'op-rewind-icon', 'aria-hidden': 'true' }, [el('i'), el('i'), el('i')]),
+        clock,
+        el('div', { class: 'op-rewind-score' }, [
+          el('span', { text: 'RSA' }), homeScore, el('i', { text: ':' }), awayScore, el('span', { text: 'KOR' }),
+        ]),
+        el('h1', { text: '결과를 되돌리는 중' }),
+        el('div', { class: 'op-rewind-track' }, [el('i')]),
+        el('p', { text: '운명이 갈라지기 전으로 돌아갑니다.' }),
+      ]));
+
+      const duration = isReducedMotion() ? 650 : 2600;
+      const startedAt = performance.now();
+      rewindTimer = window.setInterval(() => {
+        const progressValue = Math.min(1, (performance.now() - startedAt) / duration);
+        const seconds = Math.round(5400 * (1 - progressValue));
+        clock.textContent = `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
+        if (progressValue > 0.38) homeScore.textContent = '1';
+        if (progressValue > 0.68) {
+          homeScore.textContent = '0';
+          awayScore.textContent = '0';
+        }
+      }, 40);
+      stageTimer = window.setTimeout(() => {
+        stage = STAGES.MANAGER_SETUP;
+        render();
+      }, duration);
+    }
+
+    if (stage === STAGES.MANAGER_SETUP) {
+      const input = el('input', {
+        id: 'manager-name',
+        class: 'op-input',
+        type: 'text',
+        maxlength: 20,
+        value: managerName,
+        placeholder: '감독 이름',
+        autocomplete: 'name',
+        spellcheck: 'false',
+        'aria-label': '대한민국 대표팀 감독 이름',
+        'aria-describedby': 'manager-help manager-error',
+      });
+      const error = el('p', { id: 'manager-error', class: 'op-error', role: 'alert' });
+      const submit = () => {
+        const name = input.value.trim();
+        if (!name) {
+          error.textContent = '감독 이름을 한 글자 이상 입력해 주세요.';
+          input.setAttribute('aria-invalid', 'true');
+          input.focus();
+          return;
+        }
+        managerName = name;
+        setState({ managerName: name, hasCompletedSetup: true });
+        stage = STAGES.MISSION;
+        render();
+      };
+      input.addEventListener('input', () => {
+        error.textContent = '';
+        input.removeAttribute('aria-invalid');
+      });
+      input.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') submit();
+      });
+
+      shell.append(el('section', { class: 'op-content op-setup', 'aria-labelledby': 'setup-title' }, [
+        el('p', { class: 'op-kicker', text: 'NEW TIMELINE · 00:00' }),
+        el('h1', { id: 'setup-title' }, [
+          el('span', { text: '역사를 바꿀' }),
+          el('strong', { text: '새로운 감독' }),
+        ]),
+        el('p', { id: 'manager-help', class: 'op-lead', text: '대한민국 대표팀을 이끌 감독의 이름을 입력하세요.' }),
+        el('div', { class: 'op-form' }, [
+          el('label', { for: 'manager-name', text: '감독 이름' }),
+          el('div', { class: 'op-input-wrap' }, [input, el('span', { text: 'MANAGER' })]),
           error,
-          el('button', {
-            class: 'career-button',
-            type: 'button',
-            text: '감독 커리어 시작',
-            onclick: submit,
-          }),
+          el('button', { class: 'op-primary', type: 'button', text: '감독으로 부임하기', onclick: submit }),
         ]),
-        el('div', { class: 'rewind-message' }, [
-          el('b', { text: '↶', 'aria-hidden': 'true' }),
-          el('p', {}, [
-            '결정적인 순간, ',
-            el('em', { text: '시간을 되돌려' }),
-            ' 전술을 바꾸세요.',
-          ]),
-        ]),
-      ]),
-      tacticsBoard(),
-    ]),
-    introModal,
-  ]);
+      ]));
+      window.requestAnimationFrame(() => input.focus({ preventScroll: true }));
+    }
 
-  input.id = 'manager-name';
-  input.addEventListener('input', () => { error.textContent = ''; });
-  input.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter') submit();
-  });
+    if (stage === STAGES.MISSION) {
+      const prepare = el('button', {
+        class: 'op-primary',
+        type: 'button',
+        text: '남아공전 준비하기',
+        'aria-label': '남아프리카공화국전 전술 준비 화면으로 이동',
+        onclick: () => ctx.navigate('/tactics'),
+      });
+      shell.append(el('section', { class: 'op-content op-mission', 'aria-labelledby': 'mission-title' }, [
+        el('div', { class: 'op-badge', text: 'KFA' }),
+        el('p', { class: 'op-kicker', text: 'APPOINTMENT CONFIRMED' }),
+        el('h1', { id: 'mission-title' }, [
+          el('strong', { text: managerName }),
+          el('span', { text: ' 감독님의 첫 번째 임무입니다.' }),
+        ]),
+        el('p', { class: 'op-lead', text: '대한민국의 운명이 걸린 남아프리카공화국전을 준비하십시오.' }),
+        el('article', { class: 'op-fixture' }, [
+          el('span', { text: 'GROUP STAGE · MATCHDAY 3' }),
+          el('div', {}, [flag('kor'), el('b', { text: 'KOR' }), el('i', { text: 'VS' }), el('b', { text: 'RSA' }), flag('rsa')]),
+          el('p', { text: '킥오프까지 D-1 · 전술 브리핑 대기 중' }),
+        ]),
+        prepare,
+      ]));
+      window.requestAnimationFrame(() => prepare.focus({ preventScroll: true }));
+    }
+  };
 
   root.append(screen);
-  input.focus();
-  return () => document.removeEventListener('keydown', onKeyDown);
+  render();
+  return () => {
+    destroyed = true;
+    clearTimers();
+  };
 }
