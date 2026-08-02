@@ -629,6 +629,41 @@ export default function matchScreen(root, ctx) {
   const briefingDescription = el('p');
   const briefingTeams = el('div',{class:'kickoff-dialog__teams'});
   const briefingNotice = el('p',{class:'kickoff-dialog__notice'});
+  const guideCards = [
+    {
+      number:'01', icon:'◉', title:'원하는 시점으로 경기를 읽으세요',
+      description:'하단 카메라 버튼으로 경기 중에도 시점을 즉시 변경할 수 있습니다.',
+      features:[['방송캠','실제 중계처럼 경기 전체 흐름 보기','camera-active'],['탑뷰','선수 간격과 공간을 한눈에 파악','camera'],['공 추적','공을 중심으로 결정적인 장면 따라가기','camera']],
+      tip:'상황을 읽을 때는 탑뷰, 흐름을 즐길 때는 방송캠을 추천합니다.',
+    },
+    {
+      number:'02', icon:'↗', title:'드래그로 진출 방향을 직접 지시하세요',
+      description:'선수 한 명의 움직임을 감독이 직접 설계할 수 있습니다.',
+      features:[['Ⅱ 일시정지','경기를 일시정지합니다','pause'],['탑뷰','카메라를 탑뷰로 변경합니다','camera-active'],['↗ 선수 드래그','대한민국 선수를 원하는 방향으로 드래그한 뒤 놓습니다','gesture']],
+      tip:'그려진 경로는 재개하는 순간 반영됩니다. 우리 팀 선수에게만 지시할 수 있습니다.',
+    },
+    {
+      number:'03', icon:'⏪', title:'실점했다면 운명을 되돌리세요',
+      description:'실점 직후에만 되감기를 선택할 수 있고, 한 경기에서 최대 2회 사용할 수 있습니다.',
+      features:[['⏪ 되돌리기','실점 전 장면으로 시간을 되돌립니다','rewind'],['⚙ 전술 지시','되감은 뒤 T 또는 전술 버튼으로 전략 변경','tactics'],['↗ 경로 지시','탑뷰 드래그 경로까지 바꾼 뒤 재개','gesture']],
+      tip:'같은 전술로 재개하면 같은 위기가 반복될 수 있습니다. 반드시 다른 선택을 만들어 보세요.',
+    },
+    {
+      number:'04', icon:'⚙', title:'경기의 속도와 전술을 장악하세요',
+      description:'경기는 언제든 멈추고, 속도와 전술을 실시간으로 조정할 수 있습니다.',
+      features:[['Space · Ⅱ','일시정지 또는 경기 재개','pause'],['1×  2×  3×','원하는 경기 진행 속도 선택','speed'],['⚙ 전술 지시','라이브 전술 패널 열기 또는 닫기','tactics']],
+      tip:'후반전에는 진영과 골대가 바뀌며 스코어보드의 국가 위치도 함께 전환됩니다.',
+    },
+  ];
+  const guideProgress = el('div',{class:'match-guide__progress'});
+  const guideCard = el('article',{class:'match-guide__card','aria-live':'polite'});
+  const guidePrevBtn = el('button',{class:'ctl match-guide__nav',type:'button',text:'← 이전'});
+  const guideNextBtn = el('button',{class:'primary match-guide__next',type:'button',text:'다음 →'});
+  const guidePanel = el('section',{class:'match-guide'},[
+    guideProgress,
+    guideCard,
+    el('div',{class:'match-guide__actions'},[guidePrevBtn,guideNextBtn]),
+  ]);
   const kickoffDialog = el('dialog',{
     class:'kickoff-dialog',
     role:'dialog',
@@ -641,6 +676,7 @@ export default function matchScreen(root, ctx) {
         briefingTitle,
         briefingDescription,
       ]),
+      guidePanel,
       briefingTeams,
       briefingNotice,
       startMatchBtn,
@@ -651,26 +687,82 @@ export default function matchScreen(root, ctx) {
       event.preventDefault();
       return;
     }
-    if (event.key === 'Tab') {
-      event.preventDefault();
-      startMatchBtn.focus();
-    }
   };
   kickoffDialog.addEventListener('cancel',(event)=>event.preventDefault());
   kickoffDialog.addEventListener('keydown',trapKickoffFocus);
   let briefingKind = 'firstHalf';
   let briefingConfirming = false;
+  let guideIndex = 0;
+  let showingGuide = false;
+
+  function renderGuideCard() {
+    const card = guideCards[guideIndex];
+    guideProgress.replaceChildren(...guideCards.map((_,index)=>el('span',{
+      class:index===guideIndex?'is-active':'',
+      text:String(index+1).padStart(2,'0'),
+    })));
+    guideCard.replaceChildren(
+      el('div',{class:'match-guide__card-head'},[
+        el('span',{class:'match-guide__number',text:`GUIDE ${card.number}`}),
+        el('span',{class:'match-guide__icon','aria-hidden':'true',text:card.icon}),
+      ]),
+      el('h3',{text:card.title}),
+      el('p',{class:'match-guide__description',text:card.description}),
+      el('div',{class:'match-guide__features'},card.features.map(([label,text,kind])=>
+        el('div',{class:'match-guide__feature'},[
+          el('span',{
+            class:`ctl match-guide__control match-guide__control--${kind}`,
+            'aria-hidden':'true',
+            text:label,
+          }),
+          el('span',{text}),
+        ]),
+      )),
+      el('p',{class:'match-guide__tip'},[
+        el('b',{text:'COACH TIP'}),
+        el('span',{text:card.tip}),
+      ]),
+    );
+    guidePrevBtn.disabled = guideIndex === 0;
+    guideNextBtn.textContent = guideIndex === guideCards.length-1 ? '경기 정보 확인 →' : '다음 →';
+  }
+
+  function showMatchBriefing(secondHalf) {
+    showingGuide = false;
+    guidePanel.hidden = true;
+    briefingTeams.hidden = false;
+    briefingNotice.hidden = false;
+    startMatchBtn.hidden = false;
+    briefingEyebrow.textContent = secondHalf ? 'GROUP A · MATCH 54 · SECOND HALF' : 'GROUP A · MATCH 54';
+    briefingTitle.textContent = secondHalf ? '후반전이 곧 시작됩니다' : '경기가 곧 시작됩니다';
+    briefingDescription.textContent = secondHalf
+      ? '후반전에는 양 팀의 진영과 골대 위치가 서로 바뀝니다.'
+      : '양 팀의 유니폼 색상을 확인한 뒤 경기를 시작하세요.';
+    startMatchBtn.focus();
+  }
+
+  guidePrevBtn.addEventListener('click',()=>{
+    if (guideIndex === 0) return;
+    guideIndex--;
+    renderGuideCard();
+    guidePrevBtn.focus();
+  });
+  guideNextBtn.addEventListener('click',()=>{
+    if (guideIndex < guideCards.length-1) {
+      guideIndex++;
+      renderGuideCard();
+      guideNextBtn.focus();
+      return;
+    }
+    showMatchBriefing(false);
+  });
+
   function openKickoffBriefing(kind) {
     briefingKind = kind;
     briefingConfirming = false;
     const secondHalf = kind === 'secondHalf';
     matchPhase = secondHalf ? 'halftimeBriefing' : 'kickoffBriefing';
     paused = true;
-    briefingEyebrow.textContent = secondHalf ? 'GROUP A · MATCH 54 · SECOND HALF' : 'GROUP A · MATCH 54';
-    briefingTitle.textContent = secondHalf ? '후반전이 곧 시작됩니다' : '경기가 곧 시작됩니다';
-    briefingDescription.textContent = secondHalf
-      ? '후반전에는 양 팀의 진영과 골대 위치가 서로 바뀝니다.'
-      : '양 팀의 유니폼 색상을 확인한 뒤 경기를 시작하세요.';
     const leftSide = secondHalf ? matchSides.away : matchSides.home;
     const rightSide = secondHalf ? matchSides.home : matchSides.away;
     briefingTeams.replaceChildren(
@@ -684,9 +776,23 @@ export default function matchScreen(root, ctx) {
         ? `대한민국은 왼쪽 진영의 ${koreaSide.uniformLabel} 팀입니다.`
         : '대한민국의 유니폼 색상을 확인하세요.';
     startMatchBtn.textContent = secondHalf ? '후반 시작 →' : '경기 시작 →';
+    if (secondHalf) {
+      showMatchBriefing(true);
+    } else {
+      showingGuide = true;
+      guideIndex = 0;
+      briefingEyebrow.textContent = 'HOW TO CHANGE HISTORY';
+      briefingTitle.textContent = '경기 운영 가이드';
+      briefingDescription.textContent = '네 장의 카드를 넘기며 감독이 사용할 수 있는 기능을 확인하세요.';
+      guidePanel.hidden = false;
+      briefingTeams.hidden = true;
+      briefingNotice.hidden = true;
+      startMatchBtn.hidden = true;
+      renderGuideCard();
+    }
     if (!kickoffDialog.isConnected) document.body.append(kickoffDialog);
     if (!kickoffDialog.open) kickoffDialog.showModal();
-    startMatchBtn.focus();
+    (showingGuide ? guideNextBtn : startMatchBtn).focus();
   }
   startMatchBtn.addEventListener('click',()=>{
     if (briefingConfirming) return;
