@@ -1,5 +1,5 @@
 :root {
-  --app-navigation-height: 62px;
+  --app-navigation-height: var(--game-header-height, 62px);
 }
 
 .app-layout {
@@ -23,7 +23,7 @@
 .top-navigation__inner {
   display: flex;
   align-items: stretch;
-  width: min(1400px, 100%);
+  width: min(var(--game-page-max-width, 1540px), 100%);
   min-height: var(--app-navigation-height);
   margin: 0 auto;
   padding: 0 clamp(10px, 3vw, 36px);

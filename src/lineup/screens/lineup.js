@@ -27,10 +27,11 @@ export default function lineupScreen(root, ctx) {
     el('div', { class: 'screen page' }, [
       el('header', { class: 'topbar' }, [
         el('div', {}, [
-          el('p', { class: 'eyebrow', text: 'SCOUTING' }),
+          el('p', { class: 'eyebrow', text: 'SCOUTING · MATCH 54' }),
           el('h2', { class: 'h2', text: '상대 선수단을 확인하세요' }),
         ]),
         el('div', { class: 'topbar-right' }, [
+          el('span',{class:'counter',text:opponent?.name?`다음 상대 · ${opponent.name}`:'다음 상대 확인 중'}),
           el('button', {
             class: 'ghost',
             type: 'button',

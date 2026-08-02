@@ -2,5 +2,21 @@
 
 .screen.match {
   min-height: 0;
-  background-color: #03080c;
+  background-color: var(--game-bg);
+}
+
+.screen.match::after {
+  content:"GROUP A · MATCH 54";
+  position:absolute;
+  right:20px;
+  bottom:82px;
+  color:rgba(91,214,255,.32);
+  font-size:11px;
+  font-weight:900;
+  letter-spacing:.18em;
+  pointer-events:none;
+}
+
+@media (max-width:720px) {
+  .screen.match::after { display:none; }
 }
