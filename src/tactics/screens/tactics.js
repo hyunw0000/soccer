@@ -54,6 +54,7 @@ export default function tacticsScreen(root, ctx) {
     usable ? saved : autoLineup(squadPlayerIds, formationId, findById, { captainId }),
     captainId
   );
+  const formationStatus = el('span',{class:'counter',text:`현재 포메이션 · ${formationId}`});
 
   const editor = createLineupEditor({
     squadPlayerIds,
@@ -62,6 +63,7 @@ export default function tacticsScreen(root, ctx) {
     width: tactics.width,
     positionMemory: state.lineupPositions ?? {},
     onChange: () => {
+      formationStatus.textContent = `현재 포메이션 · ${editor.getLineup().formationId}`;
       drawMiniPitch();
       updateKickoff();
       playerPanel.render();
@@ -376,9 +378,11 @@ export default function tacticsScreen(root, ctx) {
     el('div', { class: 'screen page' }, [
       el('header', { class: 'topbar' }, [
         el('div', {}, [
-          el('h2', { class: 'h2', text: '상대를 보고 전술을 짜세요' }),
+          el('p', { class: 'eyebrow', text: 'MATCH PLAN · SOUTH AFRICA' }),
+          el('h2', { class: 'h2', text: '승부를 바꿀 전술' }),
         ]),
         el('div', { class: 'topbar-right' }, [
+          formationStatus,
           el('button', {
             class: 'ghost',
             type: 'button',
