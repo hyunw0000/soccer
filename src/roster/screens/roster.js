@@ -45,7 +45,7 @@ export default function squadScreen(root, ctx) {
 
   const next = el('button', {
     class: 'primary',
-    text: '전술 짜러 가기 →',
+    text: '다음 →',
     onclick: () => {
       if (pool.size < MIN_POOL) {
         warn.textContent = `최소 ${MIN_POOL}명은 뽑아야 합니다. (현재 ${pool.size}명)`;
@@ -64,7 +64,7 @@ export default function squadScreen(root, ctx) {
         }
       }
       setState({ poolIds: [...pool], captainId });
-      ctx.navigate('tactics');
+      ctx.navigate('lineup');
     },
   });
 
@@ -226,7 +226,7 @@ export default function squadScreen(root, ctx) {
         ]),
         el('div', { class: 'topbar-right' }, [
           counter,
-          el('button', { class: 'ghost', text: '← 이름 다시', onclick: () => ctx.navigate('manager') }),
+          el('button', { class: 'ghost', text: '← 이전', onclick: () => ctx.navigate('tournament') }),
           next,
         ]),
       ]),
