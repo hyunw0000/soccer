@@ -9,6 +9,23 @@ import * as THREE from 'three';
 const BADGE_SCALE = 1.6;
 const BADGE_SCALE_TOP = 2.4;
 
+/**
+ * 배경색 위에서 읽히는 글자색. WCAG 상대휘도로 밝기를 재서 밝은 배경엔 검은 글씨를 쓴다.
+ *
+ * 등번호를 늘 흰색으로 찍으면 골키퍼 노란색(#ffd60a) 위에서 거의 안 보인다.
+ * 필드 플레이어 색(빨강 0.12 · 파랑 0.18)은 임계값 아래라 예전처럼 흰 글씨 그대로다 —
+ * 즉 이 함수가 생겨도 기존 선수들의 배지는 한 픽셀도 안 바뀐다.
+ */
+function readableTextColor(hex) {
+  const channel = (v) => {
+    const c = v / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  };
+  const luminance =
+    0.2126 * channel((hex >> 16) & 255) + 0.7152 * channel((hex >> 8) & 255) + 0.0722 * channel(hex & 255);
+  return luminance > 0.4 ? '#12161c' : '#fff';
+}
+
 /** 등번호 + 체력 링을 그린 스프라이트 (머리 위 표식) */
 function badgeSprite(num, color) {
   const c = document.createElement('canvas');
@@ -19,7 +36,7 @@ function badgeSprite(num, color) {
   g.beginPath();
   g.arc(128, 128, 112, 0, Math.PI * 2);
   g.fill();
-  g.fillStyle = '#fff';
+  g.fillStyle = readableTextColor(color);
   g.font = 'bold 140px sans-serif';
   g.textAlign = 'center';
   g.textBaseline = 'middle';
@@ -54,11 +71,15 @@ function energyBar() {
  * 관절 피규어. 반환된 group의 userData에 관절 참조가 들어있고,
  * animateRig()가 그것들을 굽힌다. 로직(engine)과는 완전히 분리.
  */
-export function makePlayerRig({ color, skin, num, isCaptain = false }) {
+/**
+ * @param {number} [shortColor] 하의 색. 기본은 예전 그대로 짙은 남색이고, 골키퍼만
+ *   상의와 같은 색을 넘겨 위아래가 한 벌인 골키퍼 키트로 보이게 한다.
+ */
+export function makePlayerRig({ color, skin, num, isCaptain = false, shortColor = 0x14181f }) {
   const g = new THREE.Group();
   const mBody = new THREE.MeshStandardMaterial({ color, roughness: 0.7 });
   const mSkin = new THREE.MeshStandardMaterial({ color: skin, roughness: 0.8 });
-  const mShort = new THREE.MeshStandardMaterial({ color: 0x14181f, roughness: 0.8 });
+  const mShort = new THREE.MeshStandardMaterial({ color: shortColor, roughness: 0.8 });
 
   const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.42, 0.9, 4, 10), mBody);
   torso.position.y = 2.1;

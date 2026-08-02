@@ -103,25 +103,73 @@ export function createMatchView(container, sim, captainNum = null) {
   buildPitch(scene);
   const cam = createCameraRig(camera, controls);
 
-  const rigs = new Map(); // player → rig
+  /**
+   * 리그는 "선수 객체"가 아니라 **자리(team:idx)** 로 붙잡는다.
+   *
+   * sim.substitute()는 교체할 때 그 자리에 **새 Player 객체**를 만들어 끼워 넣는다.
+   * 그래서 예전처럼 선수 객체를 Map 키로 쓰면 교체된 순간 들어온 선수는 리그가 없어
+   * 화면에서 아예 사라지고, 나간 선수의 리그는 마지막 좌표에 얼어붙은 채 경기장에 남는다
+   * (sync()가 도는 건 Map이지 sim.all이 아니라서 아무도 그걸 못 고친다).
+   *
+   * 자리로 붙잡고 프레임마다 대조하면 교체·되감기 어느 쪽에서도 어긋나지 않는다.
+   * 등번호·역할도 같이 본다 — refreshHomeSlots()가 경기 중에 그 자리의 role을 바꿀 수 있고,
+   * 역할이 바뀌면 골키퍼 키트인지도 같이 바뀌어야 한다.
+   */
+  const rigs = new Map(); // `team:idx` → { player, num, role, rig }
   const rigToPlayer = new Map(); // rig → player (클릭 피킹 역참조용)
-  for (const p of sim.homeP) {
-    const rig = makePlayerRig({
-      color: MATCH_SIDE_STYLES.home.uniformHex,
-      skin: 0xf0c9a0,
+  const SIDE_SKIN = { home: 0xf0c9a0, away: 0xd8b48a };
+
+  /**
+   * 그 선수의 리그를 만든다.
+   * 골키퍼만 팀 색이 아니라 전용 색(홈 노랑 · 원정 핑크)을 입고, 위아래를 같은 색으로 맞춰
+   * 한 벌짜리 골키퍼 키트로 보이게 한다 — 멀리서도 키퍼가 바로 구분된다.
+   */
+  function buildRig(p) {
+    const side = MATCH_SIDE_STYLES[p.team];
+    const kit =
+      p.role === 'GK'
+        ? { color: side.gkUniformHex, shortColor: side.gkUniformHex }
+        : { color: side.uniformHex };
+    return makePlayerRig({
+      ...kit,
+      skin: SIDE_SKIN[p.team],
       num: p.num,
-      isCaptain: p.num === captainNum,
+      isCaptain: p.team === 'home' && p.num === captainNum,
     });
-    scene.add(rig);
-    rigs.set(p, rig);
-    rigToPlayer.set(rig, p);
   }
-  for (const p of sim.awayP) {
-    const rig = makePlayerRig({ color: MATCH_SIDE_STYLES.away.uniformHex, skin: 0xd8b48a, num: p.num });
-    scene.add(rig);
-    rigs.set(p, rig);
-    rigToPlayer.set(rig, p);
+
+  /** 씬에서 뺀 리그의 GPU 자원 정리 — disposeScene()은 씬에 **남아 있는** 것만 훑는다. */
+  function disposeRig(rig) {
+    rig.traverse((o) => {
+      o.geometry?.dispose();
+      const m = o.material;
+      if (Array.isArray(m)) m.forEach((x) => x.dispose());
+      else if (m) {
+        m.map?.dispose();
+        m.dispose();
+      }
+    });
   }
+
+  /** 자리에 선 선수(또는 그 번호·역할)가 바뀌었으면 그 자리 리그를 새로 만든다. */
+  function syncRoster() {
+    for (const p of sim.all) {
+      const key = `${p.team}:${p.idx}`;
+      const entry = rigs.get(key);
+      if (entry && entry.player === p && entry.num === p.num && entry.role === p.role) continue;
+      if (entry) {
+        scene.remove(entry.rig);
+        rigToPlayer.delete(entry.rig);
+        disposeRig(entry.rig);
+      }
+      const rig = buildRig(p);
+      scene.add(rig);
+      rigs.set(key, { player: p, num: p.num, role: p.role, rig });
+      rigToPlayer.set(rig, p);
+    }
+  }
+
+  syncRoster();
 
   const ballMesh = makeBall();
   scene.add(ballMesh);
@@ -157,7 +205,7 @@ export function createMatchView(container, sim, captainNum = null) {
   /** 화면 좌표 아래에 있는 선수를 찾는다(피규어 어느 부위를 클릭해도 잡힌다). 없으면 null. */
   function pickPlayer(clientX, clientY) {
     raycaster.setFromCamera(toNdc(clientX, clientY), camera);
-    const hits = raycaster.intersectObjects([...rigs.values()], true);
+    const hits = raycaster.intersectObjects(Array.from(rigs.values(), (e) => e.rig), true);
     if (!hits.length) return null;
     let obj = hits[0].object;
     while (obj && !rigToPlayer.has(obj)) obj = obj.parent;
@@ -292,7 +340,9 @@ export function createMatchView(container, sim, captainNum = null) {
   function sync(dt = 0) {
     // 탑뷰는 카메라가 90m 상공이라 등번호가 작아진다 — 그때만 크게 그린다.
     const topView = cam.mode === 'top';
-    for (const [p, rig] of rigs) {
+    // 교체로 자리 주인이 바뀌었으면 먼저 리그를 맞춰 놓고 그린다.
+    syncRoster();
+    for (const { player: p, rig } of rigs.values()) {
       animateRig(rig, p, dt, camera, celebration && celebration.team === p.team ? celebration.t : null, topView);
     }
     const b = sim.ball;
