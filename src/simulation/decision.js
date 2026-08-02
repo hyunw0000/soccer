@@ -109,7 +109,12 @@ export function scorePassCandidates(sim, p) {
   const wWidth = blendInstruction(t.width, p.ins.width);
   // 패스 길이도 템포를 따른다. 짧은 패스 팀은 가까운 동료를, 롱볼 팀은 먼 동료를 고른다.
   const preferredPassLength = 8 + blendInstruction(t.tempo, p.ins.passLength) * 32;
-  const desiredZ = (wWidth - 0.5) * 2 * HALF.W * 0.6; // 폭 지시가 노리는 좌우 위치(중앙 기준)
+  // wWidth를 "desiredZ=중앙 기준 거리"로 바꾸면 중립(0.5)일 때 desiredZ=0이 돼서, 측면
+  // 동료는 항상 감점을 받고 중앙 동료는 항상 가산을 받았다(실전 확인: 90분 동안 와이드
+  // 포지션 픽업 3회, 수비수 0회 — 폭을 사실상 못 씀). widthBias를 "중립=0(무관), 넓게=+,
+  // 좁게=-"로 바꿔서 팀 전술 폭(wWidth)이 중립이면 측면 여부가 점수에 개입하지 않게 한다 —
+  // 팀이 실제로 좁게/넓게를 지시했을 때만 그 방향으로 가산·감산이 붙는다.
+  const widthBias = (wWidth - 0.5) * 2; // -1(항상 좁게)..0(무관)..+1(항상 넓게)
   const out = [];
   for (const m of mates) {
     if (m === p || m.role === 'GK') continue;
@@ -125,7 +130,11 @@ export function scorePassCandidates(sim, p) {
     const gdTarget = vlen(m.atkX - m.x, 0 - m.z);
     const forwardGain = clamp((gdSelf - gdTarget) / 30, -1, 1);
     const successProb = passSuccessProb(sim, p, m, d);
-    const widthFit = 1 - clamp(Math.abs(Math.abs(m.z) - Math.abs(desiredZ)) / HALF.W, 0, 1);
+    // "얼마나 측면에 있는지"와 팀의 폭 지시 방향을 곱한다 — widthBias가 이미 중립(0)/
+    // 넓게(+)/좁게(-) 방향과 세기를 갖고 있으므로 여기서 다시 wWidth를 곱하지 않는다
+    // (곱하면 중립일 때도 wideness가 커서 이상하게 감산/가산되는 이중 반영이 생긴다).
+    const wideness = clamp(Math.abs(m.z) / HALF.W, 0, 1); // 0=중앙, 1=터치라인
+    const widthFit = widthBias * wideness;
     const lengthPenalty = Math.abs(d - preferredPassLength) / PARAMS.maxPass;
     const captainBonus = m.isCaptain ? 0.15 : 0;
     // 동료가 얼마나 열려 있는지 — 붙어 있는 동료에게 주는 건 그냥 볼을 넘겨주는 짓이다.
@@ -135,7 +144,7 @@ export function scorePassCandidates(sim, p) {
     const score =
       wForward * forwardGain +
       wSafety * successProb +
-      wWidth * widthFit +
+      widthFit +
       PARAMS.openPassWeight * openness -
       lengthPenalty +
       captainBonus;
