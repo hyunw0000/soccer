@@ -4,8 +4,8 @@ import { createGroupAState } from './groupStandings.js';
 /**
  * 감독이 실제로 치르는 경기의 진행 상태.
  *
- * 이 게임의 규칙은 하나다 — **이겨야만 다음 라운드가 열린다.**
- * 무승부는 패배와 똑같이 탈락이며, 탈락한 경기는 언제든 다시 치를 수 있다.
+ * 조별리그 최종전은 승리 또는 무승부 시 진출하고, 토너먼트는 승리해야 다음 라운드가 열린다.
+ * 탈락한 경기는 언제든 다시 치를 수 있다.
  *
  * 저장되는 값은 두 개뿐이고(`groupAFinalResult`, `knockoutResults`) 나머지는 전부
  * 여기서 파생한다 — 대진표, 조 순위, 다음 상대, 탈락 여부가 한 곳에서만 결정된다.
@@ -28,7 +28,7 @@ const KNOCKOUT_RUN = Object.freeze(KOREA_RUN.slice(1));
 export const findRunStep = (matchId) => KOREA_RUN.find((step) => step.matchId === matchId) ?? null;
 const runIndex = (matchId) => KOREA_RUN.findIndex((step) => step.matchId === matchId);
 
-/** 우리 팀 관점의 결과. 무승부는 승리가 아니므로 진출이 아니다. */
+/** 우리 팀 관점의 경기 결과. 진출 여부는 조별리그와 토너먼트 규칙에 따라 별도로 판단한다. */
 export const outcomeOf = (koreaScore, opponentScore) =>
   koreaScore > opponentScore ? 'win' : koreaScore === opponentScore ? 'draw' : 'loss';
 

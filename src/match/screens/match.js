@@ -150,8 +150,8 @@ export default function matchScreen(root, ctx) {
 
   /**
    * 경기 종료 — 결과를 대회 진행에 기록하고 결과 화면을 띄운다.
-   * 이 게임의 규칙상 이겨야만 다음 라운드가 열린다. 무승부와 패배는 똑같이 탈락이고,
-   * 그 자리에서 바로 다시 시도할 수 있다.
+   * 조별리그 최종전은 승리 또는 무승부 시 진출하고, 토너먼트는 승리해야 진출한다.
+   * 탈락한 경기는 그 자리에서 바로 다시 시도할 수 있다.
    */
   function finishMatch() {
     if (matchResult) return; // 되감기·재렌더로 두 번 기록되지 않게 한다
@@ -174,16 +174,19 @@ export default function matchScreen(root, ctx) {
       resultSub.textContent = "이 경기는 대회 기록에 반영되지 않습니다.";
     } else if (progress?.status === "champion") {
       resultSub.textContent = "우승! 대한민국이 2026 월드 챔피언십을 들어 올렸습니다.";
-    } else if (outcome === "win" && nextStep) {
+    } else if (nextStep && (outcome === "win" || runStep.stage === "group")) {
       resultSub.textContent = runStep.stage === "group"
-        ? `A조 2위로 32강에 진출했습니다. 다음 상대는 ${teamName(nextStep.opponentTeamId)}입니다.`
+        ? `${outcome === "draw" ? "무승부로 " : ""}A조 2위를 확정해 32강에 진출했습니다. 다음 상대는 ${teamName(nextStep.opponentTeamId)}입니다.`
         : `${runStep.advanceLabel}에 진출했습니다. 다음 상대는 ${teamName(nextStep.opponentTeamId)}입니다.`;
     } else {
-      resultSub.textContent = `${runStep.roundLabel}에서 탈락했습니다. 이 대회에서는 무승부도 패배와 같습니다.`;
+      resultSub.textContent = runStep.stage === "group"
+        ? "남아공전 패배로 조별리그에서 탈락했습니다."
+        : `${runStep.roundLabel}에서 탈락했습니다. 토너먼트에서는 무승부도 패배와 같습니다.`;
     }
 
-    const canRetry = Boolean(runStep) && outcome !== "win";
-    const canAdvance = outcome === "win" && Boolean(nextStep);
+    const advanced = Boolean(nextStep) && (outcome === "win" || runStep?.stage === "group");
+    const canRetry = Boolean(runStep) && !advanced;
+    const canAdvance = advanced;
     retryBtn.hidden = !canRetry;
     advanceBtn.hidden = !canAdvance;
     if (canAdvance) advanceBtn.textContent = `▶ ${nextStep.roundLabel} 준비하기`;

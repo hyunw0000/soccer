@@ -55,7 +55,7 @@ function currentMatchCard(progress,ctx,onRetry) {
     : step.koreaSide === 'home' ? [played.koreaScore,played.opponentScore] : [played.opponentScore,played.koreaScore];
   const rule = champion ? '결승까지 모두 이겼습니다. 대한민국이 2026 월드 챔피언십의 주인공입니다.'
     : eliminated ? `${played?.outcome === 'draw' ? '무승부' : '패배'}로 ${step.roundLabel}에서 탈락했습니다. 다시 시도할 수 있습니다.`
-    : step.stage === 'group' ? '승리해야만 A조 2위로 32강에 오릅니다. 무승부와 패배는 탈락입니다.'
+    : step.stage === 'group' ? '승리 또는 무승부 시 A조 2위로 32강에 진출합니다. 패배하면 탈락입니다.'
     : `승리하면 ${step.advanceLabel}, 무승부와 패배는 탈락입니다.`;
   const team = (teamId) => el('div',{class:'wc-compact-team'},[
     CountryFlag({teamId,size:'medium'}),
@@ -422,7 +422,7 @@ export default function tournamentScreen(root, ctx, params = {}) {
               ? '대한민국이 결승까지 모두 이기고 우승했습니다.'
               : `대한민국이 A조 2위로 32강에 진출했습니다. 다음 상대는 ${countries[progress.nextStep?.opponentTeamId ?? 'CAN'].nameKo}입니다.`)
         : qualificationStatus === 'eliminated'
-          ? '대한민국은 A조 최종전에서 승리하지 못해 조별리그에서 탈락했습니다. 이 경로는 진출했을 경우의 예상입니다.'
+          ? '대한민국은 A조 최종전에서 패배해 조별리그에서 탈락했습니다. 이 경로는 진출했을 경우의 예상입니다.'
           : '대한민국이 A조 2위로 진출할 경우의 예상 경로입니다. 진출 확정 전까지 Match 73의 홈팀은 미정입니다.';
     } else {
       statusBanner.className = 'wc-pending-banner';

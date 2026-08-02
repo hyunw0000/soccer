@@ -40,15 +40,14 @@ export function getMatchesForTeam(matches, teamId) {
 }
 
 /**
- * 이 게임의 진출 규칙: 남아공전을 **이겨야만** 32강에 오른다.
- * 승점만 보면 무승부로도 2위를 지키지만, 감독에게 주어진 조건은 승리 하나뿐이다 —
- * 무승부와 패배는 똑같이 탈락이다.
+ * 남아공전에서 승리하거나 비기고 A조 2위를 지키면 32강에 오른다.
+ * 패배하면 조 순위와 관계없이 탈락한다.
  */
 export function resolveKoreaQualification(standings, finalResult = null) {
   if (!finalResult) return 'pending';
   const koreaScore = finalResult.awayTeamId === 'KOR' ? finalResult.awayScore : finalResult.homeScore;
   const opponentScore = finalResult.awayTeamId === 'KOR' ? finalResult.homeScore : finalResult.awayScore;
-  if (!(koreaScore > opponentScore)) return 'eliminated';
+  if (koreaScore < opponentScore) return 'eliminated';
   return standings.find(({teamId}) => teamId === 'KOR')?.position === 2 ? 'qualified' : 'eliminated';
 }
 
