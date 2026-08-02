@@ -8,7 +8,11 @@ export const PENALTY_AREA = { depth: 16.5, halfWidth: 20.16 };
 
 export const PARAMS = {
   maxSpeed: 7.2, // m/s (스프린트)
-  maxForce: 40,
+  // 조향력 상한 = 가속도(m/s²). 이 값이 속도 변화폭(최대 14.4 m/s)보다 크면 클램프가 전혀
+  // 안 걸려서 목표 속도로 스프링처럼 지수함수 수렴해버린다 — 관성 없이 매끄럽기만 해서
+  // "구슬이 굴러가는" 느낌이 난다. 실제 사람처럼 일정 가속으로 붙는 느낌을 내려면 클램프가
+  // 항상 걸릴 만큼 낮아야 한다(7.2 m/s를 약 1초 안에 도달하는 정도).
+  maxForce: 8,
   comfortZone: 4,
   sepWeight: 2.2,
   sepRadius: 3.2,
@@ -142,15 +146,30 @@ export const PARAMS = {
   shootDistanceCoef: 0.08,
   shootAngleCoef: 1.6,
   shotFailErrorMultiplier: 2.2,
+  // 슛 판단 점수의 기대값 가중치. 패스 점수는 전진이득+성공확률+폭적합+열림보너스 네 항을
+  // 더해 보통 1~2대인데, 슛은 항 하나(expectedGoalValue, 0~1)뿐이라 그대로 두면 패스를 절대
+  // 못 이겨서 mandatoryShotDistance(12m) 강제가 아니면 슛을 거의 안 고른다(득점이 거의 안 남).
+  // 이 배수로 슛의 기대값 항을 패스 점수와 같은 자릿수로 올려 정당한 경쟁을 시킨다.
+  shootValueWeight: 3,
 
   // 태클 확률의 압박강도 항 — defender의 압박 지시(0..1)를 다른 항(수비력/드리블력, 0..100)과
   // 같은 "스탯형 0..100" 스케일로 맞추려면 ×100이 필요하다. §6.7의 "(1+압박강도/200)"은
   // 압박강도가 0..100 스케일이라는 전제라서, ×100 정규화 후 그대로 나눈다.
   tacklePressingScale: 100,
-  tacklePressingDivisor: 200,
+  tacklePressingDivisor: 20,
   tackleDistanceDecayMin: 0.5, // 사거리(kickDist) 끝에서도 이 밑으로는 안 깎는다
 
   clearBaseErrorDeg: 6, // 캐리어가 압박에 밀려 그냥 걷어낼 때의 기본 오차각(패스보다 급하게 찬다)
+
+  // ---------- 파울/카드 ----------
+  // 태클을 시도했다가 진 경우에만 파울 여부를 굴린다 — 이긴 태클은 파울이 아니다.
+  foulBaseChance: 0.16, // 압박 0.5·평균 수비력 기준 파울 확률
+  foulPressingCoef: 0.1, // 압박이 셀수록 거칠어져 파울이 늘어난다
+  foulSkillCoef: 0.14, // 수비력이 높을수록 깔끔하게 걸러 파울이 준다
+  foulChanceMin: 0.04,
+  foulChanceMax: 0.4,
+  yellowCardChance: 0.32, // 파울 중 경고로 이어질 확률
+  straightRedChance: 0.03, // 파울 중 거친 파울로 바로 퇴장할 확률(경고 확률과 별개, 먼저 굴린다)
 
   // 아웃오브바운즈(스로인/코너킥/골킥) 재개 지점 — 라인 위에 정확히 두면 좌표 클램프 경계와
   // 겹쳐서 다음 스텝에 다시 아웃으로 잡히는 경우가 생겨 살짝 안쪽으로 들여놓는다.
@@ -161,7 +180,7 @@ export const PARAMS = {
   // 여기 값이 0이면 감독의 전술은 표시만 남고 경기는 똑같이 흐른다. 값을 키울수록 전술이
   // 결과를 더 크게 가른다. 네 값 모두 "전술 0.5 = 예전 동작"이 되도록 식을 맞춰 두었으니,
   // 밸런스를 만질 때는 이 상수만 움직이면 된다(scripts/validate-tactics-impact.mjs가 감시한다).
-  lineHeightBasePush: 20, // 라인 높이가 대형 전체를 앞뒤로 미는 거리(m) — 0↔1이면 ±10m
+  lineHeightBasePush: 36, // 라인 높이가 대형 전체를 앞뒤로 미는 거리(m) — 0↔1이면 ±18m
   playerLineInset: 0.6, // 선수가 터치라인·골라인에서 최소한 떨어져 서는 거리(m)
   // "열린 동료에게 준다"의 무게. 이 값이 0이면 판단이 다시 드리블 일변도로 돌아간다.
   openPassWeight: 0.55,
@@ -171,6 +190,8 @@ export const PARAMS = {
   // (중립 전술 20경기 총득점: 0.5m→39, 2m→35, 4m→32, 8m→31).
   formationTargetGoalMargin: 2,
   pressSupportRadius: 18, // 압박이 최대일 때 두 번째 선수가 볼로 달려드는 거리(m)
+  pressDrainBase: 1.0, // 압박 0.5에서의 체력 소모 배수 기준값
+  pressDrainSpread: 0.1, // 압박이 체력 소모를 얼마나 더 키우는지(0↔1의 폭)
   tempoDecisionScale: 0.7, // 템포가 캐리어 판단 주기를 줄이는 비율 (0.5에서 배수 1)
   tempoPassForceScale: 0.3, // 템포가 패스 힘을 키우는 비율 (0.5에서 배수 1)
   // 드리블 점수의 템포 보정(patience) 배수 상한.

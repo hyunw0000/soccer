@@ -39,5 +39,7 @@ export const ACTION_ID = {
   SHOOT_SUCCESS: 2,
   TACKLE_CARRIER: 3,
   TACKLE_LOOSE_BALL: 4,
-  GK_CLAIM: 5, // 골키퍼가 공중/지상 볼을 잡느냐(캐치) 쳐내느냐(펀칭) 놓치느냐
+  FOUL_CHECK: 5,
+  CARD_CHECK: 6,
+  GK_CLAIM: 7, // 골키퍼가 공중/지상 볼을 잡느냐(캐치) 쳐내느냐(펀칭) 놓치느냐
 };
