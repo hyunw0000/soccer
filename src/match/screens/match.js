@@ -851,8 +851,9 @@ export default function matchScreen(root, ctx) {
 
     // 득점/실점 감지 — 대한민국 득점은 상대 킥오프 전 축하 화면에서 멈추고,
     // 실점은 되돌릴지 선택할 수 있도록 멈춘다.
-    for (let i = renderedEvents; i < sim.events.length; i++) {
-      const ev = sim.events[i];
+    // sim.events는 50개를 넘으면 앞에서부터 shift되므로 배열 인덱스가 아니라 id로 추적해야 한다.
+    const newEvents = sim.events.filter((ev) => ev.id > lastRenderedEventId);
+    for (const ev of newEvents) {
       if (ev.type === "goal" && ev.team === "home" && ev.tick !== lastNotifiedKoreaGoalTick) {
         lastNotifiedKoreaGoalTick = ev.tick;
         showKoreaGoal(ev);
