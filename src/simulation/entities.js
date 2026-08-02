@@ -7,7 +7,7 @@ import { INSTRUCTION_FALLBACK } from './coordinates.js';
  * 렌더링 쪽은 이 상태를 읽기만 하므로, 스냅샷 저장/복원(되감기)이 가능하다.
  */
 export class Player {
-  constructor({ team, idx, meta, slot }) {
+  constructor({ team, idx, meta, slot, isCaptain = false }) {
     this.team = team; // 'home' | 'away'
     this.idx = idx;
     this.num = meta.num;
@@ -26,6 +26,11 @@ export class Player {
     this.visionSkill = meta.vision ?? meta.pace;
     // 0..1, 0.5=중립(항상 점수 1등을 고름). 계약에 없으면 중립 — 기존 동작을 그대로 보존한다.
     this.boldness = meta.boldness ?? 0.5;
+    // 주장 여부 — §6.5 패스 점수식의 "주장에게 볼이 몰리는 편향" 가산에 쓴다.
+    this.isCaptain = isCaptain;
+    // 캐리어(드리블 소유자)일 때만 의미 있음: 'advance'(전진 드리블) | 'hold'(제자리 볼 지키기).
+    // decision.js의 판단 결과에 따라 sim.js의 executeDribble/executeHold가 바꾼다.
+    this.dribbleMode = 'advance';
     this.maxSpeedBase = PARAMS.maxSpeed * (0.82 + meta.pace / 100 * 0.36);
     this.maxSpeed = this.maxSpeedBase;
     this.energy = 1; // 1 → 0 으로 소모, 속도에 곱해진다
@@ -61,12 +66,15 @@ export class Ball {
     this.vx = 0;
     this.vz = 0;
     this.ownerKey = null; // `${team}:${idx}` — 참조 대신 키로 들고 있어야 스냅샷이 순수해진다
+    // 지금 드리블 중인 선수(ownerKey와 달리 여러 틱 동안 유지된다). kick()하면 놓는다.
+    this.carrierKey = null;
   }
   kick(dx, dz, force) {
     const l = vlen(dx, dz) || 1;
     this.vx = (dx / l) * force;
     this.vz = (dz / l) * force;
     this.ownerKey = null;
+    this.carrierKey = null; // 패스/슛/클리어 — 어느 쪽이든 킥하면 드리블이 끝난다
   }
   update(dt) {
     this.vx += this.vx * PARAMS.ballFriction * dt;
