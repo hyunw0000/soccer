@@ -14,10 +14,9 @@ export function createRouter(root, screens, { canAccess = () => true } = {}) {
     const resolved = resolveName(name);
     if (resolved === 'notFound') return resolved;
     if (!ROUTES[resolved]) return 'notFound';
+    // 루트 진입은 저장된 진행 상태와 관계없이 항상 오프닝부터 시작한다.
+    if (resolved === 'start') return 'setup';
     if (!canAccess(resolved, ROUTES[resolved])) return 'setup';
-    // 완료된 사용자가 루트로 다시 들어오면 명단으로 보내되,
-    // 이름 수정을 위해 명시적으로 연 setup 화면은 그대로 허용한다.
-    if (resolved === 'start' && canAccess('roster', ROUTES.roster)) return 'roster';
     return resolved;
   }
 

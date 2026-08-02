@@ -1,9 +1,7 @@
 /**
  * tournament 영역의 공개 표면 (담당자 2).
  *
- * 대진표(bracket)는 제품 정책 승인 후에 구현한다. 지금은 계약상 반드시 필요한
- * `Opponent` 하나만 제공해 lineup/tactics가 MatchSetup을 만들 수 있게 한다.
- * bracket이 생기면 `getNextOpponent()`가 현재 라운드의 상대를 돌려주도록 바뀐다.
+ * 기존 상대 스카우팅 API와 2026 토너먼트 공개 API를 함께 제공한다.
  */
 
 import { autoLineup, setCaptain } from '../lineup/index.js';
@@ -41,3 +39,16 @@ export function getNextOpponent(bracket = null) {
     tactics: { ...TACTIC_DEFAULT },
   };
 }
+
+export { countries, countryByFifaCode } from '../shared/index.js';
+export { roundOf32Matches, knockoutRoundTemplates, qualificationRules, tournamentRounds } from './data/bracket.js';
+export {
+  QUALIFICATION_STATUSES,
+  applyKoreaQualification,
+  createInitialBracket,
+  getCurrentRound,
+  getTournamentNextOpponent,
+  recordMatchResult,
+  validateBracket,
+} from './domain/bracket.js';
+export { default as tournamentScreen } from './screens/tournament.js';

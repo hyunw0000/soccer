@@ -1,4 +1,4 @@
-import { el } from '../../shared/index.js';
+import { CountryFlag, countries, el } from '../../shared/index.js';
 import { resetState, state, setState } from '../public.js';
 import './opening.css';
 
@@ -6,8 +6,8 @@ export const OPENING_MATCH = Object.freeze({
   competition: 'WORLD CHAMPIONSHIP 2026',
   stage: 'GROUP STAGE · MATCHDAY 3',
   venue: 'NORTH AMERICA · STADIUM 07',
-  home: { code: 'RSA', name: '남아프리카공화국', score: 1 },
-  away: { code: 'KOR', name: '대한민국', score: 0 },
+  home: { code: 'RSA', countryCode: 'ZA', name: '남아프리카공화국', score: 1 },
+  away: { code: 'KOR', countryCode: 'KR', name: '대한민국', score: 0 },
 });
 
 const STAGES = Object.freeze({
@@ -20,13 +20,15 @@ const STAGES = Object.freeze({
 
 const isReducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-function flag(type) {
-  return el('span', { class: `op-flag op-flag--${type}`, 'aria-hidden': 'true' });
+function flag(countryCode) {
+  const fifaCode = countryCode === 'KR' ? 'KOR' : 'RSA';
+  const country = countries[fifaCode];
+  return CountryFlag({ ...country, fifaCode, size: 'medium' });
 }
 
 function teamRow(side, team) {
   return el('div', { class: `op-team op-team--${side}` }, [
-    flag(side === 'home' ? 'rsa' : 'kor'),
+    flag(team.countryCode),
     el('div', { class: 'op-team__name' }, [
       el('b', { text: team.code }),
       el('span', { text: team.name }),
@@ -228,8 +230,7 @@ export default function managerNameScreen(root, ctx) {
         }
         managerName = name;
         setState({ managerName: name, hasCompletedSetup: true });
-        stage = STAGES.MISSION;
-        render();
+        ctx.navigate('/roster');
       };
       input.addEventListener('input', () => {
         error.textContent = '';
@@ -261,8 +262,8 @@ export default function managerNameScreen(root, ctx) {
         class: 'op-primary',
         type: 'button',
         text: '남아공전 준비하기',
-        'aria-label': '남아프리카공화국전 전술 준비 화면으로 이동',
-        onclick: () => ctx.navigate('/tactics'),
+        'aria-label': '남아프리카공화국전 선수단 준비 화면으로 이동',
+        onclick: () => ctx.navigate('/roster'),
       });
       shell.append(el('section', { class: 'op-content op-mission', 'aria-labelledby': 'mission-title' }, [
         el('div', { class: 'op-badge', text: 'KFA' }),
@@ -274,7 +275,7 @@ export default function managerNameScreen(root, ctx) {
         el('p', { class: 'op-lead', text: '대한민국의 운명이 걸린 남아프리카공화국전을 준비하십시오.' }),
         el('article', { class: 'op-fixture' }, [
           el('span', { text: 'GROUP STAGE · MATCHDAY 3' }),
-          el('div', {}, [flag('kor'), el('b', { text: 'KOR' }), el('i', { text: 'VS' }), el('b', { text: 'RSA' }), flag('rsa')]),
+          el('div', {}, [flag('KR'), el('b', { text: 'KOR' }), el('i', { text: 'VS' }), el('b', { text: 'RSA' }), flag('ZA')]),
           el('p', { text: '킥오프까지 D-1 · 전술 브리핑 대기 중' }),
         ]),
         prepare,

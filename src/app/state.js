@@ -25,6 +25,8 @@ const initial = {
   startingLineup: null,
   currentOpponent: null,
   pendingMatchSetup: null,
+  // TournamentBracket version 1. 남아공전 결과 확정 전에는 null로 둔다.
+  tournamentBracket: null,
 };
 
 export const state = { ...initial, ...load() };
@@ -44,6 +46,7 @@ export function resetState() {
     startingLineup: null,
     currentOpponent: null,
     pendingMatchSetup: null,
+    tournamentBracket: null,
   });
   save();
 }
@@ -66,6 +69,7 @@ function save() {
         startingLineup: state.startingLineup,
         lineupPositions: state.lineupPositions,
         slotTactics: state.slotTactics,
+        tournamentBracket: state.tournamentBracket,
       })
     );
   } catch {
@@ -113,6 +117,9 @@ function load() {
       out.slotTactics = Object.fromEntries(
         Object.entries(v.slotTactics).filter(([, t]) => t && typeof t === 'object')
       );
+    }
+    if (v.tournamentBracket?.version === 1 && Array.isArray(v.tournamentBracket.matches)) {
+      out.tournamentBracket = v.tournamentBracket;
     }
     if (v.tactics && typeof v.tactics === 'object') {
       out.tactics = { ...TACTIC_DEFAULT };
