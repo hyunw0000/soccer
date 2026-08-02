@@ -14,10 +14,9 @@ export function createRouter(root, screens, { canAccess = () => true } = {}) {
     const resolved = resolveName(name);
     if (resolved === 'notFound') return resolved;
     if (!ROUTES[resolved]) return 'notFound';
+    // 루트 진입은 저장된 진행 상태와 관계없이 항상 오프닝부터 시작한다.
+    if (resolved === 'start') return 'setup';
     if (!canAccess(resolved, ROUTES[resolved])) return 'setup';
-    // 완료된 사용자가 루트로 다시 들어오면 명단으로 보내되,
-    // 이름 수정을 위해 명시적으로 연 setup 화면은 그대로 허용한다.
-    if (resolved === 'start' && canAccess('roster', ROUTES.roster)) return 'roster';
     return resolved;
   }
 
@@ -44,7 +43,11 @@ export function createRouter(root, screens, { canAccess = () => true } = {}) {
     } else if (fromHistory && guarded && typeof window !== 'undefined') {
       window.history.replaceState({ route: resolved, params: null }, '', path);
     }
+    const routeChanged = currentName !== resolved;
     render(resolved, params);
+    // 새 화면이 이전 화면의 긴 스크롤 위치 아래에서 시작하지 않게 한다.
+    // 같은 라우트의 하위 탭과 브라우저 히스토리 복원은 건드리지 않는다.
+    if (routeChanged && !fromHistory) window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
   }
 
   const onPopState = (event) => {

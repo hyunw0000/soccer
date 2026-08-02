@@ -5,7 +5,6 @@ import managerScreen from './screens/managerName.js';
 import {
   notFoundScreen,
   simulationPlaceholder,
-  tournamentPlaceholder,
 } from './screens/placeholders.js';
 import { withAppLayout } from './layout/AppLayout.js';
 import { state } from './public.js';
@@ -13,6 +12,7 @@ import { lineupScreen } from '../lineup/index.js';
 import { rosterScreen } from '../roster/index.js';
 import { tacticsScreen } from '../tactics/index.js';
 import { matchScreen } from '../match/index.js';
+import { tournamentScreen } from '../tournament/index.js';
 
 /**
  * 앱의 유일한 조립 지점.
@@ -25,8 +25,8 @@ export function startApp(root = document.getElementById('app')) {
     start: managerScreen,
     setup: managerScreen,
     roster: withAppLayout(rosterScreen, '/roster'),
-    tournament: withAppLayout(tournamentPlaceholder, '/tournament'),
-    lineup: withAppLayout(lineupScreen, '/lineup'),
+    tournament: withAppLayout((outlet, ctx) => tournamentScreen(outlet, ctx, { bracket: state.tournamentBracket, groupAFinalResult:state.groupAFinalResult }), '/tournament'),
+    lineup: withAppLayout(lineupPlaceholder, '/lineup'),
     tactics: withAppLayout(tacticsScreen, '/tactics'),
     simulation: withAppLayout(simulationPlaceholder, '/simulation'),
     match: withAppLayout(matchScreen, '/match'),

@@ -1,10 +1,7 @@
 /**
  * tournament 영역의 공개 표면 (담당자 2).
  *
- * 대진표(bracket)와 대회 화면은 아직 구현하지 않는다 — 정책과 화면은 이 영역의 다음 작업이다.
- * 지금은 우리가 실제로 만나는 여섯 상대를 대회 순서대로 고정해 데이터로만 제공한다.
- * 다른 영역(lineup·tactics)은 여기서 상대를 읽어 갈 뿐 데이터를 직접 만들지 않는다.
- * bracket이 생기면 `getNextOpponent()`가 현재 라운드의 상대를 돌려주도록 바뀐다.
+ * 기존 상대 스카우팅 API와 2026 토너먼트 공개 API를 함께 제공한다.
  */
 
 import { createStartingLineup, getNormalizedSlots, setCaptain, syncSubstitutes } from '../lineup/index.js';
@@ -94,3 +91,21 @@ export function getNextOpponent(bracket = null) {
     tactics: { ...TACTIC_DEFAULT },
   };
 }
+
+export { countries, countryByFifaCode } from '../shared/index.js';
+export { bracketLayout, officialTournamentMatches, roundOf32Matches, knockoutRoundTemplates, qualificationRules, tournamentRounds } from './data/bracket.js';
+export { GROUP_A_TEAM_IDS, groupACompletedMatches, koreaSouthAfricaMatch } from './data/groupA.js';
+export { calculateGroupStandings, createGroupAState, createTournamentProgress, getMatchesForTeam, normalizeGroupAFinalResult, resolveKoreaQualification } from './domain/groupStandings.js';
+export {
+  QUALIFICATION_STATUSES,
+  applyKoreaQualification,
+  createInitialBracket,
+  createOfficialBracket,
+  createGameTimelineBracket,
+  getCurrentRound,
+  getTournamentNextOpponent,
+  recordMatchResult,
+  resolveMatch73HomeTeam,
+  validateBracket,
+} from './domain/bracket.js';
+export { default as tournamentScreen } from './screens/tournament.js';

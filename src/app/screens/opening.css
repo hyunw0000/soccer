@@ -96,9 +96,7 @@
 .op-score { font-family: Impact, sans-serif; font-size: clamp(48px, 7vw, 86px); font-weight: 400; line-height: 1; }
 .op-team--away .op-score { color: #b7bec8; }
 .op-score-divider { color: #485568; font-size: 30px; }
-.op-flag { display: inline-block; flex: 0 0 auto; width: 43px; height: 29px; border: 1px solid rgba(255,255,255,.4); box-shadow: 0 4px 12px rgba(0,0,0,.35); }
-.op-flag--kor { background: radial-gradient(circle at 50% 50%, #e72b3d 0 20%, #2769be 21% 37%, transparent 38%), #f8f9fb; }
-.op-flag--rsa { background: linear-gradient(32deg, #165da2 0 28%, #fff 29% 35%, #12914f 36% 57%, #fff 58% 64%, #d53738 65%); }
+.op-team .country-flag { width: 48px; }
 .op-eliminated { margin-top: 18px; }
 .op-eliminated > span { display: inline-block; border: 1px solid #b92c38; padding: 4px 13px; color: #ff6973; font-size: 10px; font-weight: 800; letter-spacing: .18em; }
 .op-eliminated h1 { margin: 8px 0; color: #f1f3f6; font-size: clamp(36px, 6vw, 72px); font-weight: 950; letter-spacing: -.07em; text-shadow: 3px 0 rgba(238,25,49,.35), -2px 0 rgba(0,109,255,.18); animation: op-glitch 2.8s 1.1s infinite; }
@@ -168,9 +166,13 @@
   .op-scoreboard__meta { grid-template-columns: 1fr auto; }
   .op-scoreboard__meta span:last-child { display: none; }
   .op-scoreboard__teams { padding-inline: 13px; }
-  .op-team { gap: 7px; }
-  .op-team .op-flag { display: none; }
-  .op-team__name span { display: none; }
+  .op-team { flex-direction: column; gap: 5px; }
+  .op-team--away { flex-direction: column-reverse; }
+  .op-team .country-flag { width: 40px; }
+  .op-team__name, .op-team--away .op-team__name { min-height: 25px; text-align: center; }
+  .op-team__name b { display: none; }
+  .op-team__name span { display: block; max-width: 128px; line-height: 1.25; }
+  .op-score { font-size: clamp(42px, 13vw, 58px); }
   .op-eliminated p { width: 88%; margin: auto; line-height: 1.5; }
   .op-offer, .op-rewinding, .op-setup, .op-mission { min-height: calc(100svh - 105px); padding-bottom: 55px; }
   .op-offer h1 { font-size: clamp(36px, 11vw, 52px); }
