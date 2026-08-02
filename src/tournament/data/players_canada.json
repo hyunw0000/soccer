@@ -1,0 +1,569 @@
+{
+  "meta": {
+    "team": "캐나다",
+    "teamEn": "Canada",
+    "teamCode": "CAN",
+    "stage": "r32",
+    "stageLabel": "32강",
+    "stageOrder": 2,
+    "coach": "제시 마시",
+    "formationId": "3-4-3",
+    "style": "전방 압박으로 공을 뺏고 데이비스의 왼쪽 폭발력으로 뒤집는다.",
+    "strength": 75,
+    "captainId": "can_david",
+    "startingXI": [
+      "can_clair",
+      "can_cornelius",
+      "can_bombito",
+      "can_johnston",
+      "can_davies",
+      "can_eustaquio",
+      "can_kone",
+      "can_laryea",
+      "can_shaffelburg",
+      "can_david",
+      "can_buchanan"
+    ],
+    "source": "2026 FIFA 북중미 월드컵 최종 26인 명단(위키백과 2026 FIFA World Cup squads, wc-26.net 팀 스쿼드) 기준",
+    "note": "이름·등번호·소속팀·포지션은 실제 대회 명단 참고값이다. 공개 자료에서 등번호가 겹치거나 빠진 자리는 포지션에 맞게 정리했다. 능력치(stats)는 전부 밸런싱용 더미값이며 overall은 세부 스탯의 포지션 가중 평균으로 파생한다. 선발 11인(startingXI)과 포메이션은 각 팀의 대표 전형이며 실제 경기 선발과 다를 수 있다.",
+    "count": 26,
+    "positions": [
+      "GK",
+      "DF",
+      "MF",
+      "FW"
+    ],
+    "statKeys": [
+      "overall",
+      "attack",
+      "defense",
+      "stamina",
+      "pace",
+      "pass",
+      "shoot"
+    ]
+  },
+  "players": [
+    {
+      "id": "can_clair",
+      "name": "데인 세인트클레어",
+      "nameEn": "Dayne St. Clair",
+      "num": 1,
+      "pos": "GK",
+      "detail": "GK",
+      "club": "인터 마이애미",
+      "age": 29,
+      "stats": {
+        "overall": 75,
+        "attack": 20,
+        "defense": 78,
+        "stamina": 72,
+        "pace": 60,
+        "pass": 72,
+        "shoot": 18
+      },
+      "squad2026": true
+    },
+    {
+      "id": "can_johnston",
+      "name": "알리스테어 존스턴",
+      "nameEn": "Alistair Johnston",
+      "num": 2,
+      "pos": "DF",
+      "detail": "CB",
+      "club": "셀틱",
+      "age": 27,
+      "stats": {
+        "overall": 75,
+        "attack": 56,
+        "defense": 79,
+        "stamina": 84,
+        "pace": 78,
+        "pass": 72,
+        "shoot": 46
+      },
+      "squad2026": true
+    },
+    {
+      "id": "can_jones",
+      "name": "알피 존스",
+      "nameEn": "Alfie Jones",
+      "num": 3,
+      "pos": "DF",
+      "detail": "CB",
+      "club": "미들즈브러",
+      "age": 28,
+      "stats": {
+        "overall": 67,
+        "attack": 42,
+        "defense": 72,
+        "stamina": 76,
+        "pace": 68,
+        "pass": 64,
+        "shoot": 44
+      },
+      "squad2026": true
+    },
+    {
+      "id": "can_fougerolles",
+      "name": "뤼크 드 푸주롤",
+      "nameEn": "Luc de Fougerolles",
+      "num": 4,
+      "pos": "DF",
+      "detail": "CB",
+      "club": "덴더",
+      "age": 20,
+      "stats": {
+        "overall": 67,
+        "attack": 40,
+        "defense": 70,
+        "stamina": 74,
+        "pace": 72,
+        "pass": 66,
+        "shoot": 36
+      },
+      "squad2026": true
+    },
+    {
+      "id": "can_waterman",
+      "name": "조엘 워터먼",
+      "nameEn": "Joel Waterman",
+      "num": 5,
+      "pos": "DF",
+      "detail": "CB",
+      "club": "시카고 파이어",
+      "age": 30,
+      "stats": {
+        "overall": 66,
+        "attack": 40,
+        "defense": 70,
+        "stamina": 76,
+        "pace": 68,
+        "pass": 64,
+        "shoot": 36
+      },
+      "squad2026": true
+    },
+    {
+      "id": "can_choiniere",
+      "name": "마티외 슈아니에르",
+      "nameEn": "Mathieu Choiniere",
+      "num": 6,
+      "pos": "MF",
+      "detail": "CM",
+      "club": "LAFC",
+      "age": 27,
+      "stats": {
+        "overall": 69,
+        "attack": 62,
+        "defense": 64,
+        "stamina": 80,
+        "pace": 70,
+        "pass": 74,
+        "shoot": 56
+      },
+      "squad2026": true
+    },
+    {
+      "id": "can_eustaquio",
+      "name": "스티븐 에우스타키오",
+      "nameEn": "Stephen Eustaquio",
+      "num": 7,
+      "pos": "MF",
+      "detail": "DM",
+      "club": "LAFC",
+      "age": 29,
+      "stats": {
+        "overall": 74,
+        "attack": 68,
+        "defense": 70,
+        "stamina": 84,
+        "pace": 70,
+        "pass": 80,
+        "shoot": 60
+      },
+      "squad2026": true
+    },
+    {
+      "id": "can_kone",
+      "name": "이스마엘 코네",
+      "nameEn": "Ismael Kone",
+      "num": 8,
+      "pos": "MF",
+      "detail": "CM",
+      "club": "올랭피크 마르세유",
+      "age": 24,
+      "stats": {
+        "overall": 73,
+        "attack": 70,
+        "defense": 66,
+        "stamina": 82,
+        "pace": 76,
+        "pass": 76,
+        "shoot": 62
+      },
+      "squad2026": true
+    },
+    {
+      "id": "can_larin",
+      "name": "사일 라린",
+      "nameEn": "Cyle Larin",
+      "num": 9,
+      "pos": "FW",
+      "detail": "ST",
+      "club": "바야돌리드",
+      "age": 31,
+      "stats": {
+        "overall": 72,
+        "attack": 74,
+        "defense": 40,
+        "stamina": 74,
+        "pace": 78,
+        "pass": 60,
+        "shoot": 76
+      },
+      "squad2026": true
+    },
+    {
+      "id": "can_david",
+      "name": "조너선 데이비드",
+      "nameEn": "Jonathan David",
+      "num": 10,
+      "pos": "FW",
+      "detail": "ST",
+      "club": "유벤투스",
+      "age": 26,
+      "captain": true,
+      "stats": {
+        "overall": 81,
+        "attack": 84,
+        "defense": 42,
+        "stamina": 80,
+        "pace": 84,
+        "pass": 74,
+        "shoot": 86
+      },
+      "squad2026": true
+    },
+    {
+      "id": "can_millar",
+      "name": "리암 밀러",
+      "nameEn": "Liam Millar",
+      "num": 11,
+      "pos": "FW",
+      "detail": "LW",
+      "club": "프레스턴 노스 엔드",
+      "age": 26,
+      "stats": {
+        "overall": 69,
+        "attack": 68,
+        "defense": 42,
+        "stamina": 78,
+        "pace": 82,
+        "pass": 66,
+        "shoot": 64
+      },
+      "squad2026": true
+    },
+    {
+      "id": "can_oluwaseyi",
+      "name": "타니 올루와세이",
+      "nameEn": "Tani Oluwaseyi",
+      "num": 12,
+      "pos": "FW",
+      "detail": "ST",
+      "club": "비야레알",
+      "age": 26,
+      "stats": {
+        "overall": 72,
+        "attack": 72,
+        "defense": 40,
+        "stamina": 78,
+        "pace": 84,
+        "pass": 62,
+        "shoot": 72
+      },
+      "squad2026": true
+    },
+    {
+      "id": "can_cornelius",
+      "name": "데릭 코닐리어스",
+      "nameEn": "Derek Cornelius",
+      "num": 13,
+      "pos": "DF",
+      "detail": "CB",
+      "club": "말뫼 FF",
+      "age": 28,
+      "stats": {
+        "overall": 70,
+        "attack": 46,
+        "defense": 74,
+        "stamina": 78,
+        "pace": 74,
+        "pass": 68,
+        "shoot": 40
+      },
+      "squad2026": true
+    },
+    {
+      "id": "can_shaffelburg",
+      "name": "제이컵 섀펠버그",
+      "nameEn": "Jacob Shaffelburg",
+      "num": 14,
+      "pos": "FW",
+      "detail": "LW",
+      "club": "LAFC",
+      "age": 26,
+      "stats": {
+        "overall": 73,
+        "attack": 74,
+        "defense": 44,
+        "stamina": 82,
+        "pace": 88,
+        "pass": 68,
+        "shoot": 66
+      },
+      "squad2026": true
+    },
+    {
+      "id": "can_bombito",
+      "name": "모이즈 봉비토",
+      "nameEn": "Moise Bombito",
+      "num": 15,
+      "pos": "DF",
+      "detail": "CB",
+      "club": "OGC 니스",
+      "age": 26,
+      "stats": {
+        "overall": 74,
+        "attack": 46,
+        "defense": 78,
+        "stamina": 82,
+        "pace": 84,
+        "pass": 66,
+        "shoot": 40
+      },
+      "squad2026": true
+    },
+    {
+      "id": "can_crepeau",
+      "name": "막심 크레포",
+      "nameEn": "Maxime Crepeau",
+      "num": 16,
+      "pos": "GK",
+      "detail": "GK",
+      "club": "포틀랜드 팀버스",
+      "age": 32,
+      "stats": {
+        "overall": 72,
+        "attack": 18,
+        "defense": 74,
+        "stamina": 70,
+        "pace": 58,
+        "pass": 68,
+        "shoot": 16
+      },
+      "squad2026": true
+    },
+    {
+      "id": "can_buchanan",
+      "name": "타종 뷰캐넌",
+      "nameEn": "Tajon Buchanan",
+      "num": 17,
+      "pos": "FW",
+      "detail": "RW",
+      "club": "인터 밀란",
+      "age": 27,
+      "stats": {
+        "overall": 74,
+        "attack": 74,
+        "defense": 50,
+        "stamina": 82,
+        "pace": 88,
+        "pass": 70,
+        "shoot": 66
+      },
+      "squad2026": true
+    },
+    {
+      "id": "can_goodman",
+      "name": "오언 굿맨",
+      "nameEn": "Owen Goodman",
+      "num": 18,
+      "pos": "GK",
+      "detail": "GK",
+      "club": "반즐리",
+      "age": 22,
+      "stats": {
+        "overall": 69,
+        "attack": 16,
+        "defense": 71,
+        "stamina": 68,
+        "pace": 58,
+        "pass": 66,
+        "shoot": 14
+      },
+      "squad2026": true
+    },
+    {
+      "id": "can_davies",
+      "name": "알폰소 데이비스",
+      "nameEn": "Alphonso Davies",
+      "num": 19,
+      "pos": "DF",
+      "detail": "LB",
+      "club": "바이에른 뮌헨",
+      "age": 25,
+      "stats": {
+        "overall": 80,
+        "attack": 80,
+        "defense": 74,
+        "stamina": 86,
+        "pace": 95,
+        "pass": 78,
+        "shoot": 60
+      },
+      "squad2026": true
+    },
+    {
+      "id": "can_ahmed",
+      "name": "알리 아메드",
+      "nameEn": "Ali Ahmed",
+      "num": 20,
+      "pos": "MF",
+      "detail": "LM",
+      "club": "노리치 시티",
+      "age": 25,
+      "stats": {
+        "overall": 69,
+        "attack": 66,
+        "defense": 58,
+        "stamina": 80,
+        "pace": 82,
+        "pass": 70,
+        "shoot": 58
+      },
+      "squad2026": true
+    },
+    {
+      "id": "can_osorio",
+      "name": "조너선 오소리오",
+      "nameEn": "Jonathan Osorio",
+      "num": 21,
+      "pos": "MF",
+      "detail": "CM",
+      "club": "토론토 FC",
+      "age": 34,
+      "stats": {
+        "overall": 68,
+        "attack": 66,
+        "defense": 60,
+        "stamina": 74,
+        "pace": 64,
+        "pass": 74,
+        "shoot": 62
+      },
+      "squad2026": true
+    },
+    {
+      "id": "can_laryea",
+      "name": "리치 라리아",
+      "nameEn": "Richie Laryea",
+      "num": 22,
+      "pos": "DF",
+      "detail": "RB",
+      "club": "토론토 FC",
+      "age": 31,
+      "stats": {
+        "overall": 71,
+        "attack": 64,
+        "defense": 66,
+        "stamina": 84,
+        "pace": 84,
+        "pass": 66,
+        "shoot": 48
+      },
+      "squad2026": true
+    },
+    {
+      "id": "can_sigur",
+      "name": "니코 시구르",
+      "nameEn": "Niko Sigur",
+      "num": 23,
+      "pos": "MF",
+      "detail": "DM",
+      "club": "하이두크 스플리트",
+      "age": 22,
+      "stats": {
+        "overall": 67,
+        "attack": 56,
+        "defense": 68,
+        "stamina": 80,
+        "pace": 74,
+        "pass": 70,
+        "shoot": 50
+      },
+      "squad2026": true
+    },
+    {
+      "id": "can_promisedavid",
+      "name": "프로미스 데이비드",
+      "nameEn": "Promise David",
+      "num": 24,
+      "pos": "FW",
+      "detail": "ST",
+      "club": "위니옹 생질루아즈",
+      "age": 25,
+      "stats": {
+        "overall": 71,
+        "attack": 72,
+        "defense": 42,
+        "stamina": 78,
+        "pace": 76,
+        "pass": 62,
+        "shoot": 74
+      },
+      "squad2026": true
+    },
+    {
+      "id": "can_saliba",
+      "name": "네이선 살리바",
+      "nameEn": "Nathan Saliba",
+      "num": 25,
+      "pos": "MF",
+      "detail": "CM",
+      "club": "안더레흐트",
+      "age": 21,
+      "stats": {
+        "overall": 67,
+        "attack": 58,
+        "defense": 64,
+        "stamina": 78,
+        "pace": 72,
+        "pass": 70,
+        "shoot": 52
+      },
+      "squad2026": true
+    },
+    {
+      "id": "can_nelson",
+      "name": "제이든 넬슨",
+      "nameEn": "Jayden Nelson",
+      "num": 26,
+      "pos": "FW",
+      "detail": "RW",
+      "club": "오스틴 FC",
+      "age": 23,
+      "stats": {
+        "overall": 68,
+        "attack": 66,
+        "defense": 40,
+        "stamina": 76,
+        "pace": 84,
+        "pass": 64,
+        "shoot": 62
+      },
+      "squad2026": true
+    }
+  ]
+}

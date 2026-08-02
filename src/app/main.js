@@ -3,12 +3,12 @@ import './layout/app-layout.css';
 import { createRouter } from './router.js';
 import managerScreen from './screens/managerName.js';
 import {
-  lineupPlaceholder,
   notFoundScreen,
   simulationPlaceholder,
 } from './screens/placeholders.js';
 import { withAppLayout } from './layout/AppLayout.js';
 import { state } from './public.js';
+import { lineupScreen } from '../lineup/index.js';
 import { rosterScreen } from '../roster/index.js';
 import { tacticsScreen } from '../tactics/index.js';
 import { matchScreen } from '../match/index.js';

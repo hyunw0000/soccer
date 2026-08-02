@@ -1,0 +1,570 @@
+{
+  "meta": {
+    "team": "남아프리카공화국",
+    "teamShort": "남아공",
+    "teamEn": "South Africa",
+    "teamCode": "RSA",
+    "stage": "group",
+    "stageLabel": "조별리그",
+    "stageOrder": 1,
+    "coach": "위고 브루스",
+    "formationId": "4-3-3",
+    "style": "두 줄로 촘촘히 버티다 빠른 측면 역습 한 방을 노린다.",
+    "strength": 72,
+    "captainId": "rsa_williams",
+    "startingXI": [
+      "rsa_williams",
+      "rsa_modiba",
+      "rsa_sibisi",
+      "rsa_mbokazi",
+      "rsa_mudau",
+      "rsa_sithole",
+      "rsa_mokoena",
+      "rsa_zwane",
+      "rsa_appollis",
+      "rsa_foster",
+      "rsa_mofokeng"
+    ],
+    "source": "2026 FIFA 북중미 월드컵 최종 26인 명단(위키백과 2026 FIFA World Cup squads, wc-26.net 팀 스쿼드) 기준",
+    "note": "이름·등번호·소속팀·포지션은 실제 대회 명단 참고값이다. 공개 자료에서 등번호가 겹치거나 빠진 자리는 포지션에 맞게 정리했다. 능력치(stats)는 전부 밸런싱용 더미값이며 overall은 세부 스탯의 포지션 가중 평균으로 파생한다. 선발 11인(startingXI)과 포메이션은 각 팀의 대표 전형이며 실제 경기 선발과 다를 수 있다.",
+    "count": 26,
+    "positions": [
+      "GK",
+      "DF",
+      "MF",
+      "FW"
+    ],
+    "statKeys": [
+      "overall",
+      "attack",
+      "defense",
+      "stamina",
+      "pace",
+      "pass",
+      "shoot"
+    ]
+  },
+  "players": [
+    {
+      "id": "rsa_williams",
+      "name": "론웬 윌리엄스",
+      "nameEn": "Ronwen Williams",
+      "num": 1,
+      "pos": "GK",
+      "detail": "GK",
+      "club": "마멜로디 선다운스",
+      "age": 34,
+      "captain": true,
+      "stats": {
+        "overall": 75,
+        "attack": 20,
+        "defense": 78,
+        "stamina": 72,
+        "pace": 58,
+        "pass": 70,
+        "shoot": 18
+      },
+      "squad2026": true
+    },
+    {
+      "id": "rsa_matuludi",
+      "name": "타방 마툴루디",
+      "nameEn": "Thabang Matuludi",
+      "num": 2,
+      "pos": "DF",
+      "detail": "CB",
+      "club": "폴로콰네 시티",
+      "age": 27,
+      "stats": {
+        "overall": 65,
+        "attack": 40,
+        "defense": 68,
+        "stamina": 74,
+        "pace": 72,
+        "pass": 62,
+        "shoot": 36
+      },
+      "squad2026": true
+    },
+    {
+      "id": "rsa_ndamane",
+      "name": "쿨루마니 은다마네",
+      "nameEn": "Khulumani Ndamane",
+      "num": 3,
+      "pos": "DF",
+      "detail": "CB",
+      "club": "마멜로디 선다운스",
+      "age": 22,
+      "stats": {
+        "overall": 66,
+        "attack": 38,
+        "defense": 70,
+        "stamina": 74,
+        "pace": 72,
+        "pass": 62,
+        "shoot": 34
+      },
+      "squad2026": true
+    },
+    {
+      "id": "rsa_mokoena",
+      "name": "테보호 모코에나",
+      "nameEn": "Teboho Mokoena",
+      "num": 4,
+      "pos": "MF",
+      "detail": "DM",
+      "club": "마멜로디 선다운스",
+      "age": 29,
+      "stats": {
+        "overall": 74,
+        "attack": 68,
+        "defense": 72,
+        "stamina": 82,
+        "pace": 68,
+        "pass": 78,
+        "shoot": 66
+      },
+      "squad2026": true
+    },
+    {
+      "id": "rsa_mbatha",
+      "name": "탈렌테 음바타",
+      "nameEn": "Thalente Mbatha",
+      "num": 5,
+      "pos": "MF",
+      "detail": "DM",
+      "club": "올랜도 파이러츠",
+      "age": 26,
+      "stats": {
+        "overall": 68,
+        "attack": 58,
+        "defense": 68,
+        "stamina": 80,
+        "pace": 72,
+        "pass": 70,
+        "shoot": 52
+      },
+      "squad2026": true
+    },
+    {
+      "id": "rsa_modiba",
+      "name": "오브리 모디바",
+      "nameEn": "Aubrey Modiba",
+      "num": 6,
+      "pos": "DF",
+      "detail": "LB",
+      "club": "마멜로디 선다운스",
+      "age": 31,
+      "stats": {
+        "overall": 71,
+        "attack": 64,
+        "defense": 68,
+        "stamina": 80,
+        "pace": 78,
+        "pass": 70,
+        "shoot": 48
+      },
+      "squad2026": true
+    },
+    {
+      "id": "rsa_appollis",
+      "name": "오스윈 아폴리스",
+      "nameEn": "Oswin Appollis",
+      "num": 7,
+      "pos": "FW",
+      "detail": "LW",
+      "club": "올랜도 파이러츠",
+      "age": 24,
+      "stats": {
+        "overall": 72,
+        "attack": 74,
+        "defense": 42,
+        "stamina": 78,
+        "pace": 84,
+        "pass": 70,
+        "shoot": 66
+      },
+      "squad2026": true
+    },
+    {
+      "id": "rsa_moremi",
+      "name": "체팡 모레미",
+      "nameEn": "Tshepang Moremi",
+      "num": 8,
+      "pos": "FW",
+      "detail": "RW",
+      "club": "올랜도 파이러츠",
+      "age": 25,
+      "stats": {
+        "overall": 69,
+        "attack": 70,
+        "defense": 40,
+        "stamina": 76,
+        "pace": 82,
+        "pass": 66,
+        "shoot": 64
+      },
+      "squad2026": true
+    },
+    {
+      "id": "rsa_foster",
+      "name": "라일 포스터",
+      "nameEn": "Lyle Foster",
+      "num": 9,
+      "pos": "FW",
+      "detail": "ST",
+      "club": "번리",
+      "age": 25,
+      "stats": {
+        "overall": 73,
+        "attack": 74,
+        "defense": 40,
+        "stamina": 78,
+        "pace": 80,
+        "pass": 64,
+        "shoot": 74
+      },
+      "squad2026": true
+    },
+    {
+      "id": "rsa_mofokeng",
+      "name": "렐레보힐레 모포켕",
+      "nameEn": "Relebohile Mofokeng",
+      "num": 10,
+      "pos": "FW",
+      "detail": "RW",
+      "club": "올랜도 파이러츠",
+      "age": 21,
+      "stats": {
+        "overall": 75,
+        "attack": 76,
+        "defense": 42,
+        "stamina": 78,
+        "pace": 86,
+        "pass": 72,
+        "shoot": 70
+      },
+      "squad2026": true
+    },
+    {
+      "id": "rsa_zwane",
+      "name": "템바 즈와네",
+      "nameEn": "Themba Zwane",
+      "num": 11,
+      "pos": "MF",
+      "detail": "AM",
+      "club": "마멜로디 선다운스",
+      "age": 36,
+      "stats": {
+        "overall": 70,
+        "attack": 76,
+        "defense": 50,
+        "stamina": 70,
+        "pace": 62,
+        "pass": 80,
+        "shoot": 68
+      },
+      "squad2026": true
+    },
+    {
+      "id": "rsa_maseko",
+      "name": "타펠로 마세코",
+      "nameEn": "Thapelo Maseko",
+      "num": 12,
+      "pos": "FW",
+      "detail": "RW",
+      "club": "AEL 리마솔",
+      "age": 22,
+      "stats": {
+        "overall": 69,
+        "attack": 68,
+        "defense": 40,
+        "stamina": 76,
+        "pace": 86,
+        "pass": 64,
+        "shoot": 62
+      },
+      "squad2026": true
+    },
+    {
+      "id": "rsa_sithole",
+      "name": "스페펠로 시톨레",
+      "nameEn": "Sphephelo Sithole",
+      "num": 13,
+      "pos": "MF",
+      "detail": "CM",
+      "club": "톤델라",
+      "age": 27,
+      "stats": {
+        "overall": 68,
+        "attack": 60,
+        "defense": 66,
+        "stamina": 80,
+        "pace": 70,
+        "pass": 72,
+        "shoot": 54
+      },
+      "squad2026": true
+    },
+    {
+      "id": "rsa_mbokazi",
+      "name": "음베케젤리 음보카지",
+      "nameEn": "Mbekezeli Mbokazi",
+      "num": 14,
+      "pos": "DF",
+      "detail": "CB",
+      "club": "시카고 파이어",
+      "age": 20,
+      "stats": {
+        "overall": 68,
+        "attack": 40,
+        "defense": 72,
+        "stamina": 76,
+        "pace": 76,
+        "pass": 62,
+        "shoot": 36
+      },
+      "squad2026": true
+    },
+    {
+      "id": "rsa_rayners",
+      "name": "이크람 레이너스",
+      "nameEn": "Iqraam Rayners",
+      "num": 15,
+      "pos": "FW",
+      "detail": "ST",
+      "club": "마멜로디 선다운스",
+      "age": 30,
+      "stats": {
+        "overall": 70,
+        "attack": 70,
+        "defense": 40,
+        "stamina": 76,
+        "pace": 74,
+        "pass": 62,
+        "shoot": 72
+      },
+      "squad2026": true
+    },
+    {
+      "id": "rsa_chaine",
+      "name": "시포 차이네",
+      "nameEn": "Sipho Chaine",
+      "num": 16,
+      "pos": "GK",
+      "detail": "GK",
+      "club": "올랜도 파이러츠",
+      "age": 29,
+      "stats": {
+        "overall": 70,
+        "attack": 18,
+        "defense": 73,
+        "stamina": 68,
+        "pace": 56,
+        "pass": 66,
+        "shoot": 16
+      },
+      "squad2026": true
+    },
+    {
+      "id": "rsa_makgopa",
+      "name": "에비던스 마크고파",
+      "nameEn": "Evidence Makgopa",
+      "num": 17,
+      "pos": "FW",
+      "detail": "ST",
+      "club": "올랜도 파이러츠",
+      "age": 26,
+      "stats": {
+        "overall": 68,
+        "attack": 68,
+        "defense": 42,
+        "stamina": 76,
+        "pace": 72,
+        "pass": 60,
+        "shoot": 70
+      },
+      "squad2026": true
+    },
+    {
+      "id": "rsa_kabini",
+      "name": "사무켈레 카비니",
+      "nameEn": "Samukele Kabini",
+      "num": 18,
+      "pos": "DF",
+      "detail": "CB",
+      "club": "몰데",
+      "age": 22,
+      "stats": {
+        "overall": 65,
+        "attack": 38,
+        "defense": 69,
+        "stamina": 74,
+        "pace": 72,
+        "pass": 62,
+        "shoot": 34
+      },
+      "squad2026": true
+    },
+    {
+      "id": "rsa_sibisi",
+      "name": "은코시나티 시비시",
+      "nameEn": "Nkosinathi Sibisi",
+      "num": 19,
+      "pos": "DF",
+      "detail": "CB",
+      "club": "올랜도 파이러츠",
+      "age": 31,
+      "stats": {
+        "overall": 68,
+        "attack": 42,
+        "defense": 73,
+        "stamina": 76,
+        "pace": 70,
+        "pass": 64,
+        "shoot": 38
+      },
+      "squad2026": true
+    },
+    {
+      "id": "rsa_mudau",
+      "name": "쿨리소 무다우",
+      "nameEn": "Khuliso Mudau",
+      "num": 20,
+      "pos": "DF",
+      "detail": "RB",
+      "club": "마멜로디 선다운스",
+      "age": 31,
+      "stats": {
+        "overall": 73,
+        "attack": 66,
+        "defense": 72,
+        "stamina": 84,
+        "pace": 82,
+        "pass": 68,
+        "shoot": 46
+      },
+      "squad2026": true
+    },
+    {
+      "id": "rsa_morena",
+      "name": "타펠로 모레나",
+      "nameEn": "Thapelo Morena",
+      "num": 21,
+      "pos": "MF",
+      "detail": "RM",
+      "club": "마멜로디 선다운스",
+      "age": 32,
+      "stats": {
+        "overall": 70,
+        "attack": 64,
+        "defense": 66,
+        "stamina": 84,
+        "pace": 86,
+        "pass": 66,
+        "shoot": 52
+      },
+      "squad2026": true
+    },
+    {
+      "id": "rsa_goss",
+      "name": "리카르도 고스",
+      "nameEn": "Ricardo Goss",
+      "num": 22,
+      "pos": "GK",
+      "detail": "GK",
+      "club": "시웰렐레",
+      "age": 32,
+      "stats": {
+        "overall": 69,
+        "attack": 18,
+        "defense": 71,
+        "stamina": 68,
+        "pace": 56,
+        "pass": 64,
+        "shoot": 16
+      },
+      "squad2026": true
+    },
+    {
+      "id": "rsa_adams",
+      "name": "제이든 애덤스",
+      "nameEn": "Jayden Adams",
+      "num": 23,
+      "pos": "MF",
+      "detail": "CM",
+      "club": "마멜로디 선다운스",
+      "age": 25,
+      "stats": {
+        "overall": 68,
+        "attack": 62,
+        "defense": 64,
+        "stamina": 78,
+        "pace": 72,
+        "pass": 72,
+        "shoot": 56
+      },
+      "squad2026": true
+    },
+    {
+      "id": "rsa_makhanya",
+      "name": "올웨투 마카냐",
+      "nameEn": "Olwethu Makhanya",
+      "num": 24,
+      "pos": "DF",
+      "detail": "CB",
+      "club": "필라델피아 유니온",
+      "age": 22,
+      "stats": {
+        "overall": 66,
+        "attack": 38,
+        "defense": 70,
+        "stamina": 74,
+        "pace": 74,
+        "pass": 62,
+        "shoot": 34
+      },
+      "squad2026": true
+    },
+    {
+      "id": "rsa_sebelebele",
+      "name": "카모겔로 세벨레벨레",
+      "nameEn": "Kamogelo Sebelebele",
+      "num": 25,
+      "pos": "MF",
+      "detail": "LM",
+      "club": "올랜도 파이러츠",
+      "age": 24,
+      "stats": {
+        "overall": 68,
+        "attack": 68,
+        "defense": 50,
+        "stamina": 78,
+        "pace": 80,
+        "pass": 68,
+        "shoot": 60
+      },
+      "squad2026": true
+    },
+    {
+      "id": "rsa_cross",
+      "name": "브래들리 크로스",
+      "nameEn": "Bradley Cross",
+      "num": 26,
+      "pos": "DF",
+      "detail": "LB",
+      "club": "카이저 치프스",
+      "age": 25,
+      "stats": {
+        "overall": 69,
+        "attack": 58,
+        "defense": 68,
+        "stamina": 78,
+        "pace": 76,
+        "pass": 66,
+        "shoot": 42
+      },
+      "squad2026": true
+    }
+  ]
+}
