@@ -113,6 +113,9 @@ export const PARAMS = {
   goalKickForce: 25,
   goalKickBaseErrorDeg: 8,
   halfMinutes: 45, // matchMinute 기준 전/후반 길이 (1초 = 게임 1분 스케일)
+  // 연장 전/후반 길이. 90분 종료 시 동점이면 105분까지 연장 전반, 120분까지 연장 후반을 치른다
+  // (rules.extraTime이 켜진 토너먼트 경기에서만 — 조별리그·친선은 90분에 그대로 끝난다).
+  extraHalfMinutes: 15,
   centerCircleRadius: 9.15, // 킥오프 규정 거리
   kickoffUnlockSpeed: 0.5, // 이 이상으로 볼이 움직이면 킥오프 제한 해제
   rewindCooldownSeconds: 15, // 되감기 쿨다운(게임 시간 15분 스케일 = clockSeconds 15단위)
@@ -281,6 +284,14 @@ export const PARAMS = {
   penaltyGkLineOffset: 0.6, // 키퍼가 골라인에서 이만큼 앞에 선다
   penaltyRunUp: 2, // 키커가 볼 뒤로 물러서는 거리
   penaltyWaitHalfWidth: 26, // 나머지 선수가 박스 밖에서 늘어서는 좌우 폭
+
+  // ---------- 승부차기 ----------
+  // 킥 자체는 페널티킥 코드를 그대로 쓴다(placePenaltyKick/launchPenaltyKick). 여기 값들은
+  // "몇 번을 차고, 한 번의 킥이 화면에서 얼마나 걸리는가"뿐이다.
+  shootoutRegularKicks: 5, // 정규 라운드 킥 수 — 여기서 못 가리면 서든데스
+  shootoutSetupTicks: 45, // 선수 배치 후 킥까지 (관중이 자리를 눈으로 확인할 시간)
+  shootoutFlightTicks: 240, // 킥 하나가 결판나기까지의 상한 — 넘으면 실축으로 확정한다
+  shootoutResultTicks: 70, // 성공/실패가 난 뒤 다음 키커까지 멈춰 있는 시간
 
   // ---------- 스로인 ----------
   // 손으로 던지는 거라 발로 차는 것보다 짧고 느리고 높다. 사거리 제한이 핵심이고,

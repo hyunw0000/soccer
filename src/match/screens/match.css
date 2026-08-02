@@ -741,3 +741,75 @@
     animation: none;
   }
 }
+
+/* 승부차기 보드 — 중계 화면처럼 양 팀의 킥을 순서대로 남긴다.
+   .banner를 재사용하지만 화면 한가운데(기본 위치)에 두면 그라운드의 키커·골키퍼를
+   그대로 가린다. 스코어보드 아래 상단 중앙에 얇게 붙인다. */
+.banner.shootout-board {
+  top: 14px;
+  transform: translate(-50%, 0);
+  z-index: 7;
+  gap: 8px;
+  width: min(420px, calc(100vw - 32px));
+  border-color: #f0d14b;
+  padding: 14px 20px 12px;
+}
+.shootout__eyebrow {
+  color: #f0d14b;
+  font-size: 10px;
+  font-weight: 950;
+  letter-spacing: 0.2em;
+}
+.shootout__score {
+  color: #fff;
+  font-size: clamp(20px, 3vw, 26px);
+  font-weight: 950;
+  letter-spacing: -0.02em;
+}
+.shootout__rows {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  width: 100%;
+}
+.shootout__row {
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr) 22px;
+  align-items: center;
+  gap: 10px;
+}
+.shootout__code {
+  color: #9fb4bc;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-align: left;
+}
+.shootout__row.home .shootout__code { color: var(--kor); }
+.shootout__row.away .shootout__code { color: var(--accent); }
+.shootout__marks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+/* 성공/실축을 색만으로 구분하지 않는다 — ●/○ 모양 자체가 다르다(색각 이상 대비). */
+.shootout__mark {
+  color: #3d5560;
+  font-size: 14px;
+  font-style: normal;
+  line-height: 1;
+}
+.shootout__mark.is-goal { color: #3fd694; }
+.shootout__mark.is-miss { color: #ef3d4d; }
+.shootout__count {
+  color: #fff;
+  font-size: 14px;
+  font-weight: 900;
+  text-align: right;
+}
+.shootout__now {
+  color: #9fb4bc;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}

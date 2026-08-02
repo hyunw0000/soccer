@@ -46,4 +46,5 @@ export const ACTION_ID = {
   CROSS_SUCCESS: 9,
   PENALTY_AIM: 10, // 페널티킥 키커가 노리는 쪽
   PENALTY_DIVE: 11, // 골키퍼가 몸을 던지는 쪽 — 키커와 **다른** actionId여야 둘이 독립이다
+  SHOOTOUT_ORDER: 12, // 승부차기에서 어느 팀이 먼저 차는가(실제 규칙의 동전 던지기)
 };

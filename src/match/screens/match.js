@@ -15,12 +15,60 @@ const REWIND_IDLE_LABEL = "↶ 실점 시에만 되감기 가능"; // 겨냥할 
 // 버튼)가 뜬다. 길게 잡으면 골마다 흐름이 끊기니 짧게 둔다.
 const GOAL_CELEBRATION_SECONDS = 2.2;
 
+// sim.phase(경기가 멈춘 상태) → 안내 모달의 종류. 여기 없는 phase는 모달을 안 띄운다.
+const PERIOD_BREAKS = {
+  halftime: 'secondHalf',
+  'extratime-break': 'extraFirst',
+  'extratime-halftime': 'extraSecond',
+  shootout: 'shootout',
+};
+
+// 안내 모달 종류별 문구. 32강부터는 무승부가 없으므로 연장·승부차기 안내가 여기서 나온다.
+const BREAK_COPY = {
+  firstHalf: { start: '경기 시작 →' },
+  secondHalf: {
+    eyebrow: 'SECOND HALF',
+    title: '후반전이 곧 시작됩니다',
+    description: '후반전에는 양 팀의 진영과 골대 위치가 서로 바뀝니다.',
+    notice: (side) => `골대 위치가 바뀝니다. 대한민국은 오른쪽 진영의 ${side} 팀입니다.`,
+    start: '후반 시작 →',
+  },
+  extraFirst: {
+    eyebrow: 'EXTRA TIME · FIRST HALF',
+    title: '90분 무승부 — 연장 전반',
+    description: '토너먼트는 무승부로 끝나지 않습니다. 105분까지 연장 전반을 치릅니다.',
+    notice: (side) => `진영이 다시 바뀝니다. 대한민국은 왼쪽 진영의 ${side} 팀입니다.`,
+    start: '연장 전반 시작 →',
+  },
+  extraSecond: {
+    eyebrow: 'EXTRA TIME · SECOND HALF',
+    title: '연장 후반',
+    description: '120분까지 치르고, 그래도 동점이면 승부차기로 승자를 가립니다.',
+    notice: (side) => `진영이 바뀝니다. 대한민국은 오른쪽 진영의 ${side} 팀입니다.`,
+    start: '연장 후반 시작 →',
+  },
+  shootout: {
+    eyebrow: 'PENALTY SHOOT-OUT',
+    title: '120분 무승부 — 승부차기',
+    description: '한쪽 골대에서 양 팀이 다섯 번씩 번갈아 찹니다. 5-5면 서든데스입니다.',
+    notice: () => '승부차기 득점은 경기 스코어에 더하지 않습니다. 승자만 가립니다.',
+    start: '승부차기 시작 →',
+  },
+};
+
 export default function matchScreen(root, ctx) {
   const matchSetup = state.pendingMatchSetup ?? null;
 
+  const runStepCandidate = gameProgress().activeStep;
+  const runStep =
+    runStepCandidate && runStepCandidate.opponentTeamId === matchSetup?.awayTeam?.id ? runStepCandidate : null;
+  // 32강부터는 무승부로 끝나지 않는다 — 90분 동점이면 연장 전반(105분)·후반(120분)을 치르고,
+  // 그래도 동점이면 승부차기로 승자를 가린다. 조별리그·친선은 90분 그대로다.
+  const knockout = runStep !== null && runStep.stage !== 'group';
+
   let sim;
   try {
-    sim = createSimulation(matchSetup);
+    sim = createSimulation(matchSetup, { extraTime: knockout, shootout: knockout });
   } catch (err) {
     root.append(
       el('div', { class: 'screen page' }, [
@@ -39,8 +87,6 @@ export default function matchScreen(root, ctx) {
 
   const homeCode = matchSetup.homeTeam.code ?? matchSetup.homeTeam.id;
   const awayCode = matchSetup.awayTeam.code ?? matchSetup.awayTeam.id;
-  const runStepCandidate = gameProgress().activeStep;
-  const runStep = runStepCandidate?.opponentTeamId === matchSetup.awayTeam.id ? runStepCandidate : null;
   const matchSides = getMatchSides(matchSetup);
   const koreaEntry = Object.entries(matchSides).find(([,side]) => side.teamId === 'KOR');
   const koreaSide = koreaEntry?.[1] ?? null;
@@ -162,8 +208,9 @@ export default function matchScreen(root, ctx) {
   }
 
   function setPaused(v) {
-    // 하프타임/풀타임 중에는 '후반 시작' 버튼 없이 일반 재개로 넘어갈 수 없다
-    if (!v && (sim.phase !== "playing" || matchPhase !== 'playing')) return;
+    // 하프타임/풀타임 중에는 '후반 시작' 버튼 없이 일반 재개로 넘어갈 수 없다.
+    // 승부차기는 예외 — 킥이 이어지는 동안 계속 step()이 돌아야 한다.
+    if (!v && ((sim.phase !== "playing" && sim.phase !== "shootout") || matchPhase !== 'playing')) return;
     // 대한민국 득점 뒤에는 일반 재개가 아니라 전용 "킥오프 재개" 버튼으로만 다시 시작한다.
     if (!v && koreaGoalPending) return;
     // 세리머니 중에는 재개를 막는다 — 배너가 아직 안 떴는데 경기가 흘러가면 안 된다.
@@ -218,9 +265,10 @@ export default function matchScreen(root, ctx) {
     updateSpeedButtons();
   }
 
-  // step()이 안 불리는 동안(일시정지·halftime·fulltime)은 배속이 의미 없으므로 비활성화한다
+  // step()이 안 불리는 동안(일시정지·halftime·fulltime)은 배속이 의미 없으므로 비활성화한다.
+  // 승부차기는 계속 step()이 도는 구간이라 배속을 그대로 쓸 수 있다.
   function updateSpeedButtons() {
-    const disabled = paused || sim.phase !== "playing";
+    const disabled = paused || (sim.phase !== "playing" && sim.phase !== "shootout");
     speedButtons.forEach(({ value, btn }) => {
       btn.classList.toggle("on", value === speed);
       btn.disabled = disabled;
@@ -238,20 +286,38 @@ export default function matchScreen(root, ctx) {
     if (matchResult) return; // 되감기·재렌더로 두 번 기록되지 않게 한다
     const koreaScore = sim.score.home;
     const opponentScore = sim.score.away;
+    // 승부차기까지 갔다면 승패는 그 점수로 갈린다 — 경기 스코어는 연장 종료 시점 그대로다.
+    const shootout = sim.shootout?.winner ? { ...sim.shootout.score } : null;
+    const extraTime = sim.half >= 3;
     const outcome =
-      koreaScore > opponentScore ? "win" : koreaScore === opponentScore ? "draw" : "loss";
+      koreaScore !== opponentScore
+        ? koreaScore > opponentScore ? "win" : "loss"
+        : shootout
+          ? shootout.home > shootout.away ? "win" : "loss"
+          : "draw";
     const progress = runStep
-      ? recordKoreaMatch({ matchId: runStep.matchId, koreaScore, opponentScore })
+      ? recordKoreaMatch({
+          matchId: runStep.matchId,
+          koreaScore,
+          opponentScore,
+          koreaPenaltyScore: shootout ? shootout.home : null,
+          opponentPenaltyScore: shootout ? shootout.away : null,
+          extraTime,
+        })
       : null;
-    matchResult = { koreaScore, opponentScore, outcome, progress };
+    matchResult = { koreaScore, opponentScore, outcome, shootout, extraTime, progress };
     const isKoreaChampion =
       runStep?.matchId === 104 && outcome === "win" && progress?.status === "champion";
 
     resultDialog.dataset.outcome = outcome;
     resultTitle.textContent =
       outcome === "win" ? "승리" : outcome === "draw" ? "무승부" : "패배";
-    resultScore.textContent = `${koreaScore} : ${opponentScore}`;
+    resultScore.textContent = shootout
+      ? `${koreaScore} : ${opponentScore} (승부차기 ${shootout.home} : ${shootout.away})`
+      : `${koreaScore} : ${opponentScore}`;
 
+    // 어떻게 끝났는지를 결과 문구 앞에 붙인다 — 90분/연장/승부차기는 감독에게 다른 사건이다.
+    const endedBy = shootout ? "승부차기 끝에 " : extraTime ? "연장 접전 끝에 " : "";
     const nextStep = progress?.nextStep ?? null;
     if (!runStep) {
       resultSub.textContent = "이 경기는 대회 기록에 반영되지 않습니다.";
@@ -260,11 +326,11 @@ export default function matchScreen(root, ctx) {
     } else if (nextStep && (outcome === "win" || runStep.stage === "group")) {
       resultSub.textContent = runStep.stage === "group"
         ? `${outcome === "draw" ? "무승부로 " : ""}A조 2위를 확정해 32강에 진출했습니다. 다음 상대는 ${teamName(nextStep.opponentTeamId)}입니다.`
-        : `${runStep.advanceLabel}에 진출했습니다. 다음 상대는 ${teamName(nextStep.opponentTeamId)}입니다.`;
+        : `${endedBy}${runStep.advanceLabel}에 진출했습니다. 다음 상대는 ${teamName(nextStep.opponentTeamId)}입니다.`;
     } else {
       resultSub.textContent = runStep.stage === "group"
         ? "남아공전 패배로 조별리그에서 탈락했습니다."
-        : `${runStep.roundLabel}에서 탈락했습니다. 토너먼트에서는 무승부도 패배와 같습니다.`;
+        : `${endedBy}${runStep.roundLabel}에서 탈락했습니다.`;
     }
 
     const advanced = Boolean(nextStep) && (outcome === "win" || runStep?.stage === "group");
@@ -277,7 +343,9 @@ export default function matchScreen(root, ctx) {
     setPaused(true);
     updateBanners();
     if (isKoreaChampion) {
-      championshipScore.textContent = `${koreaScore} : ${opponentScore}`;
+      championshipScore.textContent = shootout
+        ? `${koreaScore} : ${opponentScore} (PK ${shootout.home} : ${shootout.away})`
+        : `${koreaScore} : ${opponentScore}`;
       championRevealTimer = window.setTimeout(openChampionshipCelebration, 500);
       return;
     }
@@ -486,6 +554,58 @@ export default function matchScreen(root, ctx) {
   function hideConcedeChoice() {
     concedeChoicePending = false;
     updateBanners();
+  }
+
+  // 승부차기 보드 — 양 팀의 킥을 순서대로 ●(성공)/○(실축)으로 남긴다.
+  // 실제 중계처럼 "몇 번째 킥에서 무엇이 걸려 있는지"가 한눈에 보여야 하므로,
+  // 정규 5킥은 아직 안 찬 자리까지 빈 칸으로 미리 그려 둔다.
+  const shootoutScore = el("b", { class: "shootout__score", text: "" });
+  const shootoutRows = el("div", { class: "shootout__rows" });
+  const shootoutNow = el("span", { class: "shootout__now", text: "" });
+  const shootoutBoard = el("div", { class: "banner shootout-board" }, [
+    el("span", { class: "shootout__eyebrow", text: "PENALTY SHOOT-OUT" }),
+    shootoutScore,
+    shootoutRows,
+    shootoutNow,
+  ]);
+  let shootoutSignature = null;
+
+  function shootoutRow(s, team, code) {
+    const marks = s.kicks.filter((k) => k.team === team);
+    const slots = Math.max(PARAMS.shootoutRegularKicks, marks.length);
+    return el("div", { class: `shootout__row ${team}` }, [
+      el("span", { class: "shootout__code", text: code }),
+      el("span", { class: "shootout__marks" }, Array.from({ length: slots }, (_, i) => {
+        const kick = marks[i];
+        return el("i", {
+          class: `shootout__mark${kick ? (kick.scored ? " is-goal" : " is-miss") : ""}`,
+          text: kick ? (kick.scored ? "●" : "○") : "·",
+        });
+      })),
+      el("b", { class: "shootout__count", text: String(s.score[team]) }),
+    ]);
+  }
+
+  function updateShootoutBoard() {
+    const s = sim.shootout;
+    shootoutBoard.classList.toggle("show", Boolean(s));
+    subBtn.disabled = sim.phase === "shootout"; // 승부차기 중 교체는 규칙 위반이다
+
+    if (!s) return;
+    const kicker = s.current && !s.winner
+      ? (s.current.team === "home" ? sim.homeP : sim.awayP)[s.current.idx]
+      : null;
+    // 매 프레임 DOM을 다시 만들지 않는다 — 실제로 바뀌는 건 킥 하나가 끝났을 때뿐이다.
+    const signature = `${s.kicks.length}|${kicker?.team}:${kicker?.idx}|${s.winner ?? ""}`;
+    if (signature === shootoutSignature) return;
+    shootoutSignature = signature;
+    shootoutScore.textContent = `${homeCode} ${s.score.home} : ${s.score.away} ${awayCode}`;
+    shootoutRows.replaceChildren(shootoutRow(s, "home", homeCode), shootoutRow(s, "away", awayCode));
+    shootoutNow.textContent = s.winner
+      ? `${s.winner === "home" ? homeCode : awayCode} 승리`
+      : kicker
+        ? `${kicker.team === "home" ? homeCode : awayCode} #${kicker.num} ${kicker.name} 키커`
+        : "";
   }
 
   // 경기 종료 결과 화면 — 시작/후반 안내와 같은 모달 문법으로 팀과 큰 스코어를 보여 준다.
@@ -837,6 +957,8 @@ export default function matchScreen(root, ctx) {
 
   function openSubPanel() {
     if (!subPanel.hidden) return;
+    // 승부차기 중에는 교체할 수 없다(실제 규칙) — 키커 순번이 이미 정해져 있다.
+    if (sim.phase === "shootout") return;
     closeTacticsPanel(); // 두 패널이 같은 자리에 뜨므로 겹치지 않게 하나만 연다
     resumeAfterSub = !paused && sim.phase === "playing";
     if (resumeAfterSub) setPaused(true);
@@ -893,8 +1015,10 @@ export default function matchScreen(root, ctx) {
 
   function eventNode(ev) {
     const text = ev.count > 1 ? `${ev.text} ×${ev.count}` : ev.text;
+    // 승부차기는 120분 뒤에도 시계가 계속 흐르지만 "몇 분"이 의미가 없다 — PK로 표시한다.
+    const stamp = ev.type.startsWith("shootout") ? "PK" : `${ev.minute}'`;
     return el("li", { class: `ev ${ev.team}` }, [
-      el("span", { class: "evmin", text: `${ev.minute}'` }),
+      el("span", { class: "evmin", text: stamp }),
       el("span", { text }),
     ]);
   }
@@ -990,16 +1114,23 @@ export default function matchScreen(root, ctx) {
 
     if (sim.phase !== lastPhase) {
       lastPhase = sim.phase;
-      if (sim.phase === "halftime") {
+      // 'playing'이 아닌 상태는 전부 "볼이 멈췄고 감독에게 다음 단계를 알려야 한다"는 뜻이다.
+      const breakKind = PERIOD_BREAKS[sim.phase];
+      if (breakKind) {
         setPaused(true);
-        openKickoffBriefing('secondHalf');
+        // 승부차기는 sim이 이미 첫 키커를 배치해 뒀다 — 안내 뒤에 그라운드가 바뀌어 있으면
+        // 어색하니 모달을 띄우기 전에 화면을 맞춰 둔다.
+        view.sync(0);
+        openKickoffBriefing(breakKind);
       }
       else if (sim.phase === "fulltime") finishMatch();
       else updateBanners();
     }
+    updateShootoutBoard();
 
     updateScoreboard();
-    clockEl.textContent = formatTickClock(sim.tick);
+    clockEl.textContent =
+      sim.phase === "shootout" ? "승부차기" : formatTickClock(sim.tick);
     updateRewindButton();
     const o = sim.playerByKey(sim.ball.ownerKey);
     possEl.textContent = o
@@ -1163,17 +1294,18 @@ export default function matchScreen(root, ctx) {
     guideNextBtn.textContent = guideIndex === guideCards.length-1 ? '경기 정보 확인 →' : '다음 →';
   }
 
-  function showMatchBriefing(secondHalf) {
+  /** @param {'firstHalf'|'secondHalf'|'extraFirst'|'extraSecond'|'shootout'} [kind] */
+  function showMatchBriefing(kind = 'firstHalf') {
     showingGuide = false;
     guidePanel.hidden = true;
     briefingTeams.hidden = false;
     briefingNotice.hidden = false;
     startMatchBtn.hidden = false;
-    briefingEyebrow.textContent = secondHalf ? 'GROUP A · MATCH 54 · SECOND HALF' : 'GROUP A · MATCH 54';
-    briefingTitle.textContent = secondHalf ? '후반전이 곧 시작됩니다' : '경기가 곧 시작됩니다';
-    briefingDescription.textContent = secondHalf
-      ? '후반전에는 양 팀의 진영과 골대 위치가 서로 바뀝니다.'
-      : '양 팀의 유니폼 색상을 확인한 뒤 경기를 시작하세요.';
+    const copy = BREAK_COPY[kind] ?? BREAK_COPY.firstHalf;
+    const matchTag = runStep?.eyebrow ?? 'FRIENDLY MATCH';
+    briefingEyebrow.textContent = copy.eyebrow ? `${matchTag} · ${copy.eyebrow}` : matchTag;
+    briefingTitle.textContent = copy.title ?? '경기가 곧 시작됩니다';
+    briefingDescription.textContent = copy.description ?? '양 팀의 유니폼 색상을 확인한 뒤 경기를 시작하세요.';
     startMatchBtn.focus();
   }
 
@@ -1190,30 +1322,34 @@ export default function matchScreen(root, ctx) {
       guideNextBtn.focus();
       return;
     }
-    showMatchBriefing(false);
+    showMatchBriefing('firstHalf');
   });
 
   function openKickoffBriefing(kind) {
     briefingKind = kind;
     briefingConfirming = false;
-    const secondHalf = kind === 'secondHalf';
-    matchPhase = secondHalf ? 'halftimeBriefing' : 'kickoffBriefing';
+    const isKickoff = kind === 'firstHalf';
+    matchPhase = isKickoff ? 'kickoffBriefing' : 'halftimeBriefing';
     paused = true;
-    const leftSide = secondHalf ? matchSides.away : matchSides.home;
-    const rightSide = secondHalf ? matchSides.home : matchSides.away;
+    // 진영이 바뀌는 기간(후반·연장 후반)에는 화면 좌우도 뒤집어 보여 준다.
+    // 연장 전반은 다시 원래 진영이므로 전반과 같다.
+    const swapped = kind === 'secondHalf' || kind === 'extraSecond';
+    const leftSide = swapped ? matchSides.away : matchSides.home;
+    const rightSide = swapped ? matchSides.home : matchSides.away;
     briefingTeams.replaceChildren(
       teamCard(leftSide,leftSide.teamId==='KOR'),
       el('strong',{class:'kickoff-dialog__versus',text:'VS'}),
       teamCard(rightSide,rightSide.teamId==='KOR'),
     );
-    briefingNotice.textContent = secondHalf
-      ? `골대 위치가 바뀝니다. 대한민국은 오른쪽 진영의 ${koreaSide?.uniformLabel ?? ''} 팀입니다.`
+    const copy = BREAK_COPY[kind] ?? BREAK_COPY.firstHalf;
+    briefingNotice.textContent = copy.notice
+      ? copy.notice(koreaSide?.uniformLabel ?? '')
       : koreaSide
         ? `대한민국은 왼쪽 진영의 ${koreaSide.uniformLabel} 팀입니다.`
         : '대한민국의 유니폼 색상을 확인하세요.';
-    startMatchBtn.textContent = secondHalf ? '후반 시작 →' : '경기 시작 →';
-    if (secondHalf) {
-      showMatchBriefing(true);
+    startMatchBtn.textContent = copy.start;
+    if (!isKickoff) {
+      showMatchBriefing(kind);
     } else {
       showingGuide = true;
       guideIndex = 0;
@@ -1233,8 +1369,9 @@ export default function matchScreen(root, ctx) {
   startMatchBtn.addEventListener('click',()=>{
     if (briefingConfirming) return;
     briefingConfirming = true;
-    if (briefingKind === 'secondHalf') {
-      sim.startSecondHalf({ swapEnds:true });
+    // 승부차기는 sim이 이미 시작해 둔 상태(첫 키커까지 배치돼 있다)라 여기서 할 일이 없다.
+    if (briefingKind === 'secondHalf' || briefingKind === 'extraFirst' || briefingKind === 'extraSecond') {
+      sim.startNextPeriod({ swapEnds:true });
       updateScoreboard();
       view.sync(0);
     }
@@ -1253,6 +1390,7 @@ export default function matchScreen(root, ctx) {
       banner,
       koreaGoalBanner,
       concedeBanner,
+      shootoutBoard,
       el("div", { class: "hud" }, [
         scoreEl,
         el("div", { class: "row" }, [

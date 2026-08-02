@@ -94,11 +94,18 @@ export function validateMatchSetupForSim(matchSetup) {
  * assignment에 실려 온 정규화 좌표만 월드 좌표로 바꿔 쓴다.
  */
 export class Sim {
-  /** @param {object} matchSetup MatchSetup version 1 */
-  constructor(matchSetup) {
+  /**
+   * @param {object} matchSetup MatchSetup version 1
+   * @param {object} [rules] 이 경기에만 적용되는 대회 규칙.
+   *   `extraTime`이 켜져 있으면 90분에 동점일 때 연장 전·후반(105분·120분)을 치르고,
+   *   `shootout`까지 켜져 있으면 120분에도 동점일 때 승부차기로 승자를 가린다.
+   *   둘 다 기본값은 false다 — 친선·조별리그는 90분에 무승부로 끝나는 게 정상이다.
+   */
+  constructor(matchSetup, { extraTime = false, shootout = false } = {}) {
     const check = validateMatchSetupForSim(matchSetup);
     if (!check.ok) throw new Error(`잘못된 MatchSetup: ${check.errors.join(' / ')}`);
 
+    this.rules = { extraTime, shootout };
     this.setup = matchSetup;
     this.matchId = matchSetup.matchId;
     this.seed = Number.isFinite(matchSetup.seed) ? matchSetup.seed : 2026;
@@ -120,8 +127,15 @@ export class Sim {
     this.eventSeq = 0; // 이벤트 고유 id 발급용 — events가 50개 넘어가면 shift()로 앞이 밀리므로,
     // UI 쪽에서 배열 인덱스로 "어디까지 그렸는지" 추적하면 밀린 만큼 어긋나 중복/누락이 난다.
     // 안 변하는 id를 UI가 대신 추적하게 한다.
+    // 1 = 전반, 2 = 후반, 3 = 연장 전반, 4 = 연장 후반. 홀수 기간은 원래 진영,
+    // 짝수 기간은 진영을 바꾼 상태다(매 기간 사이에 코트를 바꾼다) — refreshHomeSlots()가
+    // 이 규칙 하나로 공격 방향을 정하므로 half는 항상 이 의미를 지켜야 한다.
     this.half = 1;
-    this.phase = 'playing'; // 'playing' | 'halftime' | 'fulltime'
+    // 'playing' | 'halftime' | 'extratime-break' | 'extratime-halftime' | 'shootout' | 'fulltime'
+    // 'playing'이 아닌 값은 전부 "지금 볼이 안 구르고 있다"는 뜻이고, 화면이 각각에 맞는
+    // 안내를 띄운 뒤 다음 기간을 시작한다. 'shootout'만은 예외로 계속 step()이 돈다.
+    this.phase = 'playing';
+    this.shootout = null; // 승부차기 상태 — beginShootout()이 채운다
     this.kickoffLock = null; // { team, active } — 킥오프 제한 구역 규칙
     // { from, until } — 코너킥이 날아오는 동안 문전 배치를 붙잡는다. 숫자 두 개뿐이라
     // 스냅샷이 무거워지지 않고, kickoffLock과 같은 방식이라 되감기 처리도 똑같다.
@@ -270,7 +284,8 @@ export class Sim {
       const a = this.homeLineup.assignments[i];
       if (!a) return;
       const s = assignmentSlot(a, 'home', this.tactics.width);
-      const halfTurn = this.half === 2 ? -1 : 1;
+      // 짝수 기간(후반·연장 후반)은 진영을 바꿔 뛴다.
+      const halfTurn = this.half % 2 === 0 ? -1 : 1;
       p.home.x = s.x * halfTurn;
       p.home.z = s.z * halfTurn;
       p.attackDirection = halfTurn;
@@ -367,8 +382,20 @@ export class Sim {
 
   /** 후반 시작 — 관례상 원정팀 킥오프 */
   startSecondHalf({ swapEnds = false } = {}) {
-    if (this.half === 2) return;
-    this.half = 2;
+    if (this.half !== 1) return;
+    this.startNextPeriod({ swapEnds });
+  }
+
+  /**
+   * 다음 기간(후반 / 연장 전반 / 연장 후반)을 시작한다.
+   *
+   * 킥오프 팀은 기간마다 번갈아 간다 — 전반은 홈, 후반은 원정, 연장 전반은 다시 홈,
+   * 연장 후반은 원정. 진영도 매 기간 바꾸므로 half의 홀짝이 곧 공격 방향이 된다
+   * (refreshHomeSlots의 halfTurn과 같은 규칙이다).
+   */
+  startNextPeriod({ swapEnds = false } = {}) {
+    if (this.half >= 4) return;
+    this.half += 1;
     this.phase = 'playing';
     if (swapEnds) {
       // 진영 교체는 포메이션을 센터 기준으로 180도 돌리고 공격 골대도 반대로 바꾼다.
@@ -384,19 +411,58 @@ export class Sim {
         p.command = null;
       }
     }
-    this.kickoff({ kickoffTeam: 'away' });
+    this.kickoff({ kickoffTeam: this.half % 2 === 0 ? 'away' : 'home' });
+  }
+
+  /** 그 기간이 끝나는 시각(clockSeconds = 게임 분). 45 / 90 / 105 / 120 */
+  periodEndClock(half = this.half) {
+    const regulation = PARAMS.halfMinutes * Math.min(half, 2);
+    return regulation + PARAMS.extraHalfMinutes * Math.max(0, half - 2);
+  }
+
+  /** 그 기간이 시작한 tick — 되감기가 기간 경계를 넘지 않게 자를 때 쓴다. */
+  periodStartTick(half = this.half) {
+    return half <= 1 ? 0 : this.periodEndClock(half - 1) / PARAMS.dt;
+  }
+
+  get drawn() {
+    return this.score.home === this.score.away;
   }
 
   /**
-   * 전/후반 종료를 판단한다. matchMinute(표시용, Math.floor)가 아니라 clockSeconds로 비교한다 —
+   * 전/후반·연장 종료를 판단한다. matchMinute(표시용, Math.floor)가 아니라 clockSeconds로 비교한다 —
    * halfMinutes가 1보다 작아지면 floor 때문에 halftime·fulltime 임계값이 같은 정수로 뭉개질 수 있다.
+   *
+   * 규칙(실제 축구): 90분 동점이면 연장 전·후반 15분씩을 **끝까지** 치른다(골든골 없음).
+   * 120분에도 동점이면 승부차기로 넘어간다.
    */
   updatePhase() {
-    if (this.half === 1 && this.phase === 'playing' && this.clockSeconds >= PARAMS.halfMinutes) {
+    if (this.phase !== 'playing') return;
+    if (this.clockSeconds < this.periodEndClock()) return;
+
+    if (this.half === 1) {
       this.phase = 'halftime';
-    } else if (this.half === 2 && this.phase === 'playing' && this.clockSeconds >= PARAMS.halfMinutes * 2) {
-      this.phase = 'fulltime';
+      return;
     }
+    if (this.half === 2) {
+      if (this.rules.extraTime && this.drawn) {
+        this.phase = 'extratime-break';
+        this.pushEvent('period', 'home', '90분 종료 · 연장전');
+        return;
+      }
+      this.phase = 'fulltime';
+      return;
+    }
+    if (this.half === 3) {
+      this.phase = 'extratime-halftime';
+      return;
+    }
+    // 연장 후반 종료
+    if (this.rules.shootout && this.drawn) {
+      this.beginShootout();
+      return;
+    }
+    this.phase = 'fulltime';
   }
 
   playerByKey(key) {
@@ -407,6 +473,9 @@ export class Sim {
 
   step() {
     if (this.phase === 'fulltime') return; // 종료 후에는 위치를 더 갱신하지 않는다 (호출은 무해하게 무시)
+    // 승부차기는 경기가 아니다 — 필드 플레이어 판단·대형·체력을 전부 멈추고
+    // 키커와 골키퍼만 움직이는 전용 루프로 넘긴다.
+    if (this.phase === 'shootout') return this.stepShootout();
 
     // 매 스텝 시작 시 이전 스텝에서 남은 볼 속도로 킥오프 제한 해제 여부를 판정한다
     if (this.kickoffLock?.active && vlen(this.ball.vx, this.ball.vz) > PARAMS.kickoffUnlockSpeed) {
@@ -1048,13 +1117,15 @@ export class Sim {
    * 결과는 셋 중 하나다 — 잡거나(캐치), 손끝에 걸려 쳐내거나(펀칭), 완전히 지나치거나.
    * 세 번째가 반드시 있어야 골이 들어간다. 확률 한 번만 굴려서 세 구간으로 나눈다.
    *
+   * @param {number} [ownGoalXOverride] 지킬 골문의 x. 승부차기는 규칙상 한쪽 골대에서만
+   *   차므로, 그 기간의 공격 방향과 무관하게 실제로 서 있는 골문을 넘겨준다.
    * @returns {boolean} 이번 틱에 골키퍼가 볼을 실제로 건드렸는지
    */
-  tryGoalkeeperClaim(gk) {
+  tryGoalkeeperClaim(gk, ownGoalXOverride) {
     if (gk.kc > 0) return false;
     const b = this.ball;
     if (b.carrierKey) return false; // 누가 발밑에 두고 있으면 그건 태클 문제다
-    const ownGoalX = -gk.attackDirection * HALF.L;
+    const ownGoalX = ownGoalXOverride ?? -gk.attackDirection * HALF.L;
     if (Math.abs(b.x - ownGoalX) > PENALTY_AREA.depth || Math.abs(b.z) > PENALTY_AREA.halfWidth) return false;
     if (b.y > PARAMS.gkReachHeight) return false;
     const dist = vlen(gk.x - b.x, gk.z - b.z);
@@ -1125,7 +1196,10 @@ export class Sim {
 
       // 키퍼가 의도한 몫. 단위벡터로 만들어 곱하므로 control=1이면 예전과 같은 세기(gkPunchForce)다.
       const intended = 1 / Math.SQRT2;
-      const wx = gk.attackDirection * intended * PARAMS.gkPunchForce * control;
+      // 걷어내는 방향은 "지키는 골문의 반대쪽". attackDirection을 그대로 쓰면 승부차기처럼
+      // 공격 방향과 실제로 서 있는 골문이 어긋난 상황에서 자기 골문 안으로 쳐넣게 된다.
+      const clearDir = ownGoalX >= 0 ? -1 : 1;
+      const wx = clearDir * intended * PARAMS.gkPunchForce * control;
       const wz = side * intended * PARAMS.gkPunchForce * control;
 
       // 못 댄 몫. 골문 정면으로 온 볼일수록 옆으로 더 크게 밀어내야 포스트를 벗어난다 —
@@ -1403,6 +1477,194 @@ export class Sim {
     return closest(side, this.ball);
   }
 
+  // ==========================================================================
+  // 승부차기 (연장 120분에도 동점일 때)
+  //
+  // 실제 규칙 중 여기서 지키는 것:
+  //  - 한쪽 골대에서만 찬다(주심이 고른다 → 여기서는 연장 후반 홈팀 공격 방향으로 고정).
+  //  - 어느 팀이 먼저 찰지는 동전 던지기(시드 기반이라 되감기·재현이 가능하다).
+  //  - 양 팀이 번갈아 5번씩 찬다. 남은 킥을 다 성공해도 못 따라잡으면 그 자리에서 끝난다.
+  //  - 5-5 뒤에는 서든데스 — 같은 횟수를 찬 시점에 점수가 다르면 끝난다.
+  //  - 찰 수 있는 사람은 연장 종료 시점에 경기장에 있던 선수뿐이고(퇴장·부상 제외),
+  //    전원이 한 번씩 찬 뒤에야 두 번째로 찰 수 있다.
+  //  - 인원이 적은 팀에 맞춰 많은 쪽이 인원을 줄인다(동수 원칙).
+  //  - 승부차기 득점은 경기 스코어에 더하지 않는다 — 승자를 가리는 데만 쓴다.
+  // ==========================================================================
+
+  /** 승부차기를 찰 수 있는 선수들 — 슛 능력 순. 실제 규칙대로 골키퍼도 포함한다. */
+  shootoutKickerOrder(team) {
+    const side = team === 'home' ? this.homeP : this.awayP;
+    return side
+      .filter((p) => !p.sentOff && !p.injured)
+      // 동점이면 idx로 갈라 같은 seed에서 항상 같은 순서가 나오게 한다(되감기 재현).
+      .sort((a, b) => b.shootSkill - a.shootSkill || a.idx - b.idx)
+      .map((p) => p.idx);
+  }
+
+  beginShootout() {
+    const home = this.shootoutKickerOrder('home');
+    const away = this.shootoutKickerOrder('away');
+    // 동수 원칙 — 인원이 많은 팀이 슛이 약한 순서부터 뺀다.
+    const squad = Math.min(home.length, away.length);
+    // 동전 던지기는 seededRandom(tick, playerId, actionId)으로 굴리면 안 된다 — 세 값이
+    // 어느 경기에서나 똑같아서(항상 120분, 고정 id) 결과가 매 경기 같은 팀으로 나온다.
+    // 경기 seed에서 출발하는 스트림 난수를 쓴다(스냅샷에 담기므로 재현성도 그대로다).
+    const first = this.rng.next() < 0.5 ? 'home' : 'away';
+    this.phase = 'shootout';
+    this.shootout = {
+      // 킥이 향하는 골대. 연장 후반에 홈팀이 공격하던 쪽을 그대로 쓴다.
+      endSide: this.homeP[0]?.attackDirection ?? 1,
+      first,
+      turn: first,
+      order: { home: home.slice(0, squad), away: away.slice(0, squad) },
+      next: { home: 0, away: 0 }, // order를 한 바퀴 돌면 다시 처음부터(전원이 한 번씩 찬 뒤 두 번째)
+      taken: { home: 0, away: 0 },
+      score: { home: 0, away: 0 },
+      kicks: [], // { team, num, name, scored } — 화면의 승부차기 보드가 그대로 그린다
+      current: null, // { team, idx }
+      stage: 'setup', // 'setup' → 'live' → 'result' → (다음 키커) 'setup'
+      stageUntil: 0,
+      winner: null,
+    };
+    this.pushEvent('shootout', first, `승부차기 시작 · ${first === 'home' ? '홈' : '원정'} 선축`);
+    this.prepareShootoutKick();
+  }
+
+  /** 다음 키커를 뽑아 볼과 선수를 배치한다(아직 안 찬다). */
+  prepareShootoutKick() {
+    const s = this.shootout;
+    const team = s.turn;
+    const order = s.order[team];
+    const side = team === 'home' ? this.homeP : this.awayP;
+    const kicker = side[order[s.next[team] % order.length]];
+    s.next[team]++;
+    s.current = { team, idx: kicker.idx };
+
+    this.ball.reset();
+    this.ball.x = s.endSide * (HALF.L - PARAMS.penaltySpotDepth);
+    this.ball.z = 0;
+    this.placePenaltyKick(kicker, s.endSide);
+    s.stage = 'setup';
+    s.stageUntil = this.tick + PARAMS.shootoutSetupTicks;
+  }
+
+  /**
+   * 승부차기 전용 스텝. 필드 플레이어는 전부 제자리에 멈춰 있고 볼과 골키퍼만 움직인다 —
+   * 일반 step()을 태우면 다른 선수들이 볼로 몰려들어 승부차기가 난투가 된다.
+   */
+  stepShootout() {
+    const s = this.shootout;
+    if (!s) return;
+    this.tick++;
+
+    if (s.stage === 'done') {
+      // 승부가 갈린 킥을 잠깐 보여 준 뒤에 경기를 끝낸다 — 결과 화면이 마지막 킥 위로
+      // 곧바로 덮이면 무엇으로 끝났는지 볼 수가 없다.
+      if (this.tick >= s.stageUntil) this.phase = 'fulltime';
+      return;
+    }
+
+    if (s.stage === 'setup') {
+      if (this.tick < s.stageUntil) return;
+      const side = s.current.team === 'home' ? this.homeP : this.awayP;
+      const gk = this.shootoutKeeper();
+      this.launchPenaltyKick(side[s.current.idx], s.endSide, gk, {
+        log: false,
+        rolls: { aim: this.rng.next(), dive: this.rng.next() },
+      });
+      s.stage = 'live';
+      s.stageUntil = this.tick + PARAMS.shootoutFlightTicks;
+      return;
+    }
+
+    if (s.stage === 'live') {
+      const gk = this.shootoutKeeper();
+      if (gk) {
+        if (gk.kc > 0) gk.kc--; // 일반 step()의 선수 루프가 하던 일 — 안 하면 영원히 못 막는다
+        this.tryGoalkeeperClaim(gk, s.endSide * HALF.L);
+      }
+      this.ball.update(PARAMS.dt);
+      const outcome = this.shootoutKickOutcome();
+      // 상한을 넘도록 결판이 안 났으면(포스트를 스치고 굴러다니는 등) 실축으로 확정한다.
+      if (outcome) this.resolveShootoutKick(outcome === 'goal');
+      else if (this.tick >= s.stageUntil) this.resolveShootoutKick(false);
+      return;
+    }
+
+    // 'result' — 결과를 보여 주는 사이. 끝나면 다음 키커로 넘어간다.
+    if (this.tick >= s.stageUntil) {
+      s.turn = s.turn === 'home' ? 'away' : 'home';
+      this.prepareShootoutKick();
+    }
+  }
+
+  /** 지금 킥을 막는 골키퍼. 퇴장·부상이면 없을 수도 있다(그러면 빈 골문이다). */
+  shootoutKeeper() {
+    const defenders = this.shootout.current.team === 'home' ? this.awayP : this.homeP;
+    return defenders.find((p) => p.role === 'GK' && !p.sentOff && !p.injured) ?? null;
+  }
+
+  /**
+   * 날아가는 중인 승부차기 킥의 결말. 아직 결판이 안 났으면 null.
+   * 리바운드는 규칙상 두 번째 슛이 없으므로, 골문을 안 지나친 볼이 멈추면 실축이다.
+   * @returns {'goal'|'miss'|null}
+   */
+  shootoutKickOutcome() {
+    const b = this.ball;
+    const dir = this.shootout.endSide;
+    if (b.y < GOAL_H && dir * b.x >= HALF.L && Math.abs(b.z) < GOAL_W / 2) return 'goal';
+    if (Math.abs(b.x) >= HALF.L || Math.abs(b.z) >= HALF.W) return 'miss'; // 골문을 벗어나 아웃
+    if (b.carrierKey) return 'miss'; // 키퍼가 잡았다
+    if (!b.airborne && vlen(b.vx, b.vz) < 0.4) return 'miss'; // 굴러가다 멈췄다(막힌 뒤 흐른 볼 포함)
+    return null;
+  }
+
+  /** 한 킥을 확정하고, 그걸로 승부가 갈렸는지 본다. */
+  resolveShootoutKick(scored) {
+    const s = this.shootout;
+    const { team, idx } = s.current;
+    const kicker = (team === 'home' ? this.homeP : this.awayP)[idx];
+    s.taken[team]++;
+    if (scored) s.score[team]++;
+    s.kicks.push({ team, num: kicker.num, name: kicker.name, scored });
+    this.pushEvent(
+      scored ? 'shootout-goal' : 'shootout-miss',
+      team,
+      `${kicker.name} 승부차기 ${scored ? '성공' : '실축'} (${s.score.home}-${s.score.away})`
+    );
+    this.ball.carrierKey = null; // 키퍼가 잡고 있어도 다음 킥을 위해 놓는다
+
+    const winner = this.shootoutWinner();
+    s.stage = winner ? 'done' : 'result';
+    s.stageUntil = this.tick + PARAMS.shootoutResultTicks;
+    if (winner) {
+      s.winner = winner;
+      this.pushEvent('shootout', winner, `승부차기 ${s.score.home}-${s.score.away} 종료`);
+    }
+  }
+
+  /**
+   * 지금까지의 킥으로 승자가 정해졌는가.
+   *
+   * 정규 5킥 동안은 "남은 킥을 다 넣어도 못 따라잡는" 순간 바로 끝난다(실제 규칙의 조기 종료).
+   * 5킥을 다 찬 뒤에는 양 팀이 **같은 횟수**를 찬 시점에만 비교한다(서든데스).
+   * @returns {'home'|'away'|null}
+   */
+  shootoutWinner() {
+    const s = this.shootout;
+    const rounds = PARAMS.shootoutRegularKicks;
+    const { home: hTaken, away: aTaken } = s.taken;
+    if (hTaken < rounds || aTaken < rounds) {
+      const hLeft = Math.max(0, rounds - hTaken);
+      const aLeft = Math.max(0, rounds - aTaken);
+      if (s.score.home > s.score.away + aLeft) return 'home';
+      if (s.score.away > s.score.home + hLeft) return 'away';
+      return null;
+    }
+    if (hTaken !== aTaken || s.score.home === s.score.away) return null;
+    return s.score.home > s.score.away ? 'home' : 'away';
+  }
+
   /**
    * 페널티킥 — 키커 대 골키퍼 단독 상황.
    *
@@ -1413,12 +1675,28 @@ export class Sim {
    *
    * 두 굴림은 actionId가 달라야(PENALTY_AIM vs PENALTY_DIVE) 서로 독립이다 — 같으면
    * 키퍼가 항상 맞히거나 항상 틀린다.
+   *
+   * 배치(placePenaltyKick)와 킥(launchPenaltyKick)이 나뉘어 있는 이유는 승부차기 때문이다.
+   * 경기 중 페널티킥은 둘을 한 틱에 이어서 하지만, 승부차기는 배치를 먼저 보여 주고
+   * 잠시 뒤에 차야 한 킥씩 눈에 들어온다.
+   *
+   * @param {number} [dirOverride] 킥이 향하는 골대(+1/-1). 승부차기는 규칙상 한쪽 골대에서만
+   *   차므로 키커의 공격 방향 대신 이 값을 쓴다.
    */
-  executePenaltyKick(kicker) {
-    const dir = kicker.attackDirection;
+  executePenaltyKick(kicker, dirOverride) {
+    const dir = dirOverride ?? kicker.attackDirection;
+    const gk = this.placePenaltyKick(kicker, dir);
+    this.launchPenaltyKick(kicker, dir, gk);
+  }
+
+  /**
+   * 페널티킥 배치 — 키커는 볼 뒤, 키퍼는 골라인 정면, 나머지는 전원 박스 밖(실제 규칙).
+   * @returns {object|null} 막을 골키퍼(없으면 null)
+   */
+  placePenaltyKick(kicker, dir) {
     const goalX = dir * HALF.L;
     const opponents = kicker.team === 'home' ? this.awayP : this.homeP;
-    const gk = opponents.find((p) => p.role === 'GK' && !p.sentOff && !p.injured);
+    const gk = opponents.find((p) => p.role === 'GK' && !p.sentOff && !p.injured) ?? null;
 
     // 키커와 키퍼를 뺀 전원은 박스 밖에 선다(실제 규칙). 표를 두지 않고 폭에 고르게
     // 늘어세운다 — 퇴장·부상으로 인원이 줄어도 그대로 동작한다.
@@ -1438,7 +1716,33 @@ export class Sim {
     kicker.vx = 0;
     kicker.vz = 0;
 
-    const aimRoll = seededRandom(this.tick, seededRandomPlayerId(kicker.team, kicker.idx), ACTION_ID.PENALTY_AIM);
+    if (gk) {
+      // 다이브는 킥 순간에 정한다(launchPenaltyKick) — 여기서는 골문 정면에 세워만 둔다.
+      gk.x = goalX - dir * PARAMS.penaltyGkLineOffset;
+      gk.z = 0;
+      gk.vx = 0;
+      gk.vz = 0;
+      gk.kc = 0;
+    }
+    return gk;
+  }
+
+  /**
+   * 페널티킥 실행 — 키커의 조준과 키퍼의 다이브를 굴려 키퍼를 세운 뒤 실제로 찬다.
+   * @param {boolean} [log] 행동로그에 "페널티킥"을 남길지. 승부차기는 성공/실패가 난 뒤에
+   *   결과와 함께 한 줄로 남기므로 여기서는 안 남긴다.
+   * @param {{aim:number, dive:number}} [rolls] 조준·다이브 굴림을 밖에서 넣는다(승부차기 전용).
+   *   경기 중 페널티킥은 되감기 재현 때문에 seededRandom(tick, playerId, actionId)이어야 하지만,
+   *   승부차기는 그 세 입력이 지나치게 규칙적이다 — 골키퍼 id는 팀당 하나로 고정이고 킥 간격도
+   *   거의 일정해서, 해시가 특정 팀 쪽으로 계속 같은 방향을 내놓는다(실측: 홈 성공률 60% vs
+   *   원정 70%, 오차각·체력·압박은 완전히 동일한데도). 승부차기는 되감기 대상이 아니므로
+   *   경기 seed에서 출발하는 스트림 난수를 대신 쓴다.
+   */
+  launchPenaltyKick(kicker, dir, gk, { log = true, rolls = null } = {}) {
+    const goalX = dir * HALF.L;
+    const aimRoll = rolls
+      ? rolls.aim
+      : seededRandom(this.tick, seededRandomPlayerId(kicker.team, kicker.idx), ACTION_ID.PENALTY_AIM);
     const aimSide = aimRoll < 0.5 ? -1 : 1;
     // 조준점은 스탯과 무관하게 고정이다 — 페널티킥은 찍기 싸움으로 둔다.
     // (슛 스탯으로 구석에 더 붙이게 해 봤지만, 그러면 페널티가 스탯 대결이 된다.
@@ -1446,7 +1750,9 @@ export class Sim {
     const targetZ = aimSide * (GOAL_W / 2) * PARAMS.penaltyAimFraction;
 
     if (gk) {
-      const diveRoll = seededRandom(this.tick, seededRandomPlayerId(gk.team, gk.idx), ACTION_ID.PENALTY_DIVE);
+      const diveRoll = rolls
+        ? rolls.dive
+        : seededRandom(this.tick, seededRandomPlayerId(gk.team, gk.idx), ACTION_ID.PENALTY_DIVE);
       const diveSide = diveRoll < 0.5 ? -1 : 1;
       gk.x = goalX - dir * PARAMS.penaltyGkLineOffset;
       gk.z = diveSide * PARAMS.penaltyDiveReach;
@@ -1466,7 +1772,7 @@ export class Sim {
     // 슛으로 표시해야 키퍼가 막았을 때 "선방"으로 기록된다(일반 슛과 같은 경로).
     this.ball.shotBy = kickerKey;
     kicker.kc = PARAMS.kickCooldownTicks;
-    this.pushEvent('shot', kicker.team, `${kicker.name} 페널티킥`);
+    if (log) this.pushEvent('shot', kicker.team, `${kicker.name} 페널티킥`);
   }
 
   /**
@@ -1752,7 +2058,7 @@ export class Sim {
   getRewindTargetTick() {
     const concede = this.getActiveConcedeEvent();
     if (!concede) return null;
-    const halfStartTick = this.half === 2 ? PARAMS.halfMinutes / PARAMS.dt : 0;
+    const halfStartTick = this.periodStartTick();
     const target = concede.tick - PARAMS.rewindLookbackSeconds / PARAMS.dt;
     // 하프 시작보다 앞으로는 가지 않되, 실점 시점보다 뒤로도 가지 않는다
     // (하프 시작 직후에 실점하면 두 한계가 서로 엇갈릴 수 있다).
@@ -1764,8 +2070,11 @@ export class Sim {
    * 되감기가 의미를 가진다), 후반 막판이 아니어야 하고, 쿨다운도 지나 있어야 한다.
    */
   canRewind() {
+    if (this.phase === 'shootout') return false; // 승부차기는 스냅샷 대상이 아니다 — 찬 킥은 되돌릴 수 없다
     if (!this.getActiveConcedeEvent()) return false; // 되감기는 실점 순간에만 쓸 수 있다
-    if (this.half === 2 && this.matchMinute >= 85) return false; // 마지막 5분은 확정 — 되감기 불가
+    // 경기가 끝날 수 있는 기간(후반·연장 후반)의 마지막 5분은 확정 — 되감기 불가.
+    const canEndHere = this.half === 2 || this.half === 4;
+    if (canEndHere && this.matchMinute >= this.periodEndClock() - 5) return false;
     if (
       this.lastRewindTick !== null &&
       (this.tick - this.lastRewindTick) * PARAMS.dt < PARAMS.rewindCooldownSeconds
@@ -1866,15 +2175,18 @@ export class Sim {
     this.tick = s.tick;
     this.rng.s = s.rng;
     this.events.length = s.eventCount; // 되감은 시점 이후의 사건은 없던 일이 된다
+    // 옛 스냅샷 호환: half/phase/kickoffLock/lastRewindTick이 없으면 현재 값 유지.
+    // half는 반드시 refreshHomeSlots()보다 **먼저** 되돌려야 한다 — 그 안의 halfTurn이
+    // half의 홀짝으로 공격 방향을 정하므로, 순서가 뒤집히면 기간을 넘어 되감을 때
+    // 대형이 반대 진영으로 계산된다(지금은 되감기가 기간 안으로 잘리지만 그 보장에 기대지 않는다).
+    if (s.half !== undefined) this.half = s.half;
+    if (s.phase !== undefined) this.phase = s.phase;
     if (s.tactics) {
       this.tactics = { ...s.tactics }; // 옛 스냅샷 호환: 필드가 없으면 현재 값 유지
       // width는 p.home(정렬 목표 좌표)에서 파생된다. 재계산하지 않으면
       // 되감은 뒤에도 변경 후 width가 스티어링 목표에 남아 재현성이 깨진다.
       this.refreshHomeSlots();
     }
-    // 옛 스냅샷 호환: half/phase/kickoffLock/lastRewindTick이 없으면 현재 값 유지
-    if (s.half !== undefined) this.half = s.half;
-    if (s.phase !== undefined) this.phase = s.phase;
     if ('kickoffLock' in s) this.kickoffLock = s.kickoffLock ? { ...s.kickoffLock } : null;
     // 옛 스냅샷 호환: setPieceHold가 없던 시절엔 홀드 자체가 없었으므로 null이 그 시점의
     // 정확한 상태다(현재 값을 남기면 되감은 뒤에 있지도 않던 홀드가 걸린다).

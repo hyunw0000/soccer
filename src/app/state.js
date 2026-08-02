@@ -37,7 +37,9 @@ const initial = {
   tournamentBracket: null,
   // 남아공전이 끝난 뒤에만 { homeScore, awayScore }를 저장한다. home이 남아공이다.
   groupAFinalResult: null,
-  // 32강부터의 우리 경기 결과 [{ matchId, koreaScore, opponentScore }]. 진행 순서대로만 쌓인다.
+  // 32강부터의 우리 경기 결과. 진행 순서대로만 쌓인다.
+  // [{ matchId, koreaScore, opponentScore, koreaPenaltyScore?, opponentPenaltyScore?, extraTime? }]
+  // — 연장·승부차기는 무승부가 허용되지 않는 32강 이후에만 붙는다.
   knockoutResults: [],
   // 경기를 치를 때마다 오르는 번호. MatchSetup의 seed에 섞어서 같은 라운드를 다시 치러도
   // 지난번과 똑같은 경기가 반복되지 않게 한다.
@@ -78,12 +80,21 @@ export const gameProgress = () =>
 
 /**
  * 방금 끝난 경기 결과를 저장한다. 점수는 항상 우리 팀 관점이다.
+ * 32강부터는 연장·승부차기까지 갈 수 있어 그 결과도 함께 받는다 —
+ * 승부차기 점수는 경기 스코어에 더하지 않고 승자를 가리는 데만 쓴다.
  * @returns {object} 반영된 뒤의 진행 상태
  */
-export function recordKoreaMatch({ matchId, koreaScore, opponentScore }) {
+export function recordKoreaMatch({
+  matchId,
+  koreaScore,
+  opponentScore,
+  koreaPenaltyScore = null,
+  opponentPenaltyScore = null,
+  extraTime = false,
+}) {
   const saved = applyKoreaMatchResult(
     { groupAFinalResult: state.groupAFinalResult, knockoutResults: state.knockoutResults },
-    { matchId, koreaScore, opponentScore }
+    { matchId, koreaScore, opponentScore, koreaPenaltyScore, opponentPenaltyScore, extraTime }
   );
   const progress = createGameProgress(saved);
   setState({

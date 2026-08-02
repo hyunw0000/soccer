@@ -28,9 +28,28 @@ const KNOCKOUT_RUN = Object.freeze(KOREA_RUN.slice(1));
 export const findRunStep = (matchId) => KOREA_RUN.find((step) => step.matchId === matchId) ?? null;
 const runIndex = (matchId) => KOREA_RUN.findIndex((step) => step.matchId === matchId);
 
-/** 우리 팀 관점의 경기 결과. 진출 여부는 조별리그와 토너먼트 규칙에 따라 별도로 판단한다. */
-export const outcomeOf = (koreaScore, opponentScore) =>
-  koreaScore > opponentScore ? 'win' : koreaScore === opponentScore ? 'draw' : 'loss';
+/**
+ * 우리 팀 관점의 경기 결과. 진출 여부는 조별리그와 토너먼트 규칙에 따라 별도로 판단한다.
+ *
+ * 32강부터는 90분(그리고 연장 120분)에 동점이면 승부차기로 승자를 가리므로, 승부차기
+ * 점수가 있으면 그걸로 승패를 정한다 — 그때도 경기 스코어(koreaScore/opponentScore)는
+ * 연장 종료 시점의 점수 그대로다(실제 축구도 승부차기 득점은 스코어에 안 더한다).
+ */
+export const outcomeOf = (koreaScore, opponentScore, koreaPenaltyScore = null, opponentPenaltyScore = null) => {
+  if (koreaScore !== opponentScore) return koreaScore > opponentScore ? 'win' : 'loss';
+  if (Number.isInteger(koreaPenaltyScore) && Number.isInteger(opponentPenaltyScore) && koreaPenaltyScore !== opponentPenaltyScore) {
+    return koreaPenaltyScore > opponentPenaltyScore ? 'win' : 'loss';
+  }
+  return 'draw';
+};
+
+/** 승부차기 점수는 둘 다 0 이상 정수이고 서로 달라야(승자가 있어야) 유효하다. */
+const validPenaltyScores = (a, b) =>
+  Number.isInteger(a) && a >= 0 && Number.isInteger(b) && b >= 0 && a !== b;
+
+/** 저장된 결과 한 건의 승패. */
+const resultOutcome = (r) =>
+  outcomeOf(r.koreaScore, r.opponentScore, r.koreaPenaltyScore ?? null, r.opponentPenaltyScore ?? null);
 
 /** 저장값을 믿지 않는다: 경로에 있는 경기의 0 이상 정수 점수만 진행 순서대로 남긴다. */
 export function normalizeKnockoutResults(results) {
@@ -42,8 +61,18 @@ export function normalizeKnockoutResults(results) {
     const koreaScore = Number(found.koreaScore);
     const opponentScore = Number(found.opponentScore);
     if (!Number.isInteger(koreaScore) || koreaScore < 0 || !Number.isInteger(opponentScore) || opponentScore < 0) break;
-    kept.push({ matchId: step.matchId, koreaScore, opponentScore });
-    if (outcomeOf(koreaScore, opponentScore) !== 'win') break; // 탈락 뒤의 경기는 없다
+    const entry = { matchId: step.matchId, koreaScore, opponentScore };
+    // 승부차기 점수는 실제로 승부차기까지 간 경기(동점)에만 남긴다.
+    const koreaPk = Number(found.koreaPenaltyScore);
+    const oppPk = Number(found.opponentPenaltyScore);
+    if (koreaScore === opponentScore && validPenaltyScores(koreaPk, oppPk)) {
+      entry.koreaPenaltyScore = koreaPk;
+      entry.opponentPenaltyScore = oppPk;
+    }
+    // 연장까지 갔는지는 승패에 영향이 없지만 대진표 표시(AET)에 쓴다.
+    if (found.extraTime === true) entry.extraTime = true;
+    kept.push(entry);
+    if (resultOutcome(entry) !== 'win') break; // 탈락 뒤의 경기는 없다
   }
   return kept;
 }
@@ -74,17 +103,35 @@ export function createGameProgress({ groupAFinalResult = null, knockoutResults =
     for (const step of KNOCKOUT_RUN) {
       const result = results.find((r) => r.matchId === step.matchId);
       if (!result) break;
-      const outcome = outcomeOf(result.koreaScore, result.opponentScore);
-      const [homeScore, awayScore] = step.koreaSide === 'home'
+      const outcome = resultOutcome(result);
+      const koreaHome = step.koreaSide === 'home';
+      const [homeScore, awayScore] = koreaHome
         ? [result.koreaScore, result.opponentScore]
         : [result.opponentScore, result.koreaScore];
+      const shootout = Number.isInteger(result.koreaPenaltyScore);
+      const [homePk, awayPk] = !shootout
+        ? [null, null]
+        : koreaHome
+          ? [result.koreaPenaltyScore, result.opponentPenaltyScore]
+          : [result.opponentPenaltyScore, result.koreaPenaltyScore];
       bracket = recordMatchResult(bracket, {
         matchId: step.matchId,
         homeScore,
         awayScore,
         winnerTeamId: outcome === 'win' ? 'KOR' : step.opponentTeamId,
+        resultType: shootout ? 'PENALTIES' : result.extraTime ? 'AET' : 'REGULATION',
+        homePenaltyScore: homePk,
+        awayPenaltyScore: awayPk,
       });
-      played.push({ ...step, koreaScore: result.koreaScore, opponentScore: result.opponentScore, outcome });
+      played.push({
+        ...step,
+        koreaScore: result.koreaScore,
+        opponentScore: result.opponentScore,
+        koreaPenaltyScore: result.koreaPenaltyScore ?? null,
+        opponentPenaltyScore: result.opponentPenaltyScore ?? null,
+        extraTime: result.extraTime === true,
+        outcome,
+      });
       if (outcome !== 'win') { status = 'eliminated'; break; }
       if (step.stage === 'final') { status = 'champion'; break; }
     }
@@ -122,9 +169,17 @@ export function applyKoreaMatchResult({ groupAFinalResult = null, knockoutResult
   if (step.matchId === GROUP_FINAL_MATCH_ID) {
     return { groupAFinalResult: { homeScore: opponentScore, awayScore: koreaScore }, knockoutResults: [] };
   }
+  const entry = { matchId: step.matchId, koreaScore, opponentScore };
+  const koreaPk = Number(result.koreaPenaltyScore);
+  const oppPk = Number(result.opponentPenaltyScore);
+  if (koreaScore === opponentScore && validPenaltyScores(koreaPk, oppPk)) {
+    entry.koreaPenaltyScore = koreaPk;
+    entry.opponentPenaltyScore = oppPk;
+  }
+  if (result.extraTime === true) entry.extraTime = true;
   const before = new Set(KNOCKOUT_RUN.slice(0, runIndex(step.matchId) - 1).map((s) => s.matchId));
   const kept = normalizeKnockoutResults(knockoutResults).filter((r) => before.has(r.matchId));
-  return { groupAFinalResult, knockoutResults: [...kept, { matchId: step.matchId, koreaScore, opponentScore }] };
+  return { groupAFinalResult, knockoutResults: [...kept, entry] };
 }
 
 /** 그 경기를 치르기 직전으로 되돌린다 — 다시 시도 버튼이 쓰는 값. */

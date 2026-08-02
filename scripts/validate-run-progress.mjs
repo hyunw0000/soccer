@@ -1,12 +1,14 @@
 /**
  * 대회 진행 규칙 검증.
  * 남아공전은 승리 또는 무승부 시 진출하고, 토너먼트는 승리해야 진출한다.
+ * 32강부터는 무승부로 끝나지 않는다 — 연장(AET)이나 승부차기(PENALTIES)로 승자가 갈린다.
  */
 import {
   KOREA_RUN,
   applyKoreaMatchResult,
   clearKoreaMatchResult,
   createGameProgress,
+  normalizeKnockoutResults,
 } from '../src/tournament/domain/gameProgress.js';
 
 const errors = [];
@@ -75,6 +77,61 @@ check('32강 다시 시도 조별 결과 유지', retriedR32.groupAFinalResult?.
 check('32강 다시 시도 남은 결과 수', retriedR32.knockoutResults.length, 0);
 check('32강 다시 시도 다음 경기', createGameProgress(retriedR32).nextStep?.matchId, 73);
 
+// 8-1. 32강 무승부라도 승부차기를 이기면 진출한다 (연장 120분 뒤 승부차기)
+const pkWin = applyKoreaMatchResult(savedWin, {
+  matchId: 73, koreaScore: 1, opponentScore: 1,
+  koreaPenaltyScore: 4, opponentPenaltyScore: 3, extraTime: true,
+});
+const pkWonProgress = createGameProgress(pkWin);
+check('승부차기 승 status', pkWonProgress.status, 'playing');
+check('승부차기 승 다음 경기', pkWonProgress.nextStep?.matchId, 90);
+const pkMatch = pkWonProgress.bracket.matches.find((m) => m.matchId === 73);
+check('승부차기 승 승자', pkMatch?.winnerTeamId, 'KOR');
+check('승부차기 승 결과 종류', pkMatch?.resultType, 'PENALTIES');
+check('승부차기 승 대진표 점수(홈=대한민국)', pkMatch?.homeScore, 1);
+check('승부차기 승 대진표 PK', pkMatch?.homePenaltyScore, 4);
+
+// 8-2. 승부차기를 지면 탈락하고, 대진표에는 상대가 올라간다
+const pkLoss = createGameProgress(applyKoreaMatchResult(savedWin, {
+  matchId: 73, koreaScore: 2, opponentScore: 2,
+  koreaPenaltyScore: 3, opponentPenaltyScore: 5, extraTime: true,
+}));
+check('승부차기 패 status', pkLoss.status, 'eliminated');
+check('승부차기 패 승자', pkLoss.bracket.matches.find((m) => m.matchId === 73)?.winnerTeamId, 'CAN');
+check('승부차기 패 16강 홈', pkLoss.bracket.matches.find((m) => m.matchId === 90)?.homeTeamId, 'CAN');
+
+// 8-3. 우리가 원정인 8강(97번)은 대진표 홈/원정과 PK 점수가 뒤집혀 실린다
+const toQf = play(play(savedWin, 73, 1, 0), 90, 2, 0);
+const qfPk = createGameProgress(applyKoreaMatchResult(toQf, {
+  matchId: 97, koreaScore: 0, opponentScore: 0,
+  koreaPenaltyScore: 5, opponentPenaltyScore: 4, extraTime: true,
+}));
+const qfMatch = qfPk.bracket.matches.find((m) => m.matchId === 97);
+check('8강 원정 승부차기 승자', qfMatch?.winnerTeamId, 'KOR');
+check('8강 원정 PK 홈(프랑스)', qfMatch?.awayPenaltyScore, 5);
+check('8강 원정 PK 원정(대한민국)', qfMatch?.homePenaltyScore, 4);
+
+// 8-4. 연장에서 승부가 난 경기는 AET로 남고 승부차기 점수는 없다
+const aet = createGameProgress(applyKoreaMatchResult(savedWin, {
+  matchId: 73, koreaScore: 2, opponentScore: 1, extraTime: true,
+}));
+const aetMatch = aet.bracket.matches.find((m) => m.matchId === 73);
+check('연장 승 결과 종류', aetMatch?.resultType, 'AET');
+check('연장 승 PK 없음', aetMatch?.homePenaltyScore, null);
+check('연장 승 status', aet.status, 'playing');
+
+// 8-5. 저장값을 믿지 않는다: 동점이 아닌데 붙은 PK, 승자 없는 PK는 버린다
+const junk = normalizeKnockoutResults([
+  { matchId: 73, koreaScore: 2, opponentScore: 1, koreaPenaltyScore: 4, opponentPenaltyScore: 3 },
+]);
+check('동점 아닌 경기의 PK는 버린다', junk[0]?.koreaPenaltyScore, undefined);
+check('동점 아닌 경기의 승패는 그대로', junk.length, 1);
+const tiedPk = normalizeKnockoutResults([
+  { matchId: 73, koreaScore: 1, opponentScore: 1, koreaPenaltyScore: 3, opponentPenaltyScore: 3 },
+]);
+check('승자 없는 PK는 버린다', tiedPk[0]?.koreaPenaltyScore, undefined);
+check('승자 없는 PK 뒤는 이어지지 않는다', createGameProgress({ ...savedWin, knockoutResults: tiedPk }).status, 'eliminated');
+
 // 9. 결승까지 전승 → 우승
 let saved = savedWin;
 for (const step of KOREA_RUN.slice(1)) saved = play(saved, step.matchId, 2, 1);
@@ -91,4 +148,4 @@ check('준결승 패배 마지막 경기', lostSemi.lastPlayed?.matchId, 101);
 check('준결승 패배 결승 상태', lostSemi.bracket.matches.find((m) => m.matchId === 104)?.homeTeamId, 'ESP');
 
 if (errors.length) { console.error(errors.join('\n')); process.exitCode = 1; }
-else console.log(`대회 진행 규칙 검증 통과 · 조별리그 승/무 진출 · 토너먼트 승리 진출 · 다시 시도 · 전승 우승 (${KOREA_RUN.length}경기 경로)`);
+else console.log(`대회 진행 규칙 검증 통과 · 조별리그 승/무 진출 · 토너먼트 승리 진출 · 연장·승부차기 · 다시 시도 · 전승 우승 (${KOREA_RUN.length}경기 경로)`);

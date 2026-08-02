@@ -31,6 +31,9 @@ export class RewindBuffer {
 
   /** 매 스텝 뒤에 호출. 간격에 걸릴 때만 실제로 저장한다. */
   maybeRecord(sim) {
+    // 승부차기는 되감기 대상이 아니다(sim.canRewind()도 막는다). 스냅샷에 승부차기 상태가
+    // 없으므로 여기 담아 두면 나중에 복원할 때 오히려 어긋난 상태가 만들어진다.
+    if (sim.phase === 'shootout') return;
     if (sim.tick % this.intervalTicks !== 0) return;
     this.buf[this.head] = sim.snapshot();
     this.head = (this.head + 1) % this.capacity;

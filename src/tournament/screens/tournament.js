@@ -53,10 +53,18 @@ function currentMatchCard(progress,ctx,onRetry) {
   const [homeTeamId,awayTeamId] = step.koreaSide === 'home' ? ['KOR',step.opponentTeamId] : [step.opponentTeamId,'KOR'];
   const [homeScore,awayScore] = !played ? [null,null]
     : step.koreaSide === 'home' ? [played.koreaScore,played.opponentScore] : [played.opponentScore,played.koreaScore];
+  // 승부차기까지 간 경기는 경기 스코어 옆에 PK 점수를 따로 적는다(실제 대회 표기와 같다).
+  const shootout = played && Number.isInteger(played.koreaPenaltyScore);
+  const [homePk,awayPk] = !shootout ? [null,null]
+    : step.koreaSide === 'home' ? [played.koreaPenaltyScore,played.opponentPenaltyScore] : [played.opponentPenaltyScore,played.koreaPenaltyScore];
+  // 어떻게 끝났는지 — 32강부터는 90분 무승부가 곧 탈락이 아니다.
+  const endedBy = shootout ? '승부차기 끝에 ' : played?.extraTime ? '연장 접전 끝에 ' : '';
   const rule = champion ? '결승까지 모두 이겼습니다. 대한민국이 2026 월드 챔피언십의 주인공입니다.'
-    : eliminated ? `${played?.outcome === 'draw' ? '무승부' : '패배'}로 ${step.roundLabel}에서 탈락했습니다. 다시 시도할 수 있습니다.`
+    : eliminated ? (step.stage === 'group'
+        ? `${played?.outcome === 'draw' ? '무승부' : '패배'}로 조별리그에서 탈락했습니다. 다시 시도할 수 있습니다.`
+        : `${endedBy}${step.roundLabel}에서 탈락했습니다. 다시 시도할 수 있습니다.`)
     : step.stage === 'group' ? '승리 또는 무승부 시 A조 2위로 32강에 진출합니다. 패배하면 탈락입니다.'
-    : `승리하면 ${step.advanceLabel}, 무승부와 패배는 탈락입니다.`;
+    : `승리하면 ${step.advanceLabel}에 진출합니다. 90분 무승부면 연장 전·후반(105분·120분)을 치르고, 그래도 동점이면 승부차기입니다.`;
   const team = (teamId) => el('div',{class:'wc-compact-team'},[
     CountryFlag({teamId,size:'medium'}),
     el('strong',{text:shortName(teamId)}),
@@ -80,6 +88,8 @@ function currentMatchCard(progress,ctx,onRetry) {
       el('strong',{class:'wc-compact-final__versus',text:played?`${homeScore} : ${awayScore}`:'VS'}),
       team(awayTeamId),
     ]),
+    shootout ? el('p',{class:'wc-compact-final__meta',text:`승부차기 ${homePk} : ${awayPk}`})
+      : played?.extraTime ? el('p',{class:'wc-compact-final__meta',text:'연장 종료'}) : null,
     el('p',{class:'wc-compact-final__rule',text:rule}),
     !played ? el('button',{
       type:'button',class:'wc-compact-final__cta',
@@ -98,6 +108,9 @@ function currentMatchCard(progress,ctx,onRetry) {
 
 function matchOutcome(match,teamId) {
   if (match.status !== 'completed') return 'scheduled';
+  // 토너먼트는 무승부로 끝나지 않는다 — 90분에 동점이어도 연장·승부차기로 승자가 정해진다.
+  // 그래서 점수만 보고 'draw'로 칠하면 안 되고, 확정된 승자(winnerTeamId)를 먼저 본다.
+  if (match.winnerTeamId) return match.winnerTeamId === teamId ? 'win' : 'loss';
   const ownScore = match.homeTeamId === teamId ? match.homeScore : match.awayScore;
   const opponentScore = match.homeTeamId === teamId ? match.awayScore : match.homeScore;
   return ownScore === opponentScore ? 'draw' : ownScore > opponentScore ? 'win' : 'loss';
