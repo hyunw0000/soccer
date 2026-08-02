@@ -176,7 +176,7 @@ export function scoreShootCandidate(sim, p) {
 /** 드리블(전진 유지) 후보 — §6.5 U(드리블). */
 export function scoreDribbleCandidate(sim, p) {
   const opps = p.team === 'home' ? sim.awayP : sim.homeP;
-  const dir = p.team === 'home' ? 1 : -1;
+  const dir = p.attackDirection;
   let nearestAhead = Infinity;
   let nearestDefense = 60;
   let densityCount = 0;
@@ -217,7 +217,7 @@ export function scoreHoldCandidate(sim, p) {
 
 /** 클리어(무조건 걷어내기) 후보 — 자기 진영 3분의 1 안에서 압박받을 때만 등장한다. */
 export function scoreClearCandidate(sim, p) {
-  const ownThird = p.team === 'home' ? p.x < -HALF.L / 3 : p.x > HALF.L / 3;
+  const ownThird = p.x * p.attackDirection < -HALF.L / 3;
   if (!ownThird) return null;
   const density = pressureCount(sim, p);
   if (density < 1) return null; // 압박이 아예 없으면 클리어를 고려할 이유가 없다

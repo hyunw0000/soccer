@@ -170,8 +170,10 @@ export class Sim {
       const a = this.homeLineup.assignments[i];
       if (!a) return;
       const s = assignmentSlot(a, 'home', this.tactics.width);
-      p.home.x = s.x;
-      p.home.z = s.z;
+      const halfTurn = this.half === 2 ? -1 : 1;
+      p.home.x = s.x * halfTurn;
+      p.home.z = s.z * halfTurn;
+      p.attackDirection = halfTurn;
       p.role = s.role;
       // 경기 중 지시 변경도 여기로 들어온다. 다음 스텝부터 바로 반영된다.
       p.ins = s.instruction;
@@ -188,7 +190,7 @@ export class Sim {
    */
   blockShift(team) {
     const tactics = team === 'home' ? this.tactics : this.oppTactics;
-    const dir = team === 'home' ? 1 : -1;
+    const dir = (team === 'home' ? this.homeP : this.awayP)[0]?.attackDirection ?? (team === 'home' ? 1 : -1);
     const line = tactics.lineHeight;
     const raw =
       (this.ball.x / FIELD.L) * (14 + line * 22) + (line - 0.5) * PARAMS.lineHeightBasePush * dir;
@@ -237,7 +239,7 @@ export class Sim {
     }
     if (partner) {
       // 짧은 첫 패스를 받을 파트너를 자기 진영 쪽으로 살짝 물러선 위치(minPass 이상 거리)에 세운다
-      partner.x = (kickoffTeam === 'home' ? -1 : 1) * (PARAMS.minPass + 1);
+      partner.x = -taker.attackDirection * (PARAMS.minPass + 1);
       partner.z = 0;
     }
     if (taker && partner) {
@@ -253,9 +255,20 @@ export class Sim {
   }
 
   /** 후반 시작 — 관례상 원정팀 킥오프 */
-  startSecondHalf() {
+  startSecondHalf({ swapEnds = false } = {}) {
+    if (this.half === 2) return;
     this.half = 2;
     this.phase = 'playing';
+    if (swapEnds) {
+      // 진영 교체는 포메이션을 센터 기준으로 180도 돌리고 공격 골대도 반대로 바꾼다.
+      for (const p of this.all) {
+        p.home.x *= -1;
+        p.home.z *= -1;
+        p.attackDirection *= -1;
+        p.heading = (p.heading + Math.PI) % (Math.PI * 2);
+        p.command = null;
+      }
+    }
     this.kickoff({ kickoffTeam: 'away' });
   }
 
@@ -329,7 +342,7 @@ export class Sim {
           if (p.command.index >= p.command.waypoints.length) p.command = null; // 다 왔으면 기본 AI로 복귀
         }
       } else if (p.role === 'GK') {
-        const gx = (mine ? -HALF.L : HALF.L) + (mine ? 2 : -2);
+        const gx = -p.attackDirection * (HALF.L - 2);
         const gz = clamp(this.ball.z * 0.5, -GOAL_W / 2, GOAL_W / 2);
         [fx, fz] = arrive(p, gx, gz);
       } else if (isCarrier && p.dribbleMode === 'hold') {
@@ -339,7 +352,7 @@ export class Sim {
       } else if (isCarrier) {
         // 드리블 중 — 공을 몰고 상대 골 쪽으로 전진한다(목표를 매 틱 앞으로 다시 잡아 계속
         // 전진하게 만든다). 개인 지시(roaming)로 살짝 좌우 흔들림을 준다.
-        const dir = mine ? 1 : -1;
+        const dir = p.attackDirection;
         const tx = clamp(p.x + dir * PARAMS.dribbleLookahead, -HALF.L, HALF.L);
         const tz = clamp(p.z + (p.ins.roaming - 0.5) * PARAMS.dribbleLookahead, -HALF.W, HALF.W);
         [fx, fz] = arrive(p, tx, tz);
@@ -358,7 +371,7 @@ export class Sim {
         // 대형 전체가 같은 폭으로 밀린다(blockShift가 이미 경기장 안에 들어오도록 비율을
         // 맞춰 둔 값이다). 우리팀이 공을 갖고 있을 때만 개인차 있는 침투런을 얹는다.
         const shift = mine ? homeShift : awayShift;
-        const run = holding ? (p.ins.runs - 0.5) * RUN_PUSH * (mine ? 1 : -1) : 0;
+        const run = holding ? (p.ins.runs - 0.5) * RUN_PUSH * p.attackDirection : 0;
         // 침투런까지 더한 뒤 마지막으로 한 번 더 라인 안쪽으로 자른다 — 어떤 지시를 줘도
         // 목표 지점은 경기장 안이어야 한다.
         const margin = PARAMS.formationTargetGoalMargin;
@@ -373,7 +386,7 @@ export class Sim {
           const d = vlen(tx, tz);
           if (d < PARAMS.centerCircleRadius) {
             if (d < 1e-6) {
-              tx = (mine ? -1 : 1) * PARAMS.centerCircleRadius;
+              tx = -p.attackDirection * PARAMS.centerCircleRadius;
               tz = 0;
             } else {
               const scale = PARAMS.centerCircleRadius / d;
@@ -414,7 +427,7 @@ export class Sim {
         // 골라인에 안 닿는다 — 안 그러면 슛으로 놓는 순간 볼이 이미 골라인 위에 있어서
         // 슛이 날아가기도 전에 골로 잡히는 버그가 난다(실제로 겪었다).
         const goalLimit = HALF.L - PARAMS.dribbleCarryOffset - 0.5;
-        p.x = mine ? Math.min(p.x, goalLimit) : Math.max(p.x, -goalLimit);
+        p.x = p.attackDirection > 0 ? Math.min(p.x, goalLimit) : Math.max(p.x, -goalLimit);
       }
       if (sp > 0.5) p.heading = Math.atan2(p.vx, p.vz);
       if (p.kc > 0) p.kc--;
@@ -691,16 +704,20 @@ export class Sim {
   checkGoal() {
     const b = this.ball;
     if (b.x <= -HALF.L && Math.abs(b.z) < GOAL_W / 2) {
-      this.score.away++;
-      this.pushEvent('goal', 'away', '실점');
-      this.kickoff({ kickoffTeam: 'home' }); // 실점 팀이 킥오프한다
+      const scoringTeam = this.homeP[0]?.attackDirection === -1 ? 'home' : 'away';
+      const concedingTeam = scoringTeam === 'home' ? 'away' : 'home';
+      this.score[scoringTeam]++;
+      const scorer = this.playerByKey(b.lastTouchKey);
+      this.pushEvent('goal', scoringTeam, scoringTeam === 'home' && scorer ? `${scorer.name} 득점` : scoringTeam === 'home' ? '득점' : '실점');
+      this.kickoff({ kickoffTeam: concedingTeam });
       return true;
     } else if (b.x >= HALF.L && Math.abs(b.z) < GOAL_W / 2) {
-      this.score.home++;
-      // ownerKey는 kick() 순간 바로 null이 돼서 득점자를 못 찾는다 — lastTouchKey를 쓴다.
+      const scoringTeam = this.homeP[0]?.attackDirection === 1 ? 'home' : 'away';
+      const concedingTeam = scoringTeam === 'home' ? 'away' : 'home';
+      this.score[scoringTeam]++;
       const scorer = this.playerByKey(b.lastTouchKey);
-      this.pushEvent('goal', 'home', scorer ? `${scorer.name} 득점` : '득점');
-      this.kickoff({ kickoffTeam: 'away' }); // 실점 팀이 킥오프한다
+      this.pushEvent('goal', scoringTeam, scoringTeam === 'home' && scorer ? `${scorer.name} 득점` : scoringTeam === 'home' ? '득점' : '실점');
+      this.kickoff({ kickoffTeam: concedingTeam });
       return true;
     }
     return false;
@@ -723,8 +740,8 @@ export class Sim {
     }
 
     if (Math.abs(b.x) >= HALF.L) {
-      const end = b.x > 0 ? 1 : -1; // +1=away가 지키는 골라인, -1=home이 지키는 골라인
-      const defendingTeam = end > 0 ? 'away' : 'home';
+      const end = b.x > 0 ? 1 : -1;
+      const defendingTeam = end === -(this.homeP[0]?.attackDirection ?? 1) ? 'home' : 'away';
       const attackingTeam = defendingTeam === 'home' ? 'away' : 'home';
       if (lastTeam === defendingTeam) {
         // 수비 쪽이 마지막으로 건드리고 나갔다 — 공격 팀 코너킥
@@ -733,7 +750,7 @@ export class Sim {
         this.restart(attackingTeam, cornerX, cornerZ, 'corner', '코너킥');
       } else {
         // 공격 쪽이 마지막으로 건드리고 나갔다(빗나간 슛 등) — 수비 팀 골킥
-        const goalKickX = defendingTeam === 'home' ? -HALF.L + PARAMS.goalKickDepth : HALF.L - PARAMS.goalKickDepth;
+        const goalKickX = end * (HALF.L - PARAMS.goalKickDepth);
         this.restart(defendingTeam, goalKickX, 0, 'goal-kick', '골킥');
       }
       return true;
