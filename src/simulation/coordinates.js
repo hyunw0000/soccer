@@ -55,7 +55,15 @@ const clampToPitch = (n) => Math.min(LIMIT, Math.max(-LIMIT, n));
  */
 export function normalizedToWorld({ x, z }, { side = 'home', width = 0.5, instruction = null } = {}) {
   const direction = side === 'home' ? 1 : -1;
-  const spread = 0.8 + width * 0.5;
+  // width*0.5(상한 1.3)는 전술 폭을 최대로 올려도 실제 포메이션 z_norm(~0.30, 풀백/윙어
+  // 기준)이 터치라인(HALF.W=34m)에서 7.5m 못 미쳐서, 스로인/코너킥이 사실상 안 나왔다(실측
+  // 확인). base(0.8)는 그대로 두고 — 이걸 건드리면 폭 0(가장 좁게) 쪽 기준선이 예전보다
+  // 넓어져서 "폭을 낮췄는데 오히려 마크가 비고 단독 드리블이 늘어나는" 회귀가 난다
+  // (validate-tactics-impact.mjs가 실제로 이걸 잡아냈다: 폭 0에서 69.2m 무방비 단독
+  // 드리블). 기울기만 키워서 넓은 쪽(width→1)만 터치라인 근처까지 더 벌어지게 하고,
+  // clampToPitch가 최종 좌표를 안전하게 잘라주니 상한을 넉넉히 올려도 필드 밖으로 나갈
+  // 위험은 없다.
+  const spread = 0.8 + width * 1.2;
   const ins = instruction ? normalizeInstruction(instruction) : INSTRUCTION_FALLBACK;
 
   // 전진성은 자기 자리를 상대 골문 쪽으로 밀고, 개인 폭과 팀 폭은 중앙에서 벌어진 거리를 늘린다.

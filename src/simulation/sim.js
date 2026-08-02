@@ -250,6 +250,7 @@ export class Sim {
     } else if (taker) {
       this.ball.ownerKey = `${taker.team}:${taker.idx}`;
       this.ball.carrierKey = `${taker.team}:${taker.idx}`;
+      this.ball.lastTouchKey = `${taker.team}:${taker.idx}`;
     }
     this.kickoffLock = { team: kickoffTeam, active: true };
   }
@@ -454,6 +455,13 @@ export class Sim {
       // 골이 아니면(빗나간 슛/걷어낸 공 등) 필드 밖으로 나갔는지도 같이 본다 — 골 판정이
       // 이미 kickoff()로 볼을 리셋했다면 아웃오브바운즈 판정은 의미가 없어 건너뛴다.
       if (!this.checkGoal()) this.checkOutOfBounds();
+    } else {
+      // 캐리어가 드리블 중에 터치라인/골라인 밖으로 그대로 뛰쳐나가는 경우 — 골은 슛으로만
+      // 나므로 checkGoal()은 여전히 안 부르지만, 아웃오브바운즈는 "볼이 캐리어 상태냐"와
+      // 무관하게 실제로 선을 넘으면 즉시 잡아야 한다. 이걸 안 하면 킥으로 공을 놓을 때까지는
+      // 절대 아웃 판정이 안 나서, 드리블로 계속 터치라인 밖까지 몰고 가도 경기가 안 멈추고
+      // 그대로 진행되는 버그가 났다(실전에서 확인).
+      this.checkOutOfBounds();
     }
     this.tick++;
     this.updatePhase();
@@ -697,6 +705,10 @@ export class Sim {
     // carrierDecide()가 판단 주기마다 한다 — 그래서 "잡자마자 반사적으로 패스"가 안 생긴다.
     this.ball.ownerKey = pKey;
     this.ball.carrierKey = pKey;
+    // lastTouchKey도 여기서 갱신해야 한다 — 안 그러면 "킥 없이 주워서 그대로 드리블만 하다
+    // 터치라인 밖으로 나간" 경우, 아웃오브바운즈 판정이 예전 킥의 lastTouchKey(심하면 상대
+    // 팀 것)를 그대로 써서 스로인/코너킥/골킥을 엉뚱한 팀에게 줘버린다.
+    this.ball.lastTouchKey = pKey;
     p.kc = this.decisionTicksFor(p);
   }
 
@@ -774,6 +786,7 @@ export class Sim {
       taker.z = this.ball.z;
       this.ball.ownerKey = `${taker.team}:${taker.idx}`;
       this.ball.carrierKey = `${taker.team}:${taker.idx}`;
+      this.ball.lastTouchKey = `${taker.team}:${taker.idx}`;
       taker.kc = PARAMS.kickCooldownTicks;
     }
     this.pushEvent(type, team, text);

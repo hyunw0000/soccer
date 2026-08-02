@@ -109,7 +109,16 @@ export function scorePassCandidates(sim, p) {
   const wWidth = blendInstruction(t.width, p.ins.width);
   // 패스 길이도 템포를 따른다. 짧은 패스 팀은 가까운 동료를, 롱볼 팀은 먼 동료를 고른다.
   const preferredPassLength = 8 + blendInstruction(t.tempo, p.ins.passLength) * 32;
-  const desiredZ = (wWidth - 0.5) * 2 * HALF.W * 0.6; // 폭 지시가 노리는 좌우 위치(중앙 기준)
+  // NOTE: 아래 openness(열린 동료에게 준다) 항에는 템포 배수를 곱하지 않는다 — 시도해 봤다가
+  // 되돌린 자리다. 여기에 patience를 곱하면 템포1에서 openness가 0.55배로 쪼그라들어
+  // 드리블 편중이 오히려 반대쪽으로 터진다(실측: 템포1 드리블 비중 78.6%).
+  // 템포 편중의 진짜 원인은 scoreDribbleCandidate 쪽이었다(거기 주석 참고).
+  // wWidth를 "desiredZ=중앙 기준 거리"로 바꾸면 중립(0.5)일 때 desiredZ=0이 돼서, 측면
+  // 동료는 항상 감점을 받고 중앙 동료는 항상 가산을 받았다(실전 확인: 90분 동안 와이드
+  // 포지션 픽업 3회, 수비수 0회 — 폭을 사실상 못 씀). widthBias를 "중립=0(무관), 넓게=+,
+  // 좁게=-"로 바꿔서 팀 전술 폭(wWidth)이 중립이면 측면 여부가 점수에 개입하지 않게 한다 —
+  // 팀이 실제로 좁게/넓게를 지시했을 때만 그 방향으로 가산·감산이 붙는다.
+  const widthBias = (wWidth - 0.5) * 2; // -1(항상 좁게)..0(무관)..+1(항상 넓게)
   const out = [];
   for (const m of mates) {
     if (m === p || m.role === 'GK') continue;
@@ -125,7 +134,11 @@ export function scorePassCandidates(sim, p) {
     const gdTarget = vlen(m.atkX - m.x, 0 - m.z);
     const forwardGain = clamp((gdSelf - gdTarget) / 30, -1, 1);
     const successProb = passSuccessProb(sim, p, m, d);
-    const widthFit = 1 - clamp(Math.abs(Math.abs(m.z) - Math.abs(desiredZ)) / HALF.W, 0, 1);
+    // "얼마나 측면에 있는지"와 팀의 폭 지시 방향을 곱한다 — widthBias가 이미 중립(0)/
+    // 넓게(+)/좁게(-) 방향과 세기를 갖고 있으므로 여기서 다시 wWidth를 곱하지 않는다
+    // (곱하면 중립일 때도 wideness가 커서 이상하게 감산/가산되는 이중 반영이 생긴다).
+    const wideness = clamp(Math.abs(m.z) / HALF.W, 0, 1); // 0=중앙, 1=터치라인
+    const widthFit = widthBias * wideness;
     const lengthPenalty = Math.abs(d - preferredPassLength) / PARAMS.maxPass;
     const captainBonus = m.isCaptain ? 0.15 : 0;
     // 동료가 얼마나 열려 있는지 — 붙어 있는 동료에게 주는 건 그냥 볼을 넘겨주는 짓이다.
@@ -135,7 +148,7 @@ export function scorePassCandidates(sim, p) {
     const score =
       wForward * forwardGain +
       wSafety * successProb +
-      wWidth * widthFit +
+      widthFit +
       PARAMS.openPassWeight * openness -
       lengthPenalty +
       captainBonus;
@@ -197,11 +210,27 @@ export function scoreDribbleCandidate(sim, p) {
   const breakExpect = clamp((p.dribbleSkill - nearestDefense) / 100 + 0.5, 0, 1);
   const pressureDensity = densityCount * 0.18;
 
-  // 템포는 "볼을 빨리 앞으로 보낸다"는 뜻이다. 빠른 팀일수록 혼자 끌고 가는 선택의 매력이
-  // 줄고(patience가 작아짐), 점유 지향 팀일수록 발밑에 두고 가는 선택이 살아난다.
-  const w = patience(teamTacticsOf(sim, p).tempo);
-  const wForward = p.ins.forwardness * w;
-  const risk = p.ins.risk * w;
+  // 드리블 편중 버그의 근본 원인이 여기 있었다 — patience의 "방향"이 아니라 "진폭"이 문제였다.
+  //
+  // 패스 점수의 템포 항은 가중치 합이 directness+patience=2.00으로 불변이지만, 실제 총량은
+  // 템포가 오를수록 크게 줄어든다. 두 항이 곱해지는 값의 크기가 전혀 다르기 때문이다
+  // (실측: forwardGain 평균 -0.222·73%가 음수 / successProb 평균 +0.587). 즉 템포를 올리면
+  // "자주 음수인 작은 항"의 가중치를 키우고 "항상 양수인 큰 항"의 가중치를 깎아서, 패스
+  // 매력도 총량이 통째로 내려간다. 드리블에 patience를 곱한 원래 설계는 그 하락을 같이
+  // 따라가게 만드는 보정이었고, 실제로 템포 0.25~1 구간은 그 덕에 32~48%에 머물렀다.
+  //
+  // 문제는 보정의 **상한**이었다. 저템포로 갈수록 보정 배수가 계속 커지는데(patience(0)=1.45),
+  // 판단이 argmax라 어느 지점을 넘으면 드리블이 모든 패스를 이겨버린다. 10시드 스윕에서
+  // 템포0 드리블 비중이 배수 1.10→27.1%, 1.15→40.9%, 1.20→50.1%, 1.45→65.6%로 무너졌다.
+  // 반대쪽(고템포)은 보정이 그대로 필요하다 — 진폭을 통째로 줄이면 오히려 템포 0.75~1에서
+  // 드리블이 60%대로 튄다(스윕으로 확인).
+  //
+  // 그래서 곡선은 원래대로 두고 임계점을 넘는 저템포 구간만 잘라낸다. 고템포 쪽(0.5~1)은
+  // 전혀 안 건드리므로 그 구간의 기존 밸런스가 그대로 보존되고, 중립(0.5)은 배수가 정확히
+  // 1이라 예전 동작과 완전히 동일하다.
+  const tempoComp = Math.min(patience(teamTacticsOf(sim, p).tempo), PARAMS.dribbleTempoCompMax);
+  const wForward = p.ins.forwardness * tempoComp;
+  const risk = p.ins.risk * tempoComp;
   const score = wForward * forwardGain + risk * breakExpect - pressureDensity;
   return { type: 'dribble', score, tiebreak: -2, meta: { densityCount } };
 }
