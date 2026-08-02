@@ -175,6 +175,8 @@ export const PRESET_LIBRARY = Object.freeze([
   { name: '내 전술 5', ...BASE },
 ]);
 
+/** 앞의 다섯 전술은 기본 제공 항목이라 화면에서 삭제할 수 없다. */
+export const BUILT_IN_PRESET_COUNT = 5;
 export const PRESET_COUNT = PRESET_LIBRARY.length;
 
 const clamp = (n, lo, hi) => Math.min(hi, Math.max(lo, n));

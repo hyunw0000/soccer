@@ -10,7 +10,7 @@ import {
   resolveFormationId,
   setCaptain,
 } from "../../lineup/index.js";
-import { createPreset, toTactics } from "../domain/presets.js";
+import { BUILT_IN_PRESET_COUNT, createPreset, toTactics } from "../domain/presets.js";
 import {
   activePreset,
   loadBook,
@@ -136,12 +136,30 @@ export default function tacticsScreen(root, ctx) {
   // ---------- 전술 목록(사이드바) ----------
   const presetList = el("ol", { class: "tac-presets" });
 
+  function deletePreset(index) {
+    if (index < BUILT_IN_PRESET_COUNT) return;
+    const preset = book.sets[book.activeSet][index];
+    if (!window.confirm(`'${preset.name}' 전술을 삭제할까요?`)) return;
+    const setKey = book.activeSet;
+    const wasSelected = book.selected[setKey] === index;
+    applyPreset({
+      ...book,
+      sets: {
+        ...book.sets,
+        [setKey]: book.sets[setKey].map((item,i) => i === index ? createPreset(i) : item),
+      },
+      selected: wasSelected
+        ? { ...book.selected, [setKey]:0 }
+        : book.selected,
+    });
+  }
+
   function drawSidebar() {
     const set = book.sets[book.activeSet];
     const at = book.selected[book.activeSet];
     presetList.replaceChildren(
       ...set.map((preset, i) =>
-        el("li", {}, [
+        el("li", { class:"tac-preset-item" }, [
           el(
             "button",
             {
@@ -158,6 +176,19 @@ export default function tacticsScreen(root, ctx) {
               el("span", { class: "tac-preset-name", text: preset.name }),
             ],
           ),
+          i >= BUILT_IN_PRESET_COUNT
+            ? el("button",{
+              class:"tac-preset-delete",
+              type:"button",
+              text:"삭제",
+              title:`${preset.name} 삭제`,
+              'aria-label':`${preset.name} 전술 삭제`,
+              onclick:(event)=>{
+                event.stopPropagation();
+                deletePreset(i);
+              },
+            })
+            : null,
         ]),
       ),
     );

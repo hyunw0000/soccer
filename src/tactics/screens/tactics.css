@@ -37,12 +37,19 @@
 
 .tac-presets { list-style: none; }
 
+.tac-preset-item {
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  align-items:center;
+}
+
 .tac-preset {
   display: flex;
   align-items: center;
   gap: 12px;
   width: 100%;
-  padding: 9px 12px;
+  min-width:0;
+  padding:9px 12px;
   border: 0;
   border-left: 3px solid transparent;
   background: transparent;
@@ -72,6 +79,29 @@
 }
 
 .tac-preset.on .tac-preset-no { color: rgba(6, 18, 26, 0.62); }
+
+.tac-preset-delete {
+  min-width:48px;
+  min-height:30px;
+  margin-right:10px;
+  border:1px solid rgba(126,151,163,.4);
+  padding:5px 9px;
+  color:#8196a3;
+  background:rgba(4,20,29,.72);
+  font-size:11px;
+  font-weight:800;
+  line-height:1;
+}
+
+.tac-preset-delete:hover,.tac-preset-delete:focus-visible {
+  border-color:#ef5160;
+  color:#fff;
+  background:rgba(172,30,47,.72);
+  outline:none;
+}
+
+.tac-preset.on + .tac-preset-delete { color:#6b7680; }
+.tac-preset.on + .tac-preset-delete:hover,.tac-preset.on + .tac-preset-delete:focus-visible { color:#fff; }
 
 /* ---------- 오른쪽 본문 ---------- */
 
@@ -512,6 +542,7 @@
 @media (max-width: 900px) {
   .tac-console { grid-template-columns: minmax(0, 1fr); }
   .tac-presets { display: flex; flex-wrap: wrap; padding: 0 8px; }
+  .tac-preset-item { flex:0 0 auto; grid-template-columns:auto auto; }
   .tac-preset { width: auto; border-left: 0; border-radius: 6px; }
   .tac-pane.team { grid-template-columns: minmax(0, 1fr); }
   .tac-side { max-width: 300px; }
