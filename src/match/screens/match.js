@@ -1,28 +1,48 @@
 import { el } from '../../shared/index.js';
 import { state } from '../../app/public.js';
-import { PARAMS, Sim, RewindBuffer } from '../../simulation/index.js';
+import { PARAMS, createSimulation, RewindBuffer } from '../../simulation/index.js';
 import { createMatchView, CAM_MODES } from '../render3d/index.js';
-import { findById, toSimMeta } from '../../roster/index.js';
-import { getNormalizedSlots } from '../../lineup/index.js';
 
 const REWIND_SECONDS = 8;
 const REWIND_LIMIT = 3; // 감독의 '되감기'는 유한한 자원이다 — 이 서비스의 규칙
 
-export default function matchScreen(root, ctx, params = {}) {
-  const lineup = (params.lineupIds ?? state.poolIds.slice(0, 11)).map(findById).filter(Boolean).map(toSimMeta);
+/**
+ * `match` 화면.
+ * 입력은 앱이 준비한 plain JSON MatchSetup 하나뿐이다.
+ * roster/lineup/tactics를 import하지 않으므로 여기서 선수나 좌표를 조회하지 않는다.
+ */
+export default function matchScreen(root, ctx) {
+  const matchSetup = state.pendingMatchSetup ?? null;
 
-  const sim = new Sim({
-    lineup,
-    formation: state.formation,
-    formationSlots: getNormalizedSlots(state.formation),
-    tactics: state.tactics,
-    oppFormation: state.oppFormation,
-    oppFormationSlots: getNormalizedSlots(state.oppFormation),
-  });
+  // 유효한 MatchSetup 없이는 경기를 만들 수 없다. 준비가 필요한 이전 화면으로 되돌린다.
+  let sim;
+  try {
+    sim = createSimulation(matchSetup);
+  } catch (err) {
+    root.append(
+      el('div', { class: 'screen page' }, [
+        el('h2', { class: 'h2', text: '경기를 시작할 수 없습니다' }),
+        el('p', { class: 'lead small', text: err.message }),
+        el('button', {
+          class: 'primary',
+          type: 'button',
+          text: '전술 설정으로',
+          onclick: () => ctx.navigate('tactics', undefined, { replace: true }),
+        }),
+      ])
+    );
+    return () => {};
+  }
+
+  const homeCode = matchSetup.homeTeam.code ?? matchSetup.homeTeam.id;
+  const awayCode = matchSetup.awayTeam.code ?? matchSetup.awayTeam.id;
+  const captainNum =
+    matchSetup.homeTeam.players.find((p) => p.id === matchSetup.homeTeam.lineup.captainId)?.num ?? null;
+
   const rewind = new RewindBuffer();
 
   const stage = el('div', { class: 'stage' });
-  const scoreEl = el('div', { class: 'score', text: 'KOR 0 : 0 WLD' });
+  const scoreEl = el('div', { class: 'score', text: `${homeCode} 0 : 0 ${awayCode}` });
   const clockEl = el('b', { text: "0'" });
   const possEl = el('b', { text: '-' });
   const camEl = el('b', { text: CAM_MODES.broadcast });
@@ -127,10 +147,10 @@ export default function matchScreen(root, ctx, params = {}) {
     }
     view.render();
 
-    scoreEl.textContent = `KOR ${sim.score.home} : ${sim.score.away} WLD`;
+    scoreEl.textContent = `${homeCode} ${sim.score.home} : ${sim.score.away} ${awayCode}`;
     clockEl.textContent = `${sim.matchMinute}'`;
     const o = sim.playerByKey(sim.ball.ownerKey);
-    possEl.textContent = o ? `${o.team === 'home' ? 'KOR' : 'WLD'} #${o.num} ${o.name}` : '경합 중';
+    possEl.textContent = o ? `${o.team === 'home' ? homeCode : awayCode} #${o.num} ${o.name}` : '경합 중';
 
     while (renderedEvents < sim.events.length) feed.prepend(eventNode(sim.events[renderedEvents++]));
 
@@ -184,7 +204,7 @@ export default function matchScreen(root, ctx, params = {}) {
     ])
   );
 
-  view = createMatchView(stage, sim, findById(state.captainId)?.num ?? null);
+  view = createMatchView(stage, sim, captainNum);
   view.sync(0);
   last = performance.now();
   raf = requestAnimationFrame(loop);

@@ -1,5 +1,6 @@
 import { PARAMS, HALF } from './params.js';
 import { vlen } from './math.js';
+import { INSTRUCTION_FALLBACK } from './coordinates.js';
 
 /**
  * 선수 1명의 물리/상태. Three.js 객체를 절대 들고 있지 않는다.
@@ -12,6 +13,8 @@ export class Player {
     this.num = meta.num;
     this.name = meta.name;
     this.role = slot.role;
+    // 감독이 이 선수에게만 준 지시 8축(0..1). 경기 중에도 바뀌지 않으므로 스냅샷에 담지 않는다.
+    this.ins = slot.instruction ?? { ...INSTRUCTION_FALLBACK };
     this.pace = meta.pace;
     this.stamina = meta.stamina ?? 75;
     this.maxSpeedBase = PARAMS.maxSpeed * (0.82 + meta.pace / 100 * 0.36);
