@@ -23,10 +23,11 @@ export function teamTacticsOf(sim, p) {
 }
 
 /**
- * 팀 전술(뼈대) + 개인 지시(±0.3)를 합친 실효 지시.
- * 팀 값이 중심이고 개인 지시는 그 위에서 밀거나 당긴다 — 개인 지시가 팀 전술을 뒤엎지 않는다.
+ * 팀 전술(뼈대) + 개인 지시(±0.45)를 합친 실효 지시.
+ * 팀 값이 중심이고 개인 지시는 그 위에서 크게 밀거나 당긴다 — 감독이 이 선수만 극단으로
+ * 지시하면(1 또는 5) 팀 전술을 사실상 뒤집을 만큼 체감이 커야 한다.
  */
-export const blendInstruction = (teamValue, insValue) => clamp(teamValue + (insValue - 0.5) * 0.6, 0, 1);
+export const blendInstruction = (teamValue, insValue) => clamp(teamValue + (insValue - 0.5) * 0.9, 0, 1);
 
 /**
  * 템포(0..1)가 판단 가중치를 흔드는 배수.
@@ -79,6 +80,26 @@ export function shootSuccessProb(sim, p, distance, angleFactor) {
     PARAMS.shootAngleCoef * (1 - angleFactor) -
     PARAMS.passPressureCoef * pressureCount(sim, p);
   return sigmoid(x);
+}
+
+/**
+ * 오프사이드 판정 — 패스가 나가는 순간 기준(§Law 11 단순화판).
+ * target(패스를 받을 동료)이 "상대 진영"에서, 볼과 상대 두 번째 최종수비수(보통 GK 다음
+ * 필드플레이어)보다 더 앞서 있으면 오프사이드다. 셋 중 가장 뒤쪽 기준선을 넘었는지만 본다 —
+ * 기준선 = max(상대 두 번째 수비수 전진도, 볼 전진도, 하프라인(0)).
+ */
+export function isOffside(sim, p, target) {
+  if (!target || target === p) return false;
+  const dir = p.attackDirection;
+  const opps = p.team === 'home' ? sim.awayP : sim.homeP;
+  if (opps.length < 2) return false;
+  // "전진도" = 공격 방향 기준으로 얼마나 상대 골 쪽에 가까운지(클수록 상대 골에 가깝다).
+  const advOf = (x) => x * dir;
+  const defenderLine = opps
+    .map((o) => advOf(o.x))
+    .sort((a, b) => b - a)[1]; // 가장 전진한 수비수 다음, 두 번째로 전진한 수비수
+  const threshold = Math.max(defenderLine, advOf(sim.ball.x), 0);
+  return advOf(target.x) > threshold;
 }
 
 /** 그 선수에게 가장 가까운 상대와의 거리(m). 패스 대상이 "열려 있는지"를 재는 데 쓴다. */
@@ -165,7 +186,7 @@ export function scoreShootCandidate(sim, p) {
   const expectedGoalValue = distFactor * 0.7 + angleFactor * 0.3;
   const successProb = shootSuccessProb(sim, p, gd, angleFactor);
 
-  let score = wForward * expectedGoalValue - wSafety * (1 - successProb);
+  let score = wForward * expectedGoalValue * PARAMS.shootValueWeight - wSafety * (1 - successProb);
   // 골문 코앞에서 계속 드리블만 하다 골라인으로 걸어들어가는 옛 버그(mandatoryShotDistance)를
   // "굴림으로 강제"가 아니라 "다른 후보가 절대 못 이기는 점수"로 표현한다 — 판단 결과가
   // 여전히 하나의 점수 비교에서 나오므로 chooseAction()의 일반 규칙을 벗어나지 않는다.

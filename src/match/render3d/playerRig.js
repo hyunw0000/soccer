@@ -5,7 +5,7 @@ function badgeSprite(num, color) {
   const c = document.createElement('canvas');
   c.width = c.height = 128;
   const g = c.getContext('2d');
-  g.fillStyle = color;
+  g.fillStyle = `#${color.toString(16).padStart(6, '0')}`;
   g.beginPath();
   g.arc(64, 64, 56, 0, Math.PI * 2);
   g.fill();
@@ -62,7 +62,7 @@ export function makePlayerRig({ color, skin, num, isCaptain = false }) {
 
   const arm = (side) => {
     const pivot = new THREE.Group();
-    pivot.position.set(0, 2.55, side * 0.55);
+    pivot.position.set(side * 0.55, 2.55, 0);
     const upper = new THREE.Mesh(new THREE.CapsuleGeometry(0.15, 0.6, 4, 8), mBody);
     upper.position.y = -0.35;
     upper.castShadow = true;
@@ -77,7 +77,7 @@ export function makePlayerRig({ color, skin, num, isCaptain = false }) {
 
   const leg = (side) => {
     const hip = new THREE.Group();
-    hip.position.set(0, 1.55, side * 0.22);
+    hip.position.set(side * 0.22, 1.55, 0);
     const thigh = new THREE.Mesh(new THREE.CapsuleGeometry(0.19, 0.7, 4, 8), mShort);
     thigh.position.y = -0.45;
     thigh.castShadow = true;
@@ -89,8 +89,8 @@ export function makePlayerRig({ color, skin, num, isCaptain = false }) {
     shin.position.y = -0.45;
     shin.castShadow = true;
     knee.add(shin);
-    const foot = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.16, 0.28), mShort);
-    foot.position.set(0.15, -0.85, 0);
+    const foot = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.16, 0.5), mShort);
+    foot.position.set(0, -0.85, 0.15);
     foot.castShadow = true;
     knee.add(foot);
     g.add(hip);
@@ -127,6 +127,14 @@ export function animateRig(rig, p, dt, camera) {
 
   const ud = rig.userData;
   const sp = Math.hypot(p.vx, p.vz);
+
+  // 방향 전환 시 몸을 살짝 기울여(뱅킹) 관성으로 버티는 느낌을 준다 — 정지 상태에서는 안 기운다.
+  if (ud.prevHeading == null) ud.prevHeading = p.heading;
+  const dh = Math.atan2(Math.sin(p.heading - ud.prevHeading), Math.cos(p.heading - ud.prevHeading));
+  ud.prevHeading = p.heading;
+  const turnRate = dh / Math.max(dt || 0.016, 1e-3);
+  const bank = Math.max(-0.3, Math.min(0.3, -turnRate * 0.05)) * Math.min(1, sp / p.maxSpeed);
+  rig.rotation.z = bank;
   ud.phase += (0.6 + sp * 2.2) * (dt || 0.016) * 6;
   const swing = Math.min(1, (sp / p.maxSpeed) * 1.3);
   const a = Math.sin(ud.phase) * swing;
