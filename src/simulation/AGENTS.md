@@ -19,6 +19,7 @@
 - 현재 엔진은 호환 생성자와 정규화 슬롯 배열을 사용한다. 목표 `createSimulation(matchSetup)`, `createRewindBuffer`, `normalizedToWorld` 전환은 MatchSetup version 1 합의 후 단계적으로 수행한다.
 - 최종 입력은 완성된 plain JSON MatchSetup뿐이다. roster, lineup, tactics의 내부나 `index.js`도 import하지 않는다.
 - assignment의 `instruction`(선수별 지시 8축, 0..1)은 선택 항목이다. 없으면 `INSTRUCTION_FALLBACK`(전부 0.5)로 읽으므로 MatchSetup version 1 그대로 동작한다. simulation은 감독이 만지는 1..5 단계 값을 모른다 — 계약에 실려 온 0..1만 쓴다.
+- 팀 전술 네 값은 **양 팀 모두** 자기 값으로 읽는다(`teamTacticsOf`). 홈에만 적용하면 경기가 감독의 전술 대 무전술이 되어 버린다. 전술이 결과에 개입하는 폭은 `PARAMS`의 `lineHeightBasePush`·`pressSupportRadius`·`tempoDecisionScale`·`tempoPassForceScale`에 모아 두었고, 모든 식은 **전술 0.5에서 배수 1**(=전술 도입 전 동작)이 되도록 맞춘다.
 - 지시는 경기 중 변하지 않는 입력이므로 `snapshot()`에 담지 않는다. 담으면 되감기 크기만 커지고 재현성에는 보탬이 없다.
 - renderer가 결과를 결정하지 않도록 simulation이 MatchState와 MatchResult의 원천이 된다.
 

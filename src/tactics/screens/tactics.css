@@ -559,3 +559,72 @@
   .tactics-match-card__team strong { font-size:14px; }
   .tactics-kickoff { min-width:0; min-height:64px; }
 }
+
+/* ---------- 경기 중 전술 조작판 (createLiveTacticsPanel) ---------- */
+/* 이 패널이 화면 어디에 놓이는지는 경기 화면(match.css)이 정한다. 여기서는 안쪽만 그린다. */
+.live-tactics[hidden] { display: none; }
+
+.lt-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.lt-eyebrow {
+  display: block;
+  font-size: 10px;
+  letter-spacing: .16em;
+  color: var(--dim);
+}
+.lt-name { font-size: 15px; letter-spacing: .02em; }
+.lt-close {
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--dim);
+  padding: 2px 7px;
+  font-size: 12px;
+}
+.lt-close:hover { color: var(--fg); }
+
+.lt-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+.lt-preset {
+  flex: 1 1 auto;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: #161b22;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--dim);
+  font-size: 11px;
+  padding: 5px 8px;
+}
+.lt-preset:hover { color: var(--fg); }
+.lt-preset.on {
+  color: #fff;
+  border-color: var(--game-accent-blue, #2aacd3);
+  background: linear-gradient(110deg, rgba(42, 172, 211, .28), rgba(212, 24, 44, .18));
+}
+
+/* 조작판은 전술 화면과 같은 .tt-* 행을 그대로 쓴다. 좁은 폭에 맞춰 여백만 줄인다. */
+.lt-body .tt-row { padding: 5px 0; }
+.lt-body .tt-group { margin-top: 8px; }
+.lt-body .tt-label { font-size: 12px; }
+
+.lt-foot {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 3px;
+}
+.lt-derived { font-size: 12px; color: var(--fg); letter-spacing: .02em; }
+.lt-note { font-size: 10px; color: var(--dim); }

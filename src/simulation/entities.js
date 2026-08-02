@@ -68,13 +68,18 @@ export class Ball {
     this.ownerKey = null; // `${team}:${idx}` — 참조 대신 키로 들고 있어야 스냅샷이 순수해진다
     // 지금 드리블 중인 선수(ownerKey와 달리 여러 틱 동안 유지된다). kick()하면 놓는다.
     this.carrierKey = null;
+    // 마지막으로 볼을 건드린 선수 — ownerKey/carrierKey와 달리 킥해도 안 지워진다(스로인/
+    // 코너킥/골킥을 어느 팀에 줄지, 골 득점자가 누군지는 "날아가는 동안" 판정해야 하는데,
+    // ownerKey는 킥하는 순간 바로 null이 돼서 그때는 이미 늦다).
+    this.lastTouchKey = null;
   }
-  kick(dx, dz, force) {
+  kick(dx, dz, force, byKey) {
     const l = vlen(dx, dz) || 1;
     this.vx = (dx / l) * force;
     this.vz = (dz / l) * force;
     this.ownerKey = null;
     this.carrierKey = null; // 패스/슛/클리어 — 어느 쪽이든 킥하면 드리블이 끝난다
+    if (byKey) this.lastTouchKey = byKey;
   }
   update(dt) {
     this.vx += this.vx * PARAMS.ballFriction * dt;
@@ -90,14 +95,7 @@ export class Ball {
     }
     this.x += this.vx * dt;
     this.z += this.vz * dt;
-    // 터치라인 반사 (스로인 대신 프로토타입 단순화)
-    if (this.z < -HALF.W + 0.3) {
-      this.z = -HALF.W + 0.3;
-      this.vz *= -0.6;
-    }
-    if (this.z > HALF.W - 0.3) {
-      this.z = HALF.W - 0.3;
-      this.vz *= -0.6;
-    }
+    // 터치라인/골라인 경계 판정과 스로인/코너킥/골킥 재개는 sim.js의 checkOutOfBounds()가
+    // 담당한다 — 여기서 튕겨 돌려보내지 않는다(실제로 밖으로 나가야 "아웃"을 판정할 수 있다).
   }
 }

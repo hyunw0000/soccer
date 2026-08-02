@@ -14,7 +14,9 @@ export const PARAMS = {
   passForce: 22,
   shootForce: 34,
   dribbleForce: 10,
-  minPass: 8,
+  // 짧은 연결이 가능해야 점유 축구가 성립한다. 8m로 잡으면 가까운 동료가 아예 후보에서
+  // 빠져서, 붙어 있는 동료를 두고 혼자 몰고 가는 선택만 남는다.
+  minPass: 5,
   maxPass: 32,
   ballFriction: -0.9,
   ballMaxSpeed: 40,
@@ -24,6 +26,10 @@ export const PARAMS = {
   centerCircleRadius: 9.15, // 킥오프 규정 거리
   kickoffUnlockSpeed: 0.5, // 이 이상으로 볼이 움직이면 킥오프 제한 해제
   rewindCooldownSeconds: 15, // 되감기 쿨다운(게임 시간 15분 스케일 = clockSeconds 15단위)
+  // 실점 이벤트로부터 얼마나 앞으로 되감을지(같은 단위). 짧게 잡으면 되감아도 이미 무너진
+  // 장면 한복판에서 다시 시작해서, 전술을 바꿔도 같은 실점이 그대로 재현된다.
+  // 공격이 시작되기 전까지 충분히 거슬러 올라가야 감독의 선택이 미래를 바꾼다.
+  rewindLookbackSeconds: 12,
   // 실점 순간에만 그 골을 겨냥한 되감기를 제안한다 — 이 시간(같은 단위)이 지나면
   // "실점 직전으로" 제안이 사라지고 기회는 끝난다(감독이 그 자리에서 안 쓰면 그냥 지나감).
   concedeRewindWindowSeconds: 10,
@@ -53,8 +59,6 @@ export const PARAMS = {
   dribbleDecisionTicks: 24, // 판단 주기(틱) — 이 동안은 계속 드리블하며 재판단 안 함
   dribbleCarryOffset: 0.9, // 캐리어 발밑 앞쪽으로 볼을 붙여두는 거리(m)
   dribbleLookahead: 6, // 드리블 목표를 몇 m 앞으로 계속 갱신할지
-  dribbleBaseChance: 0.4, // 패스 후보가 있어도 그냥 계속 드리블할 기본 확률
-  dribbleRiskInfluence: 0.4, // risk 지시가 드리블 확률을 얼마나 더 흔드는지(±)
   mandatoryShotDistance: 12, // 골문에서 이 거리 안이면 확률 없이 무조건 슛 — 드리블로 골라인까지 걸어들어가는 걸 막는다
 
   // 판단/실행 분리 리팩터링(decision.js) — 실행 성공확률 sigmoid 계수. §6.7 공식의
@@ -81,4 +85,26 @@ export const PARAMS = {
   tackleDistanceDecayMin: 0.5, // 사거리(kickDist) 끝에서도 이 밑으로는 안 깎는다
 
   clearBaseErrorDeg: 6, // 캐리어가 압박에 밀려 그냥 걷어낼 때의 기본 오차각(패스보다 급하게 찬다)
+
+  // 아웃오브바운즈(스로인/코너킥/골킥) 재개 지점 — 라인 위에 정확히 두면 좌표 클램프 경계와
+  // 겹쳐서 다음 스텝에 다시 아웃으로 잡히는 경우가 생겨 살짝 안쪽으로 들여놓는다.
+  restartInset: 0.5,
+  goalKickDepth: 9, // 골킥 스팟이 자기 골라인에서 이만큼 앞(대략 골에어리어 거리감)
+
+  // ---------- 팀 전술이 경기에 개입하는 폭 ----------
+  // 여기 값이 0이면 감독의 전술은 표시만 남고 경기는 똑같이 흐른다. 값을 키울수록 전술이
+  // 결과를 더 크게 가른다. 네 값 모두 "전술 0.5 = 예전 동작"이 되도록 식을 맞춰 두었으니,
+  // 밸런스를 만질 때는 이 상수만 움직이면 된다(scripts/validate-tactics-impact.mjs가 감시한다).
+  lineHeightBasePush: 20, // 라인 높이가 대형 전체를 앞뒤로 미는 거리(m) — 0↔1이면 ±10m
+  playerLineInset: 0.6, // 선수가 터치라인·골라인에서 최소한 떨어져 서는 거리(m)
+  // "열린 동료에게 준다"의 무게. 이 값이 0이면 판단이 다시 드리블 일변도로 돌아간다.
+  openPassWeight: 0.55,
+  openPassRadius: 10, // 이 거리만큼 상대와 떨어져 있으면 완전히 열린 것으로 본다(m)
+  // 대형 목표 위치를 골라인에서 띄우는 거리(m). 라인을 끝까지 올린 팀의 공격수가 골라인에
+  // 눌러붙는 것만 막는 최소값이다 — 크게 잡으면 공격이 박스에 못 들어가 득점이 줄어든다
+  // (중립 전술 20경기 총득점: 0.5m→39, 2m→35, 4m→32, 8m→31).
+  formationTargetGoalMargin: 2,
+  pressSupportRadius: 18, // 압박이 최대일 때 두 번째 선수가 볼로 달려드는 거리(m)
+  tempoDecisionScale: 0.7, // 템포가 캐리어 판단 주기를 줄이는 비율 (0.5에서 배수 1)
+  tempoPassForceScale: 0.3, // 템포가 패스 힘을 키우는 비율 (0.5에서 배수 1)
 };

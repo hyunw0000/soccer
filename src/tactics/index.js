@@ -44,3 +44,6 @@ export {
 } from './domain/matchSetup.js';
 
 export { default as tacticsScreen } from './screens/tactics.js';
+// 경기 중에 여는 전술 조작판. 경기 화면이 전술 화면으로 나갔다 오지 않아도 되도록,
+// 같은 전술 목록을 그대로 쓰는 패널을 tactics가 만들어서 넘겨준다.
+export { createLiveTacticsPanel } from './screens/liveTactics.js';

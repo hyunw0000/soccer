@@ -7,7 +7,7 @@ import {
   simulationPlaceholder,
 } from './screens/placeholders.js';
 import { withAppLayout } from './layout/AppLayout.js';
-import { state } from './public.js';
+import { retryKoreaMatch, state } from './public.js';
 import { lineupScreen } from '../lineup/index.js';
 import { rosterScreen } from '../roster/index.js';
 import { tacticsScreen } from '../tactics/index.js';
@@ -25,7 +25,16 @@ export function startApp(root = document.getElementById('app')) {
     start: managerScreen,
     setup: managerScreen,
     roster: withAppLayout(rosterScreen, '/roster'),
-    tournament: withAppLayout((outlet, ctx) => tournamentScreen(outlet, ctx, { bracket: state.tournamentBracket, groupAFinalResult:state.groupAFinalResult }), '/tournament'),
+    tournament: withAppLayout((outlet, ctx) => tournamentScreen(outlet, ctx, {
+      bracket: state.tournamentBracket,
+      groupAFinalResult: state.groupAFinalResult,
+      knockoutResults: state.knockoutResults,
+      // 다시 시도 = 그 경기를 치르기 직전으로 되돌리고 화면을 새 상태로 다시 그린다.
+      onRetry: (matchId) => {
+        retryKoreaMatch(matchId);
+        ctx.navigate('tournament', { retriedAt: Date.now() }, { replace: true });
+      },
+    }), '/tournament'),
     lineup: withAppLayout(lineupScreen, '/lineup'),
     tactics: withAppLayout(tacticsScreen, '/tactics'),
     simulation: withAppLayout(simulationPlaceholder, '/simulation'),

@@ -68,10 +68,11 @@ function assignmentsForContract(lineup, slotTactics = null) {
   return lineup.assignments.map((a) => {
     const { playerId, slotId, role, x, z } = a;
     const out = { playerId, slotId, role, x, z };
-    // 감독이 만진 적 없는 자리까지 채우면 계약이 커지기만 한다. 저장된 자리만 싣는다.
-    if (playerId && slotTactics?.[slotId]) {
-      out.instruction = toPlayerInstruction(slotTacticsOf(slotTactics, a));
-    }
+    // 감독이 만진 적 없는 자리도 함께 싣는다. 안 실으면 simulation이 전 축 0.5로 읽어서,
+    // 화면에는 골키퍼 전진성 1칸으로 보이는 선수가 경기에서는 3칸으로 뛴다 —
+    // 감독이 본 값과 경기가 어긋나는 건 계약이 작아지는 것보다 훨씬 나쁘다.
+    // `slotTacticsOf`는 저장값이 없으면 그 자리(역할·좌우 위치)의 기본값을 만들어 준다.
+    if (playerId) out.instruction = toPlayerInstruction(slotTacticsOf(slotTactics, a));
     return out;
   });
 }

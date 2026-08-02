@@ -271,20 +271,35 @@ const level01 = (value, max) => clamp((value - 1) / (max - 1), 0, 1);
 /**
  * 프리셋 → simulation이 읽는 전술 네 값(0..1).
  * 여기가 표현 계층과 계약 사이의 유일한 접점이다.
+ *
+ * 감독이 만지는 조작은 하나도 빠짐없이 이 네 값 중 하나로 흘러가야 한다 —
+ * 어느 행이 어떤 값에도 안 닿으면 그 행은 화면에만 있는 장식이 된다.
+ * (코너킥·프리킥 두 행만 예외다. 세트피스 자체가 아직 simulation에 없다.)
  */
 export function toTactics(preset) {
   const p = normalizePreset(preset);
   const attack = p.mentality / (MENTALITIES.length - 1); // 0 수비적 … 1 공격적
+  const box = level01(p.playersInBox, 10); // 박스로 들어가는 인원 = 공격에 거는 인원
+  const wingPlay = p.chanceCreation === '측면 돌파' ? 1 : 0;
 
   return {
-    lineHeight: clamp(level01(p.depth, 10) * 0.85 + attack * 0.15, 0, 1),
-    pressing: clamp((PRESSING_BY_STYLE[p.defenseStyle] ?? 0.5) * 0.85 + attack * 0.15, 0, 1),
+    // 깊이가 주도하고, 공격적일수록·박스에 많이 넣을수록 블록 전체가 함께 올라간다.
+    lineHeight: clamp(level01(p.depth, 10) * 0.7 + attack * 0.18 + box * 0.12, 0, 1),
+    pressing: clamp((PRESSING_BY_STYLE[p.defenseStyle] ?? 0.5) * 0.8 + attack * 0.2, 0, 1),
+    // 빌드업·기회 만들기가 템포를 정하고, 멘탈리티가 그 위에서 서두르게 하거나 눌러 앉힌다.
     tempo: clamp(
-      (TEMPO_BY_BUILD_UP[p.buildUp] ?? 0.5) * 0.6 + (TEMPO_BY_CHANCE[p.chanceCreation] ?? 0.5) * 0.4,
+      (TEMPO_BY_BUILD_UP[p.buildUp] ?? 0.5) * 0.5 +
+        (TEMPO_BY_CHANCE[p.chanceCreation] ?? 0.5) * 0.3 +
+        attack * 0.2,
       0,
       1
     ),
     // 보드·시뮬레이션의 좌우 전개는 수비 폭보다 공격 폭이 지배한다.
-    width: clamp(level01(p.attackWidth, 10) * 0.75 + level01(p.defenseWidth, 10) * 0.25, 0, 1),
+    // 측면 돌파를 고른 팀은 같은 폭 수치에서도 더 벌려 선다.
+    width: clamp(
+      level01(p.attackWidth, 10) * 0.62 + level01(p.defenseWidth, 10) * 0.22 + wingPlay * 0.16,
+      0,
+      1
+    ),
   };
 }
