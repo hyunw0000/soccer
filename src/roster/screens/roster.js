@@ -226,6 +226,7 @@ export default function squadScreen(root, ctx) {
         el('div', {}, [
           el('p', { class: 'eyebrow', text: 'KOREA REPUBLIC · NATIONAL SQUAD' }),
           el('h2', { class: 'h2', text: '역사를 바꿀 26인' }),
+          el('p',{class:'topbar-description',text:'대한민국의 운명을 함께할 선수단을 구성하고 주장을 선택합니다.'}),
         ]),
         el('div', { class: 'topbar-right' }, [
           counter,

@@ -1,5 +1,61 @@
 /* Roster 페이지 전용 스타일. 공용 토큰만 사용하고 카드·버튼·색상은 재정의하지 않는다. */
 
+/* 대회 화면의 조별리그/토너먼트 서브탭과 같은 포지션 필터 */
+.screen.page > .chips {
+  display:flex;
+  flex-wrap:nowrap;
+  gap:4px;
+  margin:28px 0 18px;
+  overflow-x:auto;
+  border-bottom:1px solid rgba(94,145,168,.3);
+  scrollbar-width:thin;
+}
+
+.screen.page > .chips > .chip {
+  position:relative;
+  min-width:132px;
+  min-height:54px;
+  border:0;
+  padding:14px 24px;
+  clip-path:none;
+  color:#728797;
+  background:transparent;
+  font-size:14px;
+  font-weight:850;
+}
+
+.screen.page > .chips > .chip::after {
+  content:"";
+  position:absolute;
+  right:18px;
+  bottom:-1px;
+  left:18px;
+  height:3px;
+  background:transparent;
+}
+
+.screen.page > .chips > .chip:hover {
+  border:0;
+  color:#fff;
+  background:rgba(25,112,154,.1);
+}
+
+.screen.page > .chips > .chip.on {
+  border:0;
+  color:#fff;
+  background:linear-gradient(180deg,rgba(25,112,154,.2),rgba(9,30,43,.08));
+  box-shadow:none;
+}
+
+.screen.page > .chips > .chip.on::after {
+  background:linear-gradient(90deg,#238ed0,#ef3345);
+}
+
+.screen.page > .chips > .chip:focus-visible {
+  outline:2px solid #5bd6ff;
+  outline-offset:-3px;
+}
+
 /* 소집 명단 | 화살표 | 후보 3단 배치 */
 .transfer {
   display: grid;
@@ -79,6 +135,8 @@
 }
 
 @media (max-width:560px) {
+  .screen.page > .chips { margin-top:20px; }
+  .screen.page > .chips > .chip { min-width:112px; min-height:48px; padding:12px 16px; font-size:13px; }
   .transfer { gap:10px; }
   .transfer-body { max-height:50vh; }
 }

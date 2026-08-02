@@ -12,13 +12,11 @@ import {
 } from '../../lineup/index.js';
 import { createPreset, toTactics } from '../domain/presets.js';
 import {
-  SET_KEYS,
   activePreset,
   loadBook,
   replaceActive,
   saveBook,
   selectPreset,
-  selectSet,
 } from '../domain/presetBook.js';
 import { createMatchSetup, validateMatchSetupInput } from '../domain/matchSetup.js';
 import { normalizePlayerTactics, slotTacticsOf } from '../domain/playerTactics.js';
@@ -33,7 +31,7 @@ const TABS = [
 ];
 
 /**
- * `tactics` 화면 — 전술 목록(A/B/C × 10)에서 하나를 골라 다듬고 경기에 들고 나간다.
+ * `tactics` 화면 — 전술 목록에서 하나를 골라 다듬고 경기에 들고 나간다.
  *
  * 감독이 만지는 값은 프리셋(수비 스타일·폭·깊이 …)이고,
  * simulation이 읽는 Contracts v1 전술 네 값은 `toTactics()`로 파생시켜 상태에 넣는다.
@@ -122,21 +120,9 @@ export default function tacticsScreen(root, ctx) {
   });
 
   // ---------- 전술 목록(사이드바) ----------
-  const setTabs = el('div', { class: 'tac-sets' });
   const presetList = el('ol', { class: 'tac-presets' });
 
   function drawSidebar() {
-    setTabs.replaceChildren(
-      ...SET_KEYS.map((key) =>
-        el('button', {
-          class: `tac-set${key === book.activeSet ? ' on' : ''}`,
-          type: 'button',
-          text: key,
-          onclick: () => applyPreset(selectSet(book, key)),
-        })
-      )
-    );
-
     const set = book.sets[book.activeSet];
     const at = book.selected[book.activeSet];
     presetList.replaceChildren(
@@ -283,7 +269,7 @@ export default function tacticsScreen(root, ctx) {
   // 포메이션 탭은 거기서 한 걸음 더 나아가 보드가 폭을 다 쓰게 한다(`board-only`).
   const consoleNode = el('div', { class: 'tac-console' }, [
     el('aside', { class: 'tac-list' }, [
-      el('div', { class: 'tac-list-head' }, [el('b', { text: '전술 목록' }), setTabs]),
+      el('div', { class: 'tac-list-head' }, [el('b', { text: '전술 목록' })]),
       presetList,
     ]),
     el('section', { class: 'tac-main' }, [
@@ -380,6 +366,7 @@ export default function tacticsScreen(root, ctx) {
         el('div', {}, [
           el('p', { class: 'eyebrow', text: 'MATCH PLAN · SOUTH AFRICA' }),
           el('h2', { class: 'h2', text: '승부를 바꿀 전술' }),
+          el('p',{class:'topbar-description',text:'포메이션과 팀 지시를 조정해 경기의 흐름을 설계합니다.'}),
         ]),
         el('div', { class: 'topbar-right' }, [
           formationStatus,
