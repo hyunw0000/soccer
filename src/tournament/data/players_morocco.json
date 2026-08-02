@@ -1,0 +1,569 @@
+{
+  "meta": {
+    "team": "모로코",
+    "teamEn": "Morocco",
+    "teamCode": "MAR",
+    "stage": "r16",
+    "stageLabel": "16강",
+    "stageOrder": 3,
+    "coach": "왈리드 레그라기",
+    "formationId": "4-3-3",
+    "style": "중원을 두껍게 세워 버티다 하키미의 오버래핑으로 순식간에 넘어간다.",
+    "strength": 76,
+    "captainId": "mar_hakimi",
+    "startingXI": [
+      "mar_bounou",
+      "mar_mazraoui",
+      "mar_riad",
+      "mar_yamiq",
+      "mar_hakimi",
+      "mar_ounahi",
+      "mar_amrabat",
+      "mar_khannouss",
+      "mar_talbi",
+      "mar_kaabi",
+      "mar_diaz"
+    ],
+    "source": "2026 FIFA 북중미 월드컵 최종 26인 명단(위키백과 2026 FIFA World Cup squads, wc-26.net 팀 스쿼드) 기준",
+    "note": "이름·등번호·소속팀·포지션은 실제 대회 명단 참고값이다. 공개 자료에서 등번호가 겹치거나 빠진 자리는 포지션에 맞게 정리했다. 능력치(stats)는 전부 밸런싱용 더미값이며 overall은 세부 스탯의 포지션 가중 평균으로 파생한다. 선발 11인(startingXI)과 포메이션은 각 팀의 대표 전형이며 실제 경기 선발과 다를 수 있다.",
+    "count": 26,
+    "positions": [
+      "GK",
+      "DF",
+      "MF",
+      "FW"
+    ],
+    "statKeys": [
+      "overall",
+      "attack",
+      "defense",
+      "stamina",
+      "pace",
+      "pass",
+      "shoot"
+    ]
+  },
+  "players": [
+    {
+      "id": "mar_bounou",
+      "name": "야신 부누",
+      "nameEn": "Yassine Bounou",
+      "num": 1,
+      "pos": "GK",
+      "detail": "GK",
+      "club": "알 힐랄",
+      "age": 35,
+      "stats": {
+        "overall": 80,
+        "attack": 22,
+        "defense": 84,
+        "stamina": 74,
+        "pace": 60,
+        "pass": 76,
+        "shoot": 20
+      },
+      "squad2026": true
+    },
+    {
+      "id": "mar_hakimi",
+      "name": "아슈라프 하키미",
+      "nameEn": "Achraf Hakimi",
+      "num": 2,
+      "pos": "DF",
+      "detail": "RB",
+      "club": "파리 생제르맹",
+      "age": 27,
+      "captain": true,
+      "stats": {
+        "overall": 82,
+        "attack": 84,
+        "defense": 76,
+        "stamina": 88,
+        "pace": 93,
+        "pass": 82,
+        "shoot": 70
+      },
+      "squad2026": true
+    },
+    {
+      "id": "mar_mazraoui",
+      "name": "누사이르 마즈라위",
+      "nameEn": "Noussair Mazraoui",
+      "num": 3,
+      "pos": "DF",
+      "detail": "LB",
+      "club": "맨체스터 유나이티드",
+      "age": 28,
+      "stats": {
+        "overall": 78,
+        "attack": 72,
+        "defense": 78,
+        "stamina": 84,
+        "pace": 84,
+        "pass": 78,
+        "shoot": 54
+      },
+      "squad2026": true
+    },
+    {
+      "id": "mar_amrabat",
+      "name": "소피안 암라바트",
+      "nameEn": "Sofyan Amrabat",
+      "num": 4,
+      "pos": "MF",
+      "detail": "DM",
+      "club": "페네르바흐체",
+      "age": 29,
+      "stats": {
+        "overall": 73,
+        "attack": 64,
+        "defense": 78,
+        "stamina": 86,
+        "pace": 70,
+        "pass": 76,
+        "shoot": 56
+      },
+      "squad2026": true
+    },
+    {
+      "id": "mar_yamiq",
+      "name": "자와드 엘 야미크",
+      "nameEn": "Jawad El Yamiq",
+      "num": 5,
+      "pos": "DF",
+      "detail": "CB",
+      "club": "바야돌리드",
+      "age": 34,
+      "stats": {
+        "overall": 69,
+        "attack": 44,
+        "defense": 76,
+        "stamina": 76,
+        "pace": 64,
+        "pass": 66,
+        "shoot": 44
+      },
+      "squad2026": true
+    },
+    {
+      "id": "mar_bouaddi",
+      "name": "아유브 부아디",
+      "nameEn": "Ayyoub Bouaddi",
+      "num": 6,
+      "pos": "MF",
+      "detail": "DM",
+      "club": "릴 OSC",
+      "age": 18,
+      "stats": {
+        "overall": 71,
+        "attack": 62,
+        "defense": 72,
+        "stamina": 80,
+        "pace": 74,
+        "pass": 76,
+        "shoot": 54
+      },
+      "squad2026": true
+    },
+    {
+      "id": "mar_talbi",
+      "name": "솀스딘 탈비",
+      "nameEn": "Chemsdine Talbi",
+      "num": 7,
+      "pos": "FW",
+      "detail": "LW",
+      "club": "선덜랜드",
+      "age": 21,
+      "stats": {
+        "overall": 75,
+        "attack": 76,
+        "defense": 44,
+        "stamina": 80,
+        "pace": 86,
+        "pass": 72,
+        "shoot": 72
+      },
+      "squad2026": true
+    },
+    {
+      "id": "mar_ounahi",
+      "name": "아제딘 우나히",
+      "nameEn": "Azzedine Ounahi",
+      "num": 8,
+      "pos": "MF",
+      "detail": "CM",
+      "club": "올랭피크 마르세유",
+      "age": 26,
+      "stats": {
+        "overall": 76,
+        "attack": 74,
+        "defense": 64,
+        "stamina": 84,
+        "pace": 76,
+        "pass": 82,
+        "shoot": 62
+      },
+      "squad2026": true
+    },
+    {
+      "id": "mar_rahimi",
+      "name": "수피안 라히미",
+      "nameEn": "Soufiane Rahimi",
+      "num": 9,
+      "pos": "FW",
+      "detail": "ST",
+      "club": "알 아인",
+      "age": 30,
+      "stats": {
+        "overall": 75,
+        "attack": 76,
+        "defense": 40,
+        "stamina": 76,
+        "pace": 80,
+        "pass": 68,
+        "shoot": 78
+      },
+      "squad2026": true
+    },
+    {
+      "id": "mar_diaz",
+      "name": "브라힘 디아스",
+      "nameEn": "Brahim Diaz",
+      "num": 10,
+      "pos": "FW",
+      "detail": "RW",
+      "club": "레알 마드리드",
+      "age": 26,
+      "stats": {
+        "overall": 80,
+        "attack": 84,
+        "defense": 44,
+        "stamina": 78,
+        "pace": 86,
+        "pass": 82,
+        "shoot": 78
+      },
+      "squad2026": true
+    },
+    {
+      "id": "mar_saibari",
+      "name": "이스마엘 사이비",
+      "nameEn": "Ismael Saibari",
+      "num": 11,
+      "pos": "MF",
+      "detail": "AM",
+      "club": "PSV 에인트호번",
+      "age": 25,
+      "stats": {
+        "overall": 75,
+        "attack": 78,
+        "defense": 58,
+        "stamina": 82,
+        "pace": 80,
+        "pass": 78,
+        "shoot": 72
+      },
+      "squad2026": true
+    },
+    {
+      "id": "mar_mohamedi",
+      "name": "무니르 모하메디",
+      "nameEn": "Munir Mohamedi",
+      "num": 12,
+      "pos": "GK",
+      "detail": "GK",
+      "club": "RS 베르칸",
+      "age": 37,
+      "stats": {
+        "overall": 69,
+        "attack": 18,
+        "defense": 72,
+        "stamina": 68,
+        "pace": 56,
+        "pass": 64,
+        "shoot": 16
+      },
+      "squad2026": true
+    },
+    {
+      "id": "mar_ouahdi",
+      "name": "자카리아 엘 와디",
+      "nameEn": "Zakaria El Ouahdi",
+      "num": 13,
+      "pos": "DF",
+      "detail": "RB",
+      "club": "헹크",
+      "age": 25,
+      "stats": {
+        "overall": 74,
+        "attack": 66,
+        "defense": 72,
+        "stamina": 82,
+        "pace": 84,
+        "pass": 70,
+        "shoot": 48
+      },
+      "squad2026": true
+    },
+    {
+      "id": "mar_diop",
+      "name": "이사 디오프",
+      "nameEn": "Issa Diop",
+      "num": 14,
+      "pos": "DF",
+      "detail": "CB",
+      "club": "풀럼",
+      "age": 29,
+      "stats": {
+        "overall": 71,
+        "attack": 44,
+        "defense": 78,
+        "stamina": 78,
+        "pace": 72,
+        "pass": 66,
+        "shoot": 44
+      },
+      "squad2026": true
+    },
+    {
+      "id": "mar_mourabet",
+      "name": "사미르 엘 무라베트",
+      "nameEn": "Samir El Mourabet",
+      "num": 15,
+      "pos": "MF",
+      "detail": "CM",
+      "club": "AS FAR",
+      "age": 20,
+      "stats": {
+        "overall": 67,
+        "attack": 60,
+        "defense": 62,
+        "stamina": 78,
+        "pace": 74,
+        "pass": 70,
+        "shoot": 54
+      },
+      "squad2026": true
+    },
+    {
+      "id": "mar_yassine",
+      "name": "제심 야신",
+      "nameEn": "Gessime Yassine",
+      "num": 16,
+      "pos": "FW",
+      "detail": "LW",
+      "club": "단데",
+      "age": 20,
+      "stats": {
+        "overall": 70,
+        "attack": 70,
+        "defense": 40,
+        "stamina": 76,
+        "pace": 84,
+        "pass": 66,
+        "shoot": 64
+      },
+      "squad2026": true
+    },
+    {
+      "id": "mar_sbai",
+      "name": "아민 스바이",
+      "nameEn": "Amine Sbai",
+      "num": 17,
+      "pos": "FW",
+      "detail": "RW",
+      "club": "비다드 카사블랑카",
+      "age": 25,
+      "stats": {
+        "overall": 70,
+        "attack": 70,
+        "defense": 42,
+        "stamina": 76,
+        "pace": 82,
+        "pass": 68,
+        "shoot": 66
+      },
+      "squad2026": true
+    },
+    {
+      "id": "mar_riad",
+      "name": "샤디 리아드",
+      "nameEn": "Chadi Riad",
+      "num": 18,
+      "pos": "DF",
+      "detail": "CB",
+      "club": "크리스털 팰리스",
+      "age": 22,
+      "stats": {
+        "overall": 74,
+        "attack": 46,
+        "defense": 80,
+        "stamina": 80,
+        "pace": 76,
+        "pass": 70,
+        "shoot": 42
+      },
+      "squad2026": true
+    },
+    {
+      "id": "mar_belammari",
+      "name": "유세프 벨라마리",
+      "nameEn": "Youssef Belammari",
+      "num": 19,
+      "pos": "DF",
+      "detail": "CB",
+      "club": "RS 베르칸",
+      "age": 27,
+      "stats": {
+        "overall": 68,
+        "attack": 42,
+        "defense": 73,
+        "stamina": 76,
+        "pace": 70,
+        "pass": 64,
+        "shoot": 40
+      },
+      "squad2026": true
+    },
+    {
+      "id": "mar_kaabi",
+      "name": "아유브 엘 카비",
+      "nameEn": "Ayoub El Kaabi",
+      "num": 20,
+      "pos": "FW",
+      "detail": "ST",
+      "club": "올림피아코스",
+      "age": 33,
+      "stats": {
+        "overall": 76,
+        "attack": 80,
+        "defense": 44,
+        "stamina": 76,
+        "pace": 72,
+        "pass": 66,
+        "shoot": 84
+      },
+      "squad2026": true
+    },
+    {
+      "id": "mar_amaimouni",
+      "name": "아유브 아마이무니",
+      "nameEn": "Ayoube Amaimouni",
+      "num": 21,
+      "pos": "FW",
+      "detail": "ST",
+      "club": "아인트라흐트 프랑크푸르트",
+      "age": 20,
+      "stats": {
+        "overall": 70,
+        "attack": 70,
+        "defense": 40,
+        "stamina": 76,
+        "pace": 80,
+        "pass": 62,
+        "shoot": 70
+      },
+      "squad2026": true
+    },
+    {
+      "id": "mar_tagnaouti",
+      "name": "아메드 레다 타그나우티",
+      "nameEn": "Ahmed Reda Tagnaouti",
+      "num": 22,
+      "pos": "GK",
+      "detail": "GK",
+      "club": "AS FAR",
+      "age": 30,
+      "stats": {
+        "overall": 71,
+        "attack": 18,
+        "defense": 74,
+        "stamina": 68,
+        "pace": 58,
+        "pass": 66,
+        "shoot": 16
+      },
+      "squad2026": true
+    },
+    {
+      "id": "mar_khannouss",
+      "name": "빌랄 엘 칸누스",
+      "nameEn": "Bilal El Khannouss",
+      "num": 23,
+      "pos": "MF",
+      "detail": "AM",
+      "club": "레스터 시티",
+      "age": 22,
+      "stats": {
+        "overall": 76,
+        "attack": 80,
+        "defense": 52,
+        "stamina": 80,
+        "pace": 78,
+        "pass": 84,
+        "shoot": 70
+      },
+      "squad2026": true
+    },
+    {
+      "id": "mar_aynaoui",
+      "name": "닐 엘 아이나위",
+      "nameEn": "Neil El Aynaoui",
+      "num": 24,
+      "pos": "MF",
+      "detail": "CM",
+      "club": "AS 로마",
+      "age": 25,
+      "stats": {
+        "overall": 74,
+        "attack": 70,
+        "defense": 68,
+        "stamina": 84,
+        "pace": 74,
+        "pass": 76,
+        "shoot": 66
+      },
+      "squad2026": true
+    },
+    {
+      "id": "mar_halhal",
+      "name": "레두안 할할",
+      "nameEn": "Redouane Halhal",
+      "num": 25,
+      "pos": "DF",
+      "detail": "CB",
+      "club": "메헬렌",
+      "age": 23,
+      "stats": {
+        "overall": 67,
+        "attack": 40,
+        "defense": 71,
+        "stamina": 74,
+        "pace": 70,
+        "pass": 64,
+        "shoot": 38
+      },
+      "squad2026": true
+    },
+    {
+      "id": "mar_salaheddine",
+      "name": "아나스 살라흐에딘",
+      "nameEn": "Anass Salah-Eddine",
+      "num": 26,
+      "pos": "DF",
+      "detail": "LB",
+      "club": "아탈란타",
+      "age": 24,
+      "stats": {
+        "overall": 74,
+        "attack": 68,
+        "defense": 72,
+        "stamina": 82,
+        "pace": 82,
+        "pass": 72,
+        "shoot": 48
+      },
+      "squad2026": true
+    }
+  ]
+}
