@@ -44,4 +44,6 @@ export const ACTION_ID = {
   GK_CLAIM: 7, // 골키퍼가 공중/지상 볼을 잡느냐(캐치) 쳐내느냐(펀칭) 놓치느냐
   INJURY_CHECK: 8,
   CROSS_SUCCESS: 9,
+  PENALTY_AIM: 10, // 페널티킥 키커가 노리는 쪽
+  PENALTY_DIVE: 11, // 골키퍼가 몸을 던지는 쪽 — 키커와 **다른** actionId여야 둘이 독립이다
 };

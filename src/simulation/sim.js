@@ -31,6 +31,8 @@ const RESTART_EXECUTORS = {
   'goal-kick': (sim, taker) => sim.executeGoalKick(taker),
   corner: (sim, taker) => sim.executeCornerKick(taker),
   'throw-in': (sim, taker) => sim.executeThrowIn(taker),
+  penalty: (sim, taker) => sim.executePenaltyKick(taker),
+  'free-kick': (sim, taker) => sim.executeFreeKick(taker),
 };
 
 const inCoordRange = (n) => Number.isFinite(n) && n >= -COORD_LIMIT && n <= COORD_LIMIT;
@@ -797,7 +799,19 @@ export class Sim {
     return clamp(raw, PARAMS.foulChanceMin, PARAMS.foulChanceMax);
   }
 
-  /** 파울 확정 — 공을 세우고 반칙당한 팀에 프리킥을 준 뒤, 카드 여부를 굴린다. */
+  /**
+   * 반칙 지점이 **반칙한 쪽 자기 페널티 에어리어** 안인가. 여기가 페널티킥과 프리킥을 가른다.
+   * 공격 방향(attackDirection)이 아니라 수비하는 골문 기준으로 재야 한다 — 공격 진영
+   * 페널티 에어리어(상대 골문 앞)에서 수비수가 반칙한 게 아니면 PK가 아니다.
+   */
+  foulInOwnBox(defender) {
+    const ownGoalX = -defender.attackDirection * HALF.L;
+    return (
+      Math.abs(defender.x - ownGoalX) <= PENALTY_AREA.depth && Math.abs(defender.z) <= PENALTY_AREA.halfWidth
+    );
+  }
+
+  /** 파울 확정 — 카드 여부를 굴리고, 반칙 위치에 따라 프리킥과 페널티킥으로 갈린다. */
   commitFoul(defender, attacker) {
     this.pushEvent('foul', defender.team, `${defender.name} 파울`);
     const roll = seededRandom(this.tick, seededRandomPlayerId(defender.team, defender.idx), ACTION_ID.CARD_CHECK);
@@ -805,6 +819,12 @@ export class Sim {
       this.sendOff(defender, '거친 파울');
     } else if (roll < PARAMS.straightRedChance + PARAMS.yellowCardChance) {
       this.applyCard(defender);
+    }
+    if (this.foulInOwnBox(defender)) {
+      // 페널티킥은 반칙 자리가 아니라 언제나 페널티 스폿에서 찬다.
+      const spotX = attacker.attackDirection * (HALF.L - PARAMS.penaltySpotDepth);
+      this.restart(attacker.team, spotX, 0, 'penalty', `${defender.name} 반칙 · 페널티킥`);
+      return;
     }
     this.restart(attacker.team, defender.x, defender.z, 'free-kick', `${defender.name} 파울 · 프리킥`);
   }
@@ -1334,10 +1354,7 @@ export class Sim {
     this.ball.x = clamp(x, -HALF.L, HALF.L);
     this.ball.z = clamp(z, -HALF.W, HALF.W);
     const side = team === 'home' ? this.homeP : this.awayP;
-    const taker =
-      type === 'goal-kick'
-        ? side.find((p) => p.role === 'GK' && !p.sentOff && !p.injured) ?? closest(side, this.ball)
-        : closest(side, this.ball);
+    const taker = this.restartTaker(type, side);
     if (taker) {
       taker.x = this.ball.x;
       taker.z = this.ball.z;
@@ -1356,6 +1373,89 @@ export class Sim {
       }
     }
     this.pushEvent(type, team, text);
+  }
+
+  /**
+   * 재개를 누가 차는가. 기본은 볼에서 가장 가까운 선수지만 두 가지는 다르다 —
+   * 골킥은 골키퍼가 차고, 페널티킥은 **가까운 사람이 아니라 팀에서 슛이 가장 좋은 선수**가 찬다.
+   */
+  restartTaker(type, side) {
+    const available = side.filter((p) => !p.sentOff && !p.injured);
+    if (type === 'goal-kick') return available.find((p) => p.role === 'GK') ?? closest(side, this.ball);
+    if (type === 'penalty') {
+      // 동점이면 idx로 갈라서 같은 seed에서 항상 같은 키커가 나오게 한다(되감기 재현).
+      const kickers = available
+        .filter((p) => p.role !== 'GK')
+        .sort((a, b) => b.shootSkill - a.shootSkill || a.idx - b.idx);
+      return kickers[0] ?? closest(side, this.ball);
+    }
+    return closest(side, this.ball);
+  }
+
+  /**
+   * 페널티킥 — 키커 대 골키퍼 단독 상황.
+   *
+   * 세이브 확률을 따로 계산하지 않는다. 키커가 노리는 쪽과 키퍼가 몸을 던지는 쪽을 각각
+   * 굴려서 키퍼를 **미리 그 자리에 세워 두고**, 그 다음은 기존 슛·선방 코드가 그대로
+   * 처리한다. 방향을 맞히면 볼이 사거리(gkReachRadius) 안으로 들어와 캐치/펀칭 판정이
+   * 돌고, 틀리면 손이 안 닿아 골이 된다. 새 확률 모델을 안 만들어도 "찍기 싸움"이 된다.
+   *
+   * 두 굴림은 actionId가 달라야(PENALTY_AIM vs PENALTY_DIVE) 서로 독립이다 — 같으면
+   * 키퍼가 항상 맞히거나 항상 틀린다.
+   */
+  executePenaltyKick(kicker) {
+    const dir = kicker.attackDirection;
+    const goalX = dir * HALF.L;
+    const opponents = kicker.team === 'home' ? this.awayP : this.homeP;
+    const gk = opponents.find((p) => p.role === 'GK' && !p.sentOff && !p.injured);
+
+    // 키커와 키퍼를 뺀 전원은 박스 밖에 선다(실제 규칙). 표를 두지 않고 폭에 고르게
+    // 늘어세운다 — 퇴장·부상으로 인원이 줄어도 그대로 동작한다.
+    const others = this.all.filter((p) => p !== kicker && p !== gk && !p.sentOff && !p.injured);
+    others.forEach((p, i) => {
+      const t = others.length > 1 ? i / (others.length - 1) : 0.5;
+      p.x = goalX - dir * (PENALTY_AREA.depth + 2.5 + (i % 3) * 3);
+      p.z = (t - 0.5) * 2 * PARAMS.penaltyWaitHalfWidth;
+      p.vx = 0;
+      p.vz = 0;
+      p.kc = 0;
+    });
+
+    // 키커는 볼 뒤에 선다. 볼은 restart()가 이미 페널티 스폿에 놓았다.
+    kicker.x = this.ball.x - dir * PARAMS.penaltyRunUp;
+    kicker.z = 0;
+    kicker.vx = 0;
+    kicker.vz = 0;
+
+    const aimRoll = seededRandom(this.tick, seededRandomPlayerId(kicker.team, kicker.idx), ACTION_ID.PENALTY_AIM);
+    const aimSide = aimRoll < 0.5 ? -1 : 1;
+    // 조준점은 스탯과 무관하게 고정이다 — 페널티킥은 찍기 싸움으로 둔다.
+    // (슛 스탯으로 구석에 더 붙이게 해 봤지만, 그러면 페널티가 스탯 대결이 된다.
+    //  스탯은 errorDegrees의 조준 오차에만 반영된다.)
+    const targetZ = aimSide * (GOAL_W / 2) * PARAMS.penaltyAimFraction;
+
+    if (gk) {
+      const diveRoll = seededRandom(this.tick, seededRandomPlayerId(gk.team, gk.idx), ACTION_ID.PENALTY_DIVE);
+      const diveSide = diveRoll < 0.5 ? -1 : 1;
+      gk.x = goalX - dir * PARAMS.penaltyGkLineOffset;
+      gk.z = diveSide * PARAMS.penaltyDiveReach;
+      gk.vx = 0;
+      gk.vz = 0;
+      gk.kc = 0;
+    }
+
+    const errDeg = this.errorDegrees(kicker, {
+      statValue: kicker.shootSkill,
+      distance: PARAMS.distanceErrorRef,
+      baseDeg: PARAMS.penaltyBaseErrorDeg,
+    });
+    const [edx, edz] = this.rotateXZ(goalX - this.ball.x, targetZ - this.ball.z, errDeg);
+    const kickerKey = `${kicker.team}:${kicker.idx}`;
+    this.ball.kick(edx, edz, PARAMS.penaltyForce, kickerKey, PARAMS.penaltyLoftDeg);
+    // 슛으로 표시해야 키퍼가 막았을 때 "선방"으로 기록된다(일반 슛과 같은 경로).
+    this.ball.shotBy = kickerKey;
+    kicker.kc = PARAMS.kickCooldownTicks;
+    this.pushEvent('shot', kicker.team, `${kicker.name} 페널티킥`);
   }
 
   /**
@@ -1392,14 +1492,14 @@ export class Sim {
   }
 
   /**
-   * 코너킥 — 코너 아크에서 문전으로 띄워 올린다.
+   * 문전으로 띄워 올리는 세트피스 배달 — 코너킥과 먼 프리킥이 같은 장면이라 코드를 공유한다.
    *
    * 힘은 거리에서 역산한다. 골킥처럼 힘을 고정하면 짧은 코너에서 볼이 골라인을 그대로
    * 넘어가 버린다(코너 스팟에서 문전까지가 34m인데 고정 힘은 그 하나에만 맞기 때문이다).
    * 무항력 포물선 R = v²·sin(2θ)/g 에 공기저항 보정을 넣고 v를 역산한다 — 각도를 바꾸면
    * 힘이 저절로 따라온다.
    */
-  executeCornerKick(taker) {
+  deliverSetPieceCross(taker) {
     this.setCornerFormation(taker);
     const dir = taker.attackDirection;
     // 겨냥점은 사람이 아니라 "위험 지역"이다 — 실제 코너도 존을 보고 올린다. 그 존에
@@ -1436,6 +1536,114 @@ export class Sim {
     // 볼이 문전에 내려올 때까지 배치를 붙잡는다. 안 잡으면 2.23초 체공 동안 다들 자기
     // 대형 자리로 돌아가 박스가 빈다.
     this.setPieceHold = { from: this.tick, until: this.tick + PARAMS.setPieceHoldMaxTicks };
+  }
+
+  /** 코너킥 — 문전 배달 그대로다. */
+  executeCornerKick(taker) {
+    this.deliverSetPieceCross(taker);
+  }
+
+  /**
+   * 수비벽 — 볼과 골문을 잇는 선 위, 규정 거리(centerCircleRadius와 같은 9.15m)에 세운다.
+   * 벽에 안 서는 수비도 그 거리 밖으로 물러난다(규정).
+   *
+   * @param {number} count 벽에 세울 인원. 0이면 벽 없이 물러나기만 한다(먼 프리킥).
+   */
+  setFreeKickWall(taker, count) {
+    const b = this.ball;
+    const dir = taker.attackDirection;
+    const gd = vlen(dir * HALF.L - b.x, -b.z) || 1;
+    const ux = (dir * HALF.L - b.x) / gd; // 볼 → 골문 단위벡터
+    const uz = -b.z / gd;
+    const px = -uz; // 그 수직 방향 — 벽이 옆으로 늘어서는 축
+    const pz = ux;
+
+    const defenders = (taker.team === 'home' ? this.awayP : this.homeP).filter(
+      (p) => p.role !== 'GK' && !p.sentOff && !p.injured
+    );
+    // 볼에 가까운 순서로 벽을 세운다. 동점이면 idx로 갈라 같은 seed에서 같은 벽이 나오게 한다.
+    const sorted = [...defenders].sort(
+      (a, c) => vlen(a.x - b.x, a.z - b.z) - vlen(c.x - b.x, c.z - b.z) || a.idx - c.idx
+    );
+    const wall = sorted.slice(0, count);
+    wall.forEach((p, i) => {
+      const off = (i - (count - 1) / 2) * PARAMS.freeKickWallSpacing;
+      p.x = clamp(b.x + ux * PARAMS.freeKickWallDistance + px * off, -HALF.L + PARAMS.playerLineInset, HALF.L - PARAMS.playerLineInset);
+      p.z = clamp(b.z + uz * PARAMS.freeKickWallDistance + pz * off, -HALF.W + PARAMS.playerLineInset, HALF.W - PARAMS.playerLineInset);
+      p.vx = 0;
+      p.vz = 0;
+      p.kc = 0;
+    });
+    // 나머지 수비는 규정 거리까지 물러난다 — 이미 밖에 있으면 건드리지 않는다.
+    for (const p of sorted.slice(count)) {
+      const d = vlen(p.x - b.x, p.z - b.z);
+      if (d >= PARAMS.freeKickWallDistance || d < 1e-6) continue;
+      const s = PARAMS.freeKickWallDistance / d;
+      p.x = clamp(b.x + (p.x - b.x) * s, -HALF.L + PARAMS.playerLineInset, HALF.L - PARAMS.playerLineInset);
+      p.z = clamp(b.z + (p.z - b.z) * s, -HALF.W + PARAMS.playerLineInset, HALF.W - PARAMS.playerLineInset);
+    }
+    return wall;
+  }
+
+  /**
+   * 프리킥 — 골문까지의 거리가 두 장면을 가른다.
+   *
+   * 사거리 밖이면 문전으로 올리는 세트피스(코너와 같은 장면)이고, 사거리 안이면 수비벽을
+   * 세우고 직접 노린다. 직접 슛은 벽에 맞을 수 있는데, 볼과 선수의 충돌 물리가 없으므로
+   * 여기서 한 번만 굴려서 판정한다 — 맞으면 마지막 터치가 수비가 되니 골라인을 넘어가면
+   * 규칙대로 코너킥이 된다.
+   */
+  executeFreeKick(taker) {
+    const b = this.ball;
+    const dir = taker.attackDirection;
+    const goalX = dir * HALF.L;
+    const gd = vlen(goalX - b.x, -b.z);
+
+    if (gd > PARAMS.freeKickShotRange) {
+      // 먼 프리킥 — 벽은 필요 없고(슛 사거리 밖), 규정 거리만 물린 뒤 문전으로 올린다.
+      this.setFreeKickWall(taker, 0);
+      this.deliverSetPieceCross(taker);
+      return;
+    }
+
+    this.setFreeKickWall(taker, PARAMS.freeKickWallCount);
+    const takerKey = `${taker.team}:${taker.idx}`;
+
+    // 벽 반대쪽 구석을 노린다 — 볼이 있는 쪽 반대편(파 포스트)이 벽에 덜 가린다.
+    const aimSide = b.z >= 0 ? -1 : 1;
+    const targetZ = aimSide * (GOAL_W / 2) * PARAMS.freeKickAimFraction;
+
+    // 벽을 **넘겨서** 크로스바 밑으로 떨어지는 궤적을 만든다. 이게 프리킥의 핵심이고,
+    // 없으면 벽이 매번 헤딩으로 걷어낸다 — 낮게 깔아 찼더니 실측으로 벽 앞 볼 높이가
+    // 1.2m라 헤딩 구간(0.75~2.2m)에 정확히 걸려서 100% 막혔다(득점 1~2%).
+    //
+    // 포물선 y(x) = x·tanθ − g·x²/(2v²cos²θ) 에서 "골라인에서의 높이 y(gd)"를 정해 두고
+    // v를 역산한다. 각도가 고정이면 거리마다 필요한 힘이 저절로 나오고, 벽 위치(9.15m)에서의
+    // 높이는 그 결과로 따라온다(20m 기준 3.0m — 헤딩이 안 닿는다).
+    // 스핀(마그누스)이 없는 물리라 힘을 실제 프리킥만큼 세게 주면 이 둘을 동시에 못 만족한다.
+    // 그래서 "감아 차는 느린 킥"쪽을 택했다.
+    const rad = (PARAMS.freeKickShotLoftDeg * Math.PI) / 180;
+    const rise = gd * Math.tan(rad) - PARAMS.freeKickTargetHeight;
+    const denom = 2 * Math.cos(rad) ** 2 * rise;
+    const force =
+      rise > 0
+        ? clamp(
+            Math.sqrt((PARAMS.gravity * gd * gd) / denom) * PARAMS.freeKickDragCorrection,
+            PARAMS.freeKickMinForce,
+            PARAMS.freeKickMaxForce
+          )
+        : PARAMS.freeKickMinForce;
+
+    const errDeg = this.errorDegrees(taker, {
+      statValue: taker.shootSkill,
+      distance: gd,
+      baseDeg: PARAMS.freeKickBaseErrorDeg,
+    });
+    const [edx, edz] = this.rotateXZ(goalX - b.x, targetZ - b.z, errDeg);
+    b.kick(edx, edz, force, takerKey, PARAMS.freeKickShotLoftDeg);
+    b.shotBy = takerKey;
+    taker.kc = PARAMS.kickCooldownTicks;
+    this.pushEvent('shot', taker.team, `${taker.name} 프리킥 슛`);
   }
 
   /**
