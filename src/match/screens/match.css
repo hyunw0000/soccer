@@ -599,26 +599,6 @@
   .championship-confetti,.championship-fireworks { display:none; }
 }
 
-.championship-demo-screen {
-  display:grid;
-  min-height:calc(100svh - var(--app-navigation-height,62px));
-  place-content:center;
-  justify-items:center;
-  gap:14px;
-  padding:32px 18px;
-  background:
-    radial-gradient(circle at 50% 30%,rgba(226,184,73,.15),transparent 36%),
-    linear-gradient(rgba(48,151,184,.04) 1px,transparent 1px),
-    linear-gradient(90deg,rgba(48,151,184,.04) 1px,transparent 1px),
-    #04111a;
-  background-size:auto,24px 24px,24px 24px,auto;
-  text-align:center;
-}
-.championship-demo-screen__eyebrow { margin:0; color:#e1bd5b; font-size:10px; font-weight:900; letter-spacing:.2em; }
-.championship-demo-screen h1 { margin:0; font-size:clamp(32px,6vw,58px); }
-.championship-demo-screen>p:not(.championship-demo-screen__eyebrow) { max-width:38em; margin:0 0 8px; color:#96aab4; line-height:1.6; }
-.championship-demo-screen .primary { min-width:220px; min-height:52px; }
-
 /* 경로 지시 상태 문구 — 공용 .hint(bottom 78px)와 같은 자리에 겹치지 않도록 한 줄 더 띄운다 */
 .path-status {
   position: absolute;
