@@ -3,7 +3,7 @@ import { resetState, state, setState } from '../public.js';
 import './opening.css';
 
 export const OPENING_MATCH = Object.freeze({
-  competition: 'WORLD CHAMPIONSHIP 2026',
+  competition: 'WORLD CUP 2026',
   stage: 'GROUP STAGE · MATCHDAY 3',
   venue: 'NORTH AMERICA · STADIUM 07',
   home: { code: 'RSA', countryCode: 'ZA', name: '남아프리카공화국', score: 1 },
