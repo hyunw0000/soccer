@@ -116,6 +116,17 @@ export class Sim {
     this.awayP = this.buildSide('away', this.awayLineup, this.setup.awayTeam.players, this.oppTactics.width);
     this.all = [...this.homeP, ...this.awayP];
     this.ball = new Ball();
+
+    // 교체 후보 — 벤치(substituteIds)에 있는 선수 메타만 담는다. 이미 투입된 선수는
+    // substitute()가 여기서 지운다(같은 선수를 두 번 투입할 수 없다).
+    this.homeBench = this.buildBench(this.setup.homeTeam);
+    this.awayBench = this.buildBench(this.setup.awayTeam);
+    this.subsUsed = { home: 0, away: 0 };
+  }
+
+  buildBench(team) {
+    const ids = new Set(team.lineup.substituteIds ?? []);
+    return new Map((team.players ?? []).filter((p) => ids.has(p.id)).map((p) => [p.id, p]));
   }
 
   buildSide(team, lineup, players, width) {
@@ -169,6 +180,51 @@ export class Sim {
       this.formation = lineup.formationId ?? this.formation;
     }
     this.refreshHomeSlots();
+  }
+
+  /**
+   * 선수 교체 — 부상이든 단순 체력 관리든 같은 경로를 쓴다(실제 축구도 이유를 안 가린다).
+   * 나간 선수는 필드로 못 돌아오고, 들어온 선수는 나간 자리(위치·역할·개인 지시)를 그대로
+   * 물려받되 체력은 100%로 새로 시작한다.
+   *
+   * ponytail: 되감기(snapshot/restore)는 선수 슬롯의 "수치"만 복원하고 선수 "객체"는
+   * 안 바꾼다 — 그래서 교체 이전 시점으로 되감으면 나간 선수는 못 돌아오고 교체된 선수가
+   * 그 수치를 그대로 이어받는다. 되감기가 실점 직전 15분 안쪽에서만 쓰이는 한정 자원이라
+   * 교체와 겹칠 일이 드물어 지금은 감안하고 넘어간다 — 필요해지면 선수 객체 자체를
+   * 스냅샷에 담게 확장한다.
+   *
+   * @returns {boolean} 실제로 교체했는지
+   */
+  substitute(team, outIdx, inPlayerId) {
+    if (this.subsUsed[team] >= PARAMS.maxSubsPerTeam) return false;
+    const side = team === 'home' ? this.homeP : this.awayP;
+    const outPlayer = side[outIdx];
+    if (!outPlayer || outPlayer.sentOff) return false; // 퇴장한 자리는 교체로 못 채운다
+    const bench = team === 'home' ? this.homeBench : this.awayBench;
+    const meta = bench.get(inPlayerId);
+    if (!meta) return false; // 벤치에 없거나 이미 투입된 선수다
+
+    const incoming = new Player({
+      team,
+      idx: outIdx,
+      meta,
+      slot: { x: outPlayer.home.x, z: outPlayer.home.z, role: outPlayer.role, instruction: outPlayer.ins },
+    });
+    incoming.attackDirection = outPlayer.attackDirection;
+    incoming.x = outPlayer.x;
+    incoming.z = outPlayer.z;
+    incoming.heading = outPlayer.heading;
+
+    const key = `${team}:${outIdx}`;
+    if (this.ball.carrierKey === key) this.ball.carrierKey = null;
+    if (this.ball.ownerKey === key) this.ball.ownerKey = null;
+
+    side[outIdx] = incoming;
+    this.all = [...this.homeP, ...this.awayP];
+    bench.delete(inPlayerId);
+    this.subsUsed[team]++;
+    this.pushEvent('substitution', team, `${meta.name} 투입 ↔ ${outPlayer.name} 교체 아웃`);
+    return true;
   }
 
   refreshHomeSlots() {
@@ -325,7 +381,7 @@ export class Sim {
     const awayShift = this.blockShift('away');
 
     for (const p of this.all) {
-      if (p.sentOff) continue; // 퇴장한 선수는 경기장 밖에 멈춰 선 채로 다시 움직이지 않는다
+      if (p.sentOff || p.injured) continue; // 퇴장·부상 선수는 경기장 밖에 멈춰 선 채로 다시 움직이지 않는다
       const mates = p.team === 'home' ? this.homeP : this.awayP;
       const chaser = p.team === 'home' ? hc : ac;
       const mine = p.team === 'home';
@@ -339,7 +395,9 @@ export class Sim {
 
       // 체력 → 최고 속도는 스티어링보다 먼저 확정한다.
       // 뒤에서 갱신하면 한 스텝 늦은 값이 힘 계산에 섞여 되감기 재현성이 깨진다.
-      p.maxSpeed = p.maxSpeedBase * (0.72 + p.energy * 0.28);
+      // 0.72~1.0(예전)은 완전히 지쳐도 82%로 뛸 수 있어 체감이 안 됐다 — 0.55~1.0으로 넓혀
+      // 방전 상태(energyMin)에서는 최고 속도가 눈에 띄게 둔화된다.
+      p.maxSpeed = p.maxSpeedBase * (0.6 + p.energy * 0.4);
 
       let fx = 0;
       let fz = 0;
@@ -443,6 +501,17 @@ export class Sim {
       }
       if (sp > 0.5) p.heading = Math.atan2(p.vx, p.vz);
       if (p.kc > 0) p.kc--;
+      p.distanceRun += sp * dt; // 실제로 뛴 거리(m) 누적 — 감독이 압박 강도의 대가를 눈으로 확인할 지표
+
+      // 부상 — 지치고 전력질주할수록 확률이 올라간다. 이번 틱에 다치면 볼 스냅·체력 소모 없이
+      // 바로 빠진다(캐리어였다면 볼도 놓는다).
+      const injuryChance =
+        PARAMS.injuryBaseChance * (1 + (1 - p.energy) * PARAMS.injuryFatigueCoef) * clamp(sp / p.maxSpeed, 0, 1);
+      const injuryRoll = seededRandom(this.tick, seededRandomPlayerId(p.team, p.idx), ACTION_ID.INJURY_CHECK);
+      if (injuryRoll < injuryChance) {
+        this.injurePlayer(p);
+        continue;
+      }
 
       if (isCarrier) {
         // 볼을 발밑 앞쪽에 붙여둔다 — 따로 물리 갱신하지 않고 매 틱 캐리어 위치로 스냅한다.
@@ -456,8 +525,8 @@ export class Sim {
         this.ball.vy = 0;
       }
 
-      const drain = (sp / PARAMS.maxSpeed) * (PARAMS.pressDrainBase + press * PARAMS.pressDrainSpread) * (110 - p.stamina) / 100;
-      p.energy = clamp(p.energy - drain * dt * 0.004, 0.35, 1);
+      const drain = (sp / PARAMS.maxSpeed) * (PARAMS.pressDrainBase + (press - 0.5) * PARAMS.pressDrainSpread) * (110 - p.stamina) / 100;
+      p.energy = clamp(p.energy - drain * dt * PARAMS.energyDrainCoef, PARAMS.energyMin, 1);
     }
 
     for (const p of this.all) this.tryKick(p);
@@ -637,6 +706,23 @@ export class Sim {
     this.pushEvent('red-card', p.team, `${p.name} 퇴장 (${reason})`);
   }
 
+  /**
+   * 부상 — 퇴장과 같은 방식으로 경기장 밖에 고정하지만, sentOff와 달리 substitute()로
+   * 그 자리를 채울 수 있다. 캐리어가 다치면 볼도 즉시 놓아야 다음 틱에 아무도 못 다루는
+   * "유령 캐리어" 상태가 안 생긴다.
+   */
+  injurePlayer(p) {
+    p.injured = true;
+    p.x = p.home.x;
+    p.z = HALF.W + 8;
+    p.vx = 0;
+    p.vz = 0;
+    const key = `${p.team}:${p.idx}`;
+    if (this.ball.carrierKey === key) this.ball.carrierKey = null;
+    if (this.ball.ownerKey === key) this.ball.ownerKey = null;
+    this.pushEvent('injury', p.team, `${p.name} 부상`);
+  }
+
   /** 캐리어를 드리블 중에 노리는 상대. 사거리 안에 실제로 붙어야 다툰다. */
   tryTackleCarrier(defender) {
     const carrier = this.playerByKey(this.ball.carrierKey);
@@ -671,6 +757,8 @@ export class Sim {
     switch (action.type) {
       case 'pass':
         return this.executePass(p, action);
+      case 'cross':
+        return this.executeCross(p, action);
       case 'shoot':
         return this.executeShoot(p, action);
       case 'dribble':
@@ -720,6 +808,25 @@ export class Sim {
     // 확인함 — 패스가 나간 것처럼 보이지만 실제로는 계속 같은 선수가 캐리어로 남아 있었다).
     // 다른 킥/태클 경로는 전부 kc를 세팅하는데 여기만 빠져 있었다.
     p.kc = PARAMS.kickCooldownTicks;
+  }
+
+  /** 크로스 실행 — executePass와 같은 골격이지만 항상 크게 띄우고(crossLoftDeg) 오차가 더 크다. */
+  executeCross(p, action) {
+    const target = action.target;
+    if (isOffside(this, p, target)) {
+      this.offsideRestart(p.team, target);
+      return;
+    }
+    const dx = target.x - p.x;
+    const dz = target.z - p.z;
+    const roll = seededRandom(this.tick, seededRandomPlayerId(p.team, p.idx), ACTION_ID.CROSS_SUCCESS);
+    const succeeded = roll < action.meta.successProb;
+    const baseDeg = succeeded ? PARAMS.crossBaseErrorDeg : PARAMS.crossBaseErrorDeg * PARAMS.passFailErrorMultiplier;
+    const errDeg = this.errorDegrees(p, { statValue: p.passSkill, distance: action.meta.distance, baseDeg });
+    const [edx, edz] = this.rotateXZ(dx, dz, errDeg);
+    this.ball.kick(edx, edz, PARAMS.passForce, `${p.team}:${p.idx}`, PARAMS.crossLoftDeg);
+    p.kc = PARAMS.kickCooldownTicks;
+    this.pushEvent('cross', p.team, `${p.name} 크로스`);
   }
 
   /** 슛 실행 — 마찬가지로 성공확률을 한 번만 굴려서 오차 폭을 정한다. */
@@ -906,7 +1013,7 @@ export class Sim {
   }
 
   tryKick(p) {
-    if (p.sentOff) return;
+    if (p.sentOff || p.injured) return;
     const pKey = `${p.team}:${p.idx}`;
 
     if (this.ball.carrierKey) {
@@ -943,7 +1050,7 @@ export class Sim {
     let closer = null;
     let bd = vlen(p.x - this.ball.x, p.z - this.ball.z);
     for (const other of this.all) {
-      if (other === p || other.kc > 0 || other.sentOff) continue;
+      if (other === p || other.kc > 0 || other.sentOff || other.injured) continue;
       const d = vlen(other.x - this.ball.x, other.z - this.ball.z);
       if (d < bd) {
         bd = d;
@@ -964,7 +1071,7 @@ export class Sim {
     let challenger = null;
     let cbd = PARAMS.kickDist;
     for (const o of opps) {
-      if (o.kc > 0 || o.sentOff) continue;
+      if (o.kc > 0 || o.sentOff || o.injured) continue;
       const d = vlen(o.x - this.ball.x, o.z - this.ball.z);
       if (d <= cbd) {
         cbd = d;
@@ -1073,7 +1180,9 @@ export class Sim {
     this.ball.z = clamp(z, -HALF.W, HALF.W);
     const side = team === 'home' ? this.homeP : this.awayP;
     const taker =
-      type === 'goal-kick' ? side.find((p) => p.role === 'GK' && !p.sentOff) ?? closest(side, this.ball) : closest(side, this.ball);
+      type === 'goal-kick'
+        ? side.find((p) => p.role === 'GK' && !p.sentOff && !p.injured) ?? closest(side, this.ball)
+        : closest(side, this.ball);
     if (taker) {
       taker.x = this.ball.x;
       taker.z = this.ball.z;
@@ -1211,6 +1320,11 @@ export class Sim {
       // 돌려도 선수가 경기장에 돌아와 있는 모순이 생긴다.
       yellowCards: this.all.map((p) => p.yellowCards),
       sentOff: this.all.map((p) => p.sentOff),
+      // 부상·교체 사용 횟수도 되감기 대상이다 — 안 담으면 되감은 뒤 subsUsed가 그대로 남아
+      // maxSubsPerTeam을 우회해 교체를 더 쓸 수 있게 된다(선수 객체 자체가 아니라 이 숫자만
+      // 정확해도 "규정 위반"은 막을 수 있다 — substitute() 클래스 위 comment 참고).
+      injured: this.all.map((p) => p.injured),
+      subsUsed: { ...this.subsUsed },
     };
   }
 
@@ -1274,6 +1388,15 @@ export class Sim {
       this.all.forEach((p, i) => {
         p.sentOff = s.sentOff[i];
       });
+    }
+    // 옛 스냅샷 호환: injured/subsUsed가 없으면 현재 값을 그대로 둔다.
+    if (s.injured) {
+      this.all.forEach((p, i) => {
+        p.injured = s.injured[i];
+      });
+    }
+    if (s.subsUsed) {
+      this.subsUsed = { ...s.subsUsed };
     }
   }
 }

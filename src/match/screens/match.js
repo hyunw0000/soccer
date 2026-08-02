@@ -61,6 +61,7 @@ export default function matchScreen(root, ctx) {
   }
   const clockEl = el("b", { text: "00:00" });
   const possEl = el("b", { text: "-" });
+  const distEl = el("b", { text: "0.0km" }); // 팀 평균 주행거리 — 전술(특히 압박)의 체력 대가를 감독이 직접 확인하는 지표
   const camEl = el("b", { text: CAM_MODES.broadcast });
   const fpsEl = el("b", { text: "-" });
   const rewindEl = el("b", { text: `${REWIND_LIMIT}회` });
@@ -479,6 +480,7 @@ export default function matchScreen(root, ctx) {
 
   function openTacticsPanel() {
     if (tacticsPanel.isOpen) return;
+    closeSubPanel(); // 두 패널이 같은 자리에 뜨므로 겹치지 않게 하나만 연다
     // 전술을 고르는 동안 경기가 흘러가면 손댈 틈이 없다. 열면 멈추고, 닫으면 원래대로 돌아간다.
     resumeAfterTactics = !paused && sim.phase === "playing";
     tacticsPanel.open();
@@ -500,6 +502,81 @@ export default function matchScreen(root, ctx) {
     class: "ctl",
     text: "⚙ 전술 지시",
     onclick: () => (tacticsPanel.isOpen ? closeTacticsPanel() : openTacticsPanel()),
+  });
+
+  // 경기 중 선수 교체 — 홈만 감독이 직접 조작한다(전술과 같은 비대칭). 부상으로 강제로
+  // 빠진 선수도, 그냥 체력 관리 차원의 교체도 같은 패널·같은 sim.substitute() 경로를 쓴다.
+  const subCountEl = el("b", { text: `0/${PARAMS.maxSubsPerTeam}` });
+  const subListEl = el("div", { class: "lt-body" });
+  let resumeAfterSub = false;
+
+  function renderSubPanel() {
+    subCountEl.textContent = `${sim.subsUsed.home}/${PARAMS.maxSubsPerTeam}`;
+    const subsLeft = sim.subsUsed.home < PARAMS.maxSubsPerTeam;
+    const bench = [...sim.homeBench.entries()];
+    subListEl.replaceChildren(
+      ...sim.homeP.map((p) => {
+        const label = `#${p.num} ${p.name} · 체력 ${Math.round(p.energy * 100)}%${p.injured ? " · 부상" : ""}`;
+        if (p.sentOff) {
+          return el("div", { class: "row" }, [el("span", { text: label }), el("span", { text: "퇴장" })]);
+        }
+        if (!subsLeft || !bench.length) {
+          return el("div", { class: "row" }, [el("span", { text: label })]);
+        }
+        const select = el(
+          "select",
+          {},
+          bench.map(([id, meta]) => el("option", { value: id, text: `#${meta.num} ${meta.name}` }))
+        );
+        return el("div", { class: "row" }, [
+          el("span", { text: label, style: p.injured ? { color: "#ff8a92" } : {} }),
+          select,
+          el("button", {
+            class: "ctl",
+            type: "button",
+            text: "교체",
+            onclick: () => {
+              if (sim.substitute("home", p.idx, select.value)) renderSubPanel();
+            },
+          }),
+        ]);
+      })
+    );
+  }
+
+  const subPanel = el("aside", { class: "live-tactics", hidden: true }, [
+    el("div", { class: "lt-head" }, [
+      el("div", {}, [el("span", { class: "lt-eyebrow", text: "선수 교체" }), subCountEl]),
+      el("button", { class: "lt-close", type: "button", text: "✕", "aria-label": "교체 창 닫기", onclick: () => closeSubPanel() }),
+    ]),
+    subListEl,
+    el("div", { class: "lt-foot" }, [el("span", { class: "lt-note", text: "벤치 선수를 골라 교체합니다 · 팀당 최대 3회" })]),
+  ]);
+
+  function openSubPanel() {
+    if (!subPanel.hidden) return;
+    closeTacticsPanel(); // 두 패널이 같은 자리에 뜨므로 겹치지 않게 하나만 연다
+    resumeAfterSub = !paused && sim.phase === "playing";
+    if (resumeAfterSub) setPaused(true);
+    renderSubPanel();
+    subPanel.hidden = false;
+    subBtn.classList.add("on");
+  }
+
+  function closeSubPanel() {
+    if (subPanel.hidden) return;
+    subPanel.hidden = true;
+    subBtn.classList.remove("on");
+    if (resumeAfterSub) {
+      resumeAfterSub = false;
+      setPaused(false);
+    }
+  }
+
+  const subBtn = el("button", {
+    class: "ctl",
+    text: "🔄 선수 교체",
+    onclick: () => (subPanel.hidden ? openSubPanel() : closeSubPanel()),
   });
 
   // 재생 배속 — 시뮬레이션 계산 내용은 그대로, 실제 시간 대비 소비 속도만 바뀐다
@@ -581,6 +658,9 @@ export default function matchScreen(root, ctx) {
     possEl.textContent = o
       ? `${o.team === "home" ? homeCode : awayCode} #${o.num} ${o.name}`
       : "경합 중";
+    const outfield = sim.homeP.filter((p) => p.role !== "GK" && !p.sentOff);
+    const avgDistanceM = outfield.reduce((s, p) => s + p.distanceRun, 0) / Math.max(1, outfield.length);
+    distEl.textContent = `${(avgDistanceM / 1000).toFixed(1)}km`;
 
     for (const ev of newEvents) feed.prepend(eventNode(ev));
     if (newEvents.length) lastRenderedEventId = newEvents[newEvents.length - 1].id;
@@ -831,6 +911,7 @@ export default function matchScreen(root, ctx) {
           clockEl,
         ]),
         el("div", { class: "row" }, [el("span", { text: "공 소유" }), possEl]),
+        el("div", { class: "row" }, [el("span", { text: "평균 주행거리" }), distEl]),
         el("div", { class: "row" }, [el("span", { text: "카메라" }), camEl]),
         el("div", { class: "row" }, [
           el("span", { text: "남은 되감기" }),
@@ -867,8 +948,10 @@ export default function matchScreen(root, ctx) {
           },
         }),
         tacticsBtn,
+        subBtn,
       ]),
       tacticsPanel.node,
+      subPanel,
       el("p", { class: "hint" }, [
         el("span", {
           text: "탑뷰에서 드래그=회전 / 휠=줌 · Space=일시정지 · T=전술 · R=되감기 · 일시정지+탑뷰에서 우리 선수 드래그=경로 지시",

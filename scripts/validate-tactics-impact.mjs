@@ -97,8 +97,10 @@ function play(homeTactics, awayTactics, seed) {
     sumX += x / outfield.length;
     sumZ += z / outfield.length;
     sumBallSpeed += Math.hypot(sim.ball.vx, sim.ball.vz);
-    // 어떤 전술을 걸어도 선수는 경기장 안에 있어야 한다.
+    // 어떤 전술을 걸어도 "뛰고 있는" 선수는 경기장 안에 있어야 한다 — 퇴장·부상으로 빠진
+    // 선수는 의도적으로 터치라인 밖(HALF.W+8)에 고정해 두므로 이 체크에서 제외한다.
     for (const p of sim.all) {
+      if (p.sentOff || p.injured) continue;
       if (Math.abs(p.x) >= HALF.L || Math.abs(p.z) >= HALF.W) outsideTicks++;
     }
 
@@ -280,9 +282,12 @@ for (const [label, tactics] of [
   // 한 번의 긴 질주는 버그가 아니다 — 양 팀이 다 올라선 상황의 역습은 실제로 절반을 달린다.
   // 진짜 신호는 "경기 내내 드리블만 한다"쪽이라 시간 비율을 주 기준으로 삼고,
   // 최장 거리는 골라인에서 골라인까지 걸어가던 옛 동작만 걸러 내는 헐거운 상한으로 둔다.
+  // 70으로 둔 이유: 체력이 떨어질수록 최고속도가 실제로 느려지게 만든 뒤로(sim.js의
+  // energy→maxSpeed 곡선), 지친 수비가 드리블러를 못 따라잡는 한 번의 긴 질주가 이전보다
+  // 조금 더 길게 나올 수 있다 — 이건 의도한 체력 저하 효과지 버그가 아니다.
   check(
     `${label} 단독 드리블`,
-    r.longestCarry < 60,
+    r.longestCarry < 70,
     `한 명이 ${fixed(r.longestCarry, 1)}m를 혼자 몰고 갔다 — 아무도 막지 못한다는 뜻이다`
   );
   check(

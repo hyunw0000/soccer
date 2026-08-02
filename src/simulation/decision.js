@@ -7,7 +7,7 @@
 // 기존 score*() 함수는 절대 건드리지 않는다 — 이게 "if-else 폭포수라 새 행동을 추가하면
 // 기존 행동이 실행되지 않는" 문제의 재발을 막는 핵심 규칙이다.
 
-import { PARAMS, HALF, GOAL_W } from './params.js';
+import { PARAMS, HALF, GOAL_W, PENALTY_AREA } from './params.js';
 import { vlen, clamp } from './math.js';
 import { seededRandomPlayerId } from './rng.js';
 
@@ -129,6 +129,8 @@ export function scorePassCandidates(sim, p) {
   // 진영 폭은 팀 전술이 뼈대다 — 좁은 팀은 중앙으로 모으고 넓은 팀은 측면으로 벌린다.
   const wWidth = blendInstruction(t.width, p.ins.width);
   // 패스 길이도 템포를 따른다. 짧은 패스 팀은 가까운 동료를, 롱볼 팀은 먼 동료를 고른다.
+  // 상한 40은 maxPass(36)보다 일부러 더 크게 잡았다 — 선호 길이가 항상 사거리 밖에 있어야
+  // "그 근처 아무나" 대신 "사거리 안에서 가장 먼 동료"가 템포가 오를수록 꾸준히 최선호가 된다.
   const preferredPassLength = 8 + blendInstruction(t.tempo, p.ins.passLength) * 32;
   // NOTE: 아래 openness(열린 동료에게 준다) 항에는 템포 배수를 곱하지 않는다 — 시도해 봤다가
   // 되돌린 자리다. 여기에 patience를 곱하면 템포1에서 openness가 0.55배로 쪼그라들어
@@ -179,6 +181,46 @@ export function scorePassCandidates(sim, p) {
       score,
       tiebreak: seededRandomPlayerId(m.team, m.idx),
       meta: { distance: d, successProb, forwardGain },
+    });
+  }
+  return out;
+}
+
+/**
+ * 크로스 후보 — 상대 진영 마지막 1/3의 측면(터치라인 인근)에서 페널티 박스 안 동료에게
+ * 올리는 전용 패스. scorePassCandidates와 후보 자체를 분리한 이유는 openness 페널티다 —
+ * 박스 안은 항상 수비가 몰려 있어 일반 패스 채점으로는 크로스가 안전한 백패스를 절대
+ * 못 이긴다. 크로스는 그 밀집 지역을 노리는 게 목적이라 openness를 아예 보지 않는다.
+ */
+export function scoreCrossCandidates(sim, p) {
+  const dir = p.attackDirection;
+  const advance = p.x * dir; // 공격 방향 기준 전진도 — 클수록 상대 골에 가깝다
+  const inFinalThird = advance > HALF.L / 3;
+  const wide = Math.abs(p.z) > HALF.W * 0.5; // 터치라인 인근
+  if (!inFinalThird || !wide) return [];
+
+  const t = teamTacticsOf(sim, p);
+  const wForward = p.ins.forwardness * directness(t.tempo);
+  const wWidth = blendInstruction(t.width, p.ins.width); // 넓게 뛰는 팀일수록 크로스를 즐긴다
+  const mates = p.team === 'home' ? sim.homeP : sim.awayP;
+  const out = [];
+  for (const m of mates) {
+    if (m === p || m.role === 'GK') continue;
+    const mAdvance = m.x * dir;
+    // 박스 안뿐 아니라 박스로 파고드는 중인 동료도 받는다(문전으로 쇄도하는 스트라이커) —
+    // 딱 박스 안으로만 좁히면 크로스가 뜨는 순간엔 아직 아무도 도착해 있지 않다.
+    const inBox = mAdvance > HALF.L - PENALTY_AREA.depth - 6 && Math.abs(m.z) < PENALTY_AREA.halfWidth + 4;
+    if (!inBox) continue;
+    const d = vlen(m.x - p.x, m.z - p.z);
+    if (d < PARAMS.minPass || d > PARAMS.maxCrossDistance) continue;
+    const successProb = passSuccessProb(sim, p, m, d) * PARAMS.crossSuccessMult;
+    const score = PARAMS.crossBaseScore + wForward * 0.5 + wWidth * 0.3 + successProb * 0.4;
+    out.push({
+      type: 'cross',
+      target: m,
+      score,
+      tiebreak: seededRandomPlayerId(m.team, m.idx),
+      meta: { distance: d, successProb },
     });
   }
   return out;
@@ -277,7 +319,7 @@ export function scoreClearCandidate(sim, p) {
 
 /** 후보를 전부 모은다. 새 행동을 추가할 때는 여기 한 줄만 늘어난다. */
 export function buildCandidates(sim, p) {
-  const candidates = [...scorePassCandidates(sim, p)];
+  const candidates = [...scorePassCandidates(sim, p), ...scoreCrossCandidates(sim, p)];
   const shoot = scoreShootCandidate(sim, p);
   if (shoot) candidates.push(shoot);
   candidates.push(scoreDribbleCandidate(sim, p));

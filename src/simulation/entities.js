@@ -34,6 +34,7 @@ export class Player {
     this.maxSpeedBase = PARAMS.maxSpeed * (0.82 + meta.pace / 100 * 0.36);
     this.maxSpeed = this.maxSpeedBase;
     this.energy = 1; // 1 → 0 으로 소모, 속도에 곱해진다
+    this.distanceRun = 0; // 누적 주행거리(m) — 체력 소모와 별개로 감독이 확인할 측정값
     this.home = { x: slot.x, z: slot.z };
     this.x = slot.x;
     this.z = slot.z;
@@ -48,6 +49,9 @@ export class Player {
     this.yellowCards = 0;
     // 퇴장 여부 — true가 되면 그 순간부터 경기장 밖으로 빠져 다시는 판단/이동에 끼지 않는다.
     this.sentOff = false;
+    // 부상 여부 — sentOff와 마찬가지로 경기장 밖으로 빠지지만, 교체로 자리를 채울 수 있다는
+    // 점이 다르다(퇴장은 그 자리를 영원히 못 채운다).
+    this.injured = false;
   }
 
   /** 공격 방향 골라인의 x좌표 */

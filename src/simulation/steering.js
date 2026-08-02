@@ -57,7 +57,7 @@ export function closest(team, ball) {
   let best = null;
   let bd = Infinity;
   for (const p of team) {
-    if (p.role === 'GK' || p.sentOff) continue;
+    if (p.role === 'GK' || p.sentOff || p.injured) continue;
     const d = (p.x - ball.x) ** 2 + (p.z - ball.z) ** 2;
     if (d < bd) {
       bd = d;
