@@ -10,7 +10,7 @@ const STORAGE_KEY = 'soccer-manager-3d/v1';
  */
 const initial = {
   managerName: '',
-  poolIds: defaultPool(23),
+  poolIds: defaultPool(26),
   captainId: 'kor_son',
   formation: '4-3-3',
   tactics: { ...TACTIC_DEFAULT },
@@ -34,7 +34,7 @@ export function setState(patch) {
 
 export function resetState() {
   Object.assign(state, initial, {
-    poolIds: defaultPool(23),
+    poolIds: defaultPool(26),
     tactics: { ...TACTIC_DEFAULT },
     lineupPositions: {},
     slotTactics: {},
