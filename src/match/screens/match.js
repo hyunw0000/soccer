@@ -88,6 +88,10 @@ export default function matchScreen(root, ctx) {
   // events 배열은 50개가 넘으면 앞에서 shift()로 밀린다. 배열 인덱스로 "어디까지 그렸는지"를
   // 세면 밀린 만큼 어긋나 이벤트가 중복되거나 씹힌다 — id(고유, 안 변함)로 추적한다.
   let lastRenderedEventId = 0;
+  // 스로인처럼 짧은 시간에 같은 종류의 사건이 몰아치면 로그를 한 줄로 합친다(아래 appendFeedEvent).
+  // 합친 대상(가장 최근 줄)을 여기 들고 있다가 다음 사건이 같은 묶음이면 새 줄 대신 갱신한다.
+  let lastFeedLi = null;
+  let lastFeedMeta = null; // { type, team, tick, count }
   let lastPhase = sim.phase;
   let speed = 1; // 1 | 2 | 3 — 재생 배속(UI 상태). Sim/RewindBuffer에는 저장하지 않는다.
   let matchResult = null; // fulltime 결과 기록. null인 동안만 경기 루프와 되감기를 허용한다.
@@ -320,7 +324,7 @@ export default function matchScreen(root, ctx) {
     if (!sim.canRewind()) return;
     const targetTick = sim.getRewindTargetTick();
     if (targetTick === null) return; // canRewind()가 true면 항상 있어야 하지만 방어적으로
-    const snap = rewind.findNearestTick(targetTick);
+    const snap = rewind.restoreTo(targetTick);
     if (!snap) return;
     concedeChoicePending = false; // R키로 바로 되감아도 실점 선택 배너는 닫아야 한다
     koreaGoalPending = false;
@@ -329,7 +333,11 @@ export default function matchScreen(root, ctx) {
     sim.markRewindUsed();
     rewindsLeft--;
     rewindEl.textContent = `${rewindsLeft}회`;
-    feed.replaceChildren(...[...sim.events].map(eventNode));
+    const feedRows = buildFeedRows(sim.events);
+    feed.replaceChildren(...feedRows.map(eventNode));
+    const lastRow = feedRows[feedRows.length - 1];
+    lastFeedMeta = lastRow ? { type: lastRow.type, team: lastRow.team, tick: lastRow.tick, count: lastRow.count } : null;
+    lastFeedLi = lastRow ? feed.lastElementChild : null;
     lastRenderedEventId = sim.events.length ? sim.events[sim.events.length - 1].id : 0;
     // 스냅샷에는 되감은 시점의 전술이 들어 있다. 시계는 되돌리되 감독의 지시는 지금 것을 유지한다.
     sim.applyTactics(livePlan);
@@ -878,11 +886,54 @@ export default function matchScreen(root, ctx) {
     }),
   );
 
+  // 같은 유형·같은 팀의 사건이 이 틱 수 안에 다시 나면 새 줄을 추가하지 않고 기존 줄에
+  // "×N"을 붙인다 — 스로인 스크럼블처럼 실제로 연달아 나는 사건까지 막을 필요는 없지만,
+  // 화면에 줄이 우르르 쏟아지는 건 행동로그의 목적(뭐가 있었는지 한눈에 훑기)에 안 맞는다.
+  const FEED_MERGE_WINDOW_TICKS = 180; // 3 game-minute 스케일(≈ 실시간 3초)
+
   function eventNode(ev) {
+    const text = ev.count > 1 ? `${ev.text} ×${ev.count}` : ev.text;
     return el("li", { class: `ev ${ev.team}` }, [
       el("span", { class: "evmin", text: `${ev.minute}'` }),
-      el("span", { text: ev.text }),
+      el("span", { text }),
     ]);
+  }
+
+  /** sim.events(원본, 병합 없음)를 화면에 그릴 묶음 단위로 접는다 — 되감기로 피드를 통째로
+   * 다시 그릴 때 실시간 누적(appendFeedEvent)과 같은 규칙을 쓰기 위한 공용 로직이다. */
+  function buildFeedRows(events) {
+    const rows = [];
+    for (const ev of events) {
+      const prev = rows[rows.length - 1];
+      if (prev && prev.type === ev.type && prev.team === ev.team && ev.tick - prev.tick <= FEED_MERGE_WINDOW_TICKS) {
+        prev.tick = ev.tick;
+        prev.minute = ev.minute;
+        prev.count += 1;
+      } else {
+        rows.push({ ...ev, count: 1 });
+      }
+    }
+    return rows;
+  }
+
+  /** 실시간 루프에서 새 사건 하나를 피드에 반영 — 직전 줄과 같은 묶음이면 그 줄을 갱신하고,
+   * 아니면 새 줄을 맨 위에 얹는다. */
+  function appendFeedEvent(ev) {
+    if (
+      lastFeedMeta &&
+      lastFeedMeta.type === ev.type &&
+      lastFeedMeta.team === ev.team &&
+      ev.tick - lastFeedMeta.tick <= FEED_MERGE_WINDOW_TICKS
+    ) {
+      lastFeedMeta.tick = ev.tick;
+      lastFeedMeta.count += 1;
+      lastFeedLi.querySelector(".evmin").textContent = `${ev.minute}'`;
+      lastFeedLi.querySelector("span:last-child").textContent = `${ev.text} ×${lastFeedMeta.count}`;
+      return;
+    }
+    lastFeedMeta = { type: ev.type, team: ev.team, tick: ev.tick, count: 1 };
+    lastFeedLi = eventNode(ev);
+    feed.prepend(lastFeedLi);
   }
 
   /**
@@ -958,7 +1009,7 @@ export default function matchScreen(root, ctx) {
     const avgDistanceM = outfield.reduce((s, p) => s + p.distanceRun, 0) / Math.max(1, outfield.length);
     distEl.textContent = `${(avgDistanceM / 1000).toFixed(1)}km`;
 
-    for (const ev of newEvents) feed.prepend(eventNode(ev));
+    for (const ev of newEvents) appendFeedEvent(ev);
     if (newEvents.length) lastRenderedEventId = newEvents[newEvents.length - 1].id;
 
     fpsN++;
@@ -1232,30 +1283,24 @@ export default function matchScreen(root, ctx) {
         el("b", { class: "panel-title", text: "경기 기록" }),
         feed,
       ]),
-      el("div", { class: "controls" }, [
-        ...camButtons,
-        el("span", { class: "sep" }),
-        pauseBtn,
-        rewindBtn,
-        el("button", {
-          class: "ctl",
-          text: "↺ 킥오프",
-          onclick: () => {
-            sim.kickoff();
-            view.sync(0);
-          },
-        }),
-        tacticsBtn,
-        subBtn,
-      ]),
       tacticsPanel.node,
       subPanel,
-      el("p", { class: "hint" }, [
-        el("span", {
-          text: "탑뷰에서 드래그=회전 / 휠=줌 · Space=일시정지 · T=전술 · R=되감기 · 일시정지+탑뷰에서 우리 선수 드래그=경로 지시",
-        }),
+      el("div", { class: "bottom-bar" }, [
+        pathStatusEl,
+        el("p", { class: "hint" }, [
+          el("span", {
+            text: "탑뷰에서 드래그=회전 / 휠=줌 · Space=일시정지 · T=전술 · R=되감기 · 일시정지+탑뷰에서 우리 선수 드래그=경로 지시",
+          }),
+        ]),
+        el("div", { class: "controls" }, [
+          ...camButtons,
+          el("span", { class: "sep" }),
+          pauseBtn,
+          rewindBtn,
+          tacticsBtn,
+          subBtn,
+        ]),
       ]),
-      pathStatusEl,
     ]),
   );
 

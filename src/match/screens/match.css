@@ -654,7 +654,8 @@
   .championship-confetti,.championship-fireworks { display:none; }
 }
 
-/* 경로 지시 상태 문구 — 공용 .hint(bottom 78px)와 같은 자리에 겹치지 않도록 한 줄 더 띄운다 */
+/* 경로 지시 상태 문구 — .bottom-bar 안에서는 hint 바로 위 줄로 쌓인다(base.css 참고).
+   .bottom-bar 밖에서 쓰일 경우를 대비한 기본 절대좌표는 남겨 둔다. */
 .path-status {
   position: absolute;
   bottom: 96px;
