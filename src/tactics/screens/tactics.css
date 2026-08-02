@@ -443,6 +443,62 @@
 
 .tac-saved { color: var(--ok); font-size: 12px; }
 
+.tactics-match-card {
+  width:min(100%,720px);
+  border:1px solid rgba(82,153,183,.55);
+  padding:clamp(16px,1.5vw,22px);
+  background:rgba(2,14,22,.96);
+  box-shadow:inset 4px 0 rgba(35,142,208,.7),inset -4px 0 rgba(239,51,69,.58),0 14px 34px rgba(0,0,0,.28);
+}
+
+.tactics-match-card>header { display:flex; align-items:start; justify-content:space-between; gap:16px; }
+.tactics-match-card h3 { margin-top:5px; font-size:clamp(18px,1.4vw,24px); }
+.tactics-match-card__back { min-height:34px; padding:6px 12px; font-size:12px; }
+.tactics-match-card__teams { display:grid; grid-template-columns:minmax(0,1fr) auto minmax(0,1fr); align-items:center; gap:16px; margin-top:18px; }
+.tactics-match-card__team { display:flex; min-width:0; align-items:center; justify-content:center; gap:10px; }
+.tactics-match-card__team strong { overflow:hidden; font-size:clamp(17px,1.35vw,23px); text-overflow:ellipsis; white-space:nowrap; }
+.tactics-match-card__versus { color:var(--game-accent-red); font-size:clamp(25px,2vw,34px); font-weight:950; }
+.tactics-match-card__rule { margin:14px 0; color:var(--game-success); font-size:14px; font-weight:800; text-align:center; }
+
+.tactics-kickoff {
+  display:grid;
+  width:100%;
+  min-height:70px;
+  align-content:center;
+  justify-items:center;
+  gap:5px;
+  padding:14px 24px;
+  text-align:center;
+}
+
+.tactics-kickoff span {
+  color:rgba(255,255,255,.72);
+  font-size:10px;
+  font-weight:900;
+  letter-spacing:.16em;
+}
+
+.tactics-kickoff strong {
+  color:#fff;
+  font-size:clamp(18px,1.35vw,23px);
+  line-height:1.15;
+}
+
+.tactics-floating-kickoff {
+  position:fixed;
+  z-index:110;
+  top:7px;
+  right:max(18px,calc((100vw - var(--game-page-max-width))/2 + 28px));
+  min-width:250px;
+  min-height:48px;
+  padding:10px 18px;
+  font-size:13px;
+  letter-spacing:.02em;
+  box-shadow:0 0 18px rgba(239,51,69,.22);
+}
+
+.tactics-floating-kickoff[hidden] { display:none; }
+
 /* 킥오프 직전 상태 안내 — 오류 목록(.lineup-errors)과 달리 경고 수준의 한 줄이다. */
 .tactics-setup-note {
   min-height: 18px;
@@ -459,10 +515,16 @@
   .tac-preset { width: auto; border-left: 0; border-radius: 6px; }
   .tac-pane.team { grid-template-columns: minmax(0, 1fr); }
   .tac-side { max-width: 300px; }
+  .tactics-floating-kickoff { display:none; }
 }
 
 @media (max-width:560px) {
   .tac-body { padding:14px 12px; }
   .tac-tabs { gap:14px; overflow-x:auto; }
   .tac-actions { flex-wrap:wrap; padding:12px; }
+  .tactics-match-card { padding:14px 12px; }
+  .tactics-match-card__teams { gap:8px; }
+  .tactics-match-card__team { gap:6px; }
+  .tactics-match-card__team strong { font-size:14px; }
+  .tactics-kickoff { min-width:0; min-height:64px; }
 }
