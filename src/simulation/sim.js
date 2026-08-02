@@ -1,10 +1,10 @@
-import { PARAMS, FIELD, HALF, GOAL_W } from './params.js';
+import { PARAMS, FIELD, HALF, GOAL_W, GOAL_H, PENALTY_AREA } from './params.js';
 import { vlen, clamp } from './math.js';
 import { Rng, seededRandom, seededRandomPlayerId, ACTION_ID } from './rng.js';
 import { Player, Ball } from './entities.js';
 import { assignmentSlot, INSTRUCTION_FALLBACK } from './coordinates.js';
 import { arrive, pursuit, separation, closest } from './steering.js';
-import { chooseAction, effectivePressing, teamTacticsOf } from './decision.js';
+import { chooseAction, effectivePressing, nearestOpponentDistance, staminaMult, teamTacticsOf } from './decision.js';
 
 const SIM_TACTIC_FALLBACK = { lineHeight: 0.5, pressing: 0.5, tempo: 0.5, width: 0.5 };
 const TACTIC_KEYS = Object.keys(SIM_TACTIC_FALLBACK);
@@ -343,8 +343,7 @@ export class Sim {
           if (p.command.index >= p.command.waypoints.length) p.command = null; // 다 왔으면 기본 AI로 복귀
         }
       } else if (p.role === 'GK') {
-        const gx = -p.attackDirection * (HALF.L - 2);
-        const gz = clamp(this.ball.z * 0.5, -GOAL_W / 2, GOAL_W / 2);
+        const [gx, gz] = this.goalkeeperTarget(p);
         [fx, fz] = arrive(p, gx, gz);
       } else if (isCarrier && p.dribbleMode === 'hold') {
         // 키핑 — 판단(decision.js scoreHoldCandidate)이 "제자리에서 볼을 지킨다"를 골랐을 때.
@@ -440,6 +439,9 @@ export class Sim {
         this.ball.z = clamp(p.z + Math.cos(p.heading) * PARAMS.dribbleCarryOffset, -HALF.W, HALF.W);
         this.ball.vx = p.vx;
         this.ball.vz = p.vz;
+        // 발밑에 붙은 볼은 항상 땅에 있다 — 공중볼을 잡은 직후에도 높이를 여기서 확실히 죽인다.
+        this.ball.y = PARAMS.ballRadius;
+        this.ball.vy = 0;
       }
 
       const drain = (sp / PARAMS.maxSpeed) * (0.6 + press * 0.8) * (110 - p.stamina) / 100;
@@ -465,6 +467,30 @@ export class Sim {
     }
     this.tick++;
     this.updatePhase();
+  }
+
+  /**
+   * 골키퍼가 이번 스텝에 서 있고 싶은 자리.
+   * 기본은 골문 앞 2m에서 볼의 z를 반만 따라가는 예전 동작 그대로다. 볼이 떠서 우리 페널티
+   * 에어리어로 떨어지는 중이면(크로스·롱볼·클리어) 낙하 지점까지 마중 나간다 — 다만 골라인에서
+   * gkComeOutRange 밖으로는 절대 안 나간다. 나갔다가 골문이 비면 그게 더 큰 실점이다.
+   */
+  goalkeeperTarget(gk) {
+    const b = this.ball;
+    let gx = -gk.attackDirection * (HALF.L - 2);
+    let gz = clamp(b.z * 0.5, -GOAL_W / 2, GOAL_W / 2);
+    if (b.airborne) {
+      const land = b.predictLanding();
+      const ownGoalX = -gk.attackDirection * HALF.L;
+      const landsInOwnBox =
+        Math.abs(land.x - ownGoalX) <= PENALTY_AREA.depth && Math.abs(land.z) <= PENALTY_AREA.halfWidth;
+      if (landsInOwnBox) {
+        const outLimit = -gk.attackDirection * (HALF.L - PARAMS.gkComeOutRange);
+        gx = gk.attackDirection > 0 ? Math.min(land.x, outLimit) : Math.max(land.x, outLimit);
+        gz = clamp(land.z, -PENALTY_AREA.halfWidth, PENALTY_AREA.halfWidth);
+      }
+    }
+    return [gx, gz];
   }
 
   /** p를 압박 중인 가장 가까운 상대와의 거리를 오차 배수로 바꾼다. 상대가 없거나 멀면 1(가산 없음). */
@@ -538,7 +564,8 @@ export class Sim {
       baseDeg: PARAMS.passBaseErrorDeg,
     });
     const [edx, edz] = this.rotateXZ(cdx, cdz, errDeg);
-    this.ball.kick(edx, edz, PARAMS.clearForce, `${defender.team}:${defender.idx}`); // kick()이 carrierKey도 같이 지운다
+    // 걷어내기는 높이 띄운다 — 태클로 빼앗은 볼을 땅으로 굴리면 압박 안에서 바로 다시 뺏긴다.
+    this.ball.kick(edx, edz, PARAMS.clearForce, `${defender.team}:${defender.idx}`, PARAMS.clearLoftDeg); // kick()이 carrierKey도 같이 지운다
     this.pushEvent('tackle', defender.team, `${defender.name} 볼 탈취`);
   }
 
@@ -546,6 +573,14 @@ export class Sim {
   tryTackleCarrier(defender) {
     const carrier = this.playerByKey(this.ball.carrierKey);
     if (!carrier) return;
+    // 자기 페널티 에어리어 안에서 볼을 잡고 있는 골키퍼에게는 도전할 수 없다 —
+    // 손에 든 공을 발로 뺏는 장면이 나오면 안 된다.
+    if (carrier.role === 'GK') {
+      const ownGoalX = -carrier.attackDirection * HALF.L;
+      if (Math.abs(carrier.x - ownGoalX) <= PENALTY_AREA.depth && Math.abs(carrier.z) <= PENALTY_AREA.halfWidth) {
+        return;
+      }
+    }
     if (vlen(defender.x - carrier.x, defender.z - carrier.z) > PARAMS.kickDist) return;
     defender.kc = PARAMS.kickCooldownTicks;
     // 캐리어의 kc(재판단 주기)는 여기서 건드리지 않는다 — 건드리면 수비가 계속 붙어서
@@ -603,7 +638,10 @@ export class Sim {
     // 직선적인 팀은 패스를 더 세게 찬다 — 빨리 도착하는 대신 받기 어렵고 흐르기도 쉽다.
     const tempo = teamTacticsOf(this, p).tempo;
     const force = PARAMS.passForce * (1 - PARAMS.tempoPassForceScale / 2 + tempo * PARAMS.tempoPassForceScale);
-    this.ball.kick(edx, edz, force, `${p.team}:${p.idx}`);
+    // 짧은 패스는 땅볼, 긴 패스는 띄워 보낸다 — 롱볼이 수비 사이를 굴러 지나가지 않고
+    // 넘어가야 "긴 패스"가 짧은 패스와 다른 선택이 된다.
+    const loft = action.meta.distance > PARAMS.longPassDistance ? PARAMS.longPassLoftDeg : PARAMS.passLoftDeg;
+    this.ball.kick(edx, edz, force, `${p.team}:${p.idx}`, loft);
     // 찬 직후에도 kc가 0으로 남아 있으면, 공이 발밑에서 채 1틱도 안 떨어진 사이에 본인이
     // 다시 "가장 가까운 선수"로 잡혀서 즉시 자기 패스를 자기가 재줍는 버그가 났다(실전에서
     // 확인함 — 패스가 나간 것처럼 보이지만 실제로는 계속 같은 선수가 캐리어로 남아 있었다).
@@ -620,7 +658,10 @@ export class Sim {
     const baseDeg = succeeded ? PARAMS.shotBaseErrorDeg : PARAMS.shotBaseErrorDeg * PARAMS.shotFailErrorMultiplier;
     const errDeg = this.errorDegrees(p, { statValue: p.shootSkill, distance: action.meta.distance, baseDeg });
     const [edx, edz] = this.rotateXZ(gdx, gdz, errDeg);
-    this.ball.kick(edx, edz, PARAMS.shootForce, `${p.team}:${p.idx}`);
+    // 오차는 좌우로만이 아니라 위아래로도 난다 — 같은 오차각을 상하로도 나눠 써서, 크게
+    // 빗나간 슛은 옆으로 흐르는 대신 크로스바를 넘어간다(errDeg가 음수면 낮게 깔린 슛).
+    const loft = Math.max(0, PARAMS.shootLoftDeg + errDeg * PARAMS.shotVerticalErrorScale);
+    this.ball.kick(edx, edz, PARAMS.shootForce, `${p.team}:${p.idx}`, loft);
     p.kc = PARAMS.kickCooldownTicks; // 패스와 같은 이유 — 슛한 직후 본인이 바로 재줍는 걸 막는다
   }
 
@@ -642,9 +683,151 @@ export class Sim {
     const cdz = 0 - p.z;
     const errDeg = this.errorDegrees(p, { statValue: p.passSkill, distance: PARAMS.distanceErrorRef, baseDeg: PARAMS.clearBaseErrorDeg });
     const [edx, edz] = this.rotateXZ(cdx, cdz, errDeg);
-    this.ball.kick(edx, edz, PARAMS.clearForce, `${p.team}:${p.idx}`);
+    this.ball.kick(edx, edz, PARAMS.clearForce, `${p.team}:${p.idx}`, PARAMS.clearLoftDeg);
     p.kc = PARAMS.kickCooldownTicks; // 마찬가지로 자기 클리어를 자기가 바로 재줍는 걸 막는다
     this.pushEvent('tackle', p.team, `${p.name} 압박에 클리어`);
+  }
+
+  /**
+   * 헤딩 — 발이 안 닿는 높이의 볼을 머리로 쳐낸다. 컨트롤이 아니라 "쳐내기"라서 캐리어가
+   * 되지 않고, 방향 오차도 발보다 훨씬 크다. 항상 자기 공격 방향으로 보내므로 수비의
+   * 걷어내기와 공격의 문전 헤딩이 같은 코드에서 자연스럽게 갈린다(골문 앞에서 때리면
+   * 그대로 골문으로 간다).
+   */
+  executeHeader(p) {
+    const hdx = p.atkX - p.x;
+    const hdz = 0 - p.z;
+    const errDeg = this.errorDegrees(p, {
+      statValue: p.shootSkill,
+      distance: PARAMS.distanceErrorRef,
+      baseDeg: PARAMS.headerBaseErrorDeg,
+    });
+    const [edx, edz] = this.rotateXZ(hdx, hdz, errDeg);
+    this.ball.kick(edx, edz, PARAMS.headerForce, `${p.team}:${p.idx}`, PARAMS.headerLoftDeg);
+    p.kc = PARAMS.kickCooldownTicks;
+  }
+
+  /**
+   * 골키퍼의 볼 처리. 손을 쓰기 때문에 필드 플레이어의 발 사거리(kickDist)·발 높이
+   * (footControlHeight)가 아니라 gkReachRadius·gkReachHeight를 쓰고, 대신 자기 페널티
+   * 에어리어 안에서만 가능하다(밖에서는 이 경로를 안 타고 발로만 다룬다).
+   *
+   * 결과는 셋 중 하나다 — 잡거나(캐치), 손끝에 걸려 쳐내거나(펀칭), 완전히 지나치거나.
+   * 세 번째가 반드시 있어야 골이 들어간다. 확률 한 번만 굴려서 세 구간으로 나눈다.
+   *
+   * @returns {boolean} 이번 틱에 골키퍼가 볼을 실제로 건드렸는지
+   */
+  tryGoalkeeperClaim(gk) {
+    if (gk.kc > 0) return false;
+    const b = this.ball;
+    if (b.carrierKey) return false; // 누가 발밑에 두고 있으면 그건 태클 문제다
+    const ownGoalX = -gk.attackDirection * HALF.L;
+    if (Math.abs(b.x - ownGoalX) > PENALTY_AREA.depth || Math.abs(b.z) > PENALTY_AREA.halfWidth) return false;
+    if (b.y > PARAMS.gkReachHeight) return false;
+    const dist = vlen(gk.x - b.x, gk.z - b.z);
+    if (dist > PARAMS.gkReachRadius) return false;
+
+    // 성공하든 실패하든 이번 접촉은 여기서 끝난다 — 쿨다운을 안 걸면 볼이 사거리를 지나는
+    // 동안 매 틱 다시 굴려서, 아무리 확률이 낮아도 결국 한 번은 잡아 버린다.
+    gk.kc = PARAMS.kickCooldownTicks;
+
+    const speed = vlen(b.vx, b.vz);
+    // 조건별 배수를 곱한다 — 각 항은 "이만큼 어려워진다"를 뜻하고, 어느 하나가 혼자
+    // 확률을 0으로 끌어내리지 않는다(뺄셈이었을 때 속도 항 하나가 그렇게 만들었다).
+    const handling = clamp(
+      (gk.defenseSkill * staminaMult(gk.energy)) / PARAMS.gkHandlingRefStat,
+      0.6,
+      1.25
+    );
+    const speedFactor = 1 - clamp(speed / PARAMS.gkCatchSpeedRef, 0, 1) * PARAMS.gkCatchSpeedPenalty;
+    const reachFactor = 1 - clamp(dist / PARAMS.gkReachRadius, 0, 1) * PARAMS.gkCatchReachPenalty;
+    const heightFactor =
+      1 -
+      clamp(
+        (b.y - PARAMS.footControlHeight) / Math.max(0.01, PARAMS.gkReachHeight - PARAMS.footControlHeight),
+        0,
+        1
+      ) * PARAMS.gkCatchHeightPenalty;
+    const catchProb = clamp(
+      PARAMS.gkCatchBaseProb * handling * speedFactor * reachFactor * heightFactor,
+      PARAMS.gkCatchMin,
+      PARAMS.gkCatchMax
+    );
+    const parryProb = (1 - catchProb) * PARAMS.gkParryShare;
+    const roll = seededRandom(this.tick, seededRandomPlayerId(gk.team, gk.idx), ACTION_ID.GK_CLAIM);
+    const gkKey = `${gk.team}:${gk.idx}`;
+    // 세게 날아온 볼을 막아냈을 때만 "선방"으로 남긴다 — 굴러온 볼까지 기록하면 이벤트 창이 도배된다.
+    const worthLogging = speed >= PARAMS.gkSaveEventSpeed;
+
+    if (roll < catchProb) {
+      // 캐치 — 손에 넣었다. 볼을 죽여 발밑에 붙이고 다음 판단(골킥/패스)까지 들고 있는다.
+      b.vx = 0;
+      b.vz = 0;
+      b.vy = 0;
+      b.y = PARAMS.ballRadius;
+      b.ownerKey = gkKey;
+      b.carrierKey = gkKey;
+      b.lastTouchKey = gkKey;
+      gk.kc = PARAMS.gkHoldTicks;
+      if (worthLogging) this.pushEvent('save', gk.team, `${gk.name} 선방`);
+      return true;
+    }
+
+    if (roll < catchProb + parryProb) {
+      // 펀칭 — 잡지는 못하고 옆으로 쳐냈다. 방향을 고를 여유가 없어 오차가 크다.
+      const side = b.z >= 0 ? 1 : -1;
+      const errDeg = this.errorDegrees(gk, {
+        statValue: gk.defenseSkill,
+        distance: PARAMS.distanceErrorRef,
+        baseDeg: PARAMS.gkPunchBaseErrorDeg,
+      });
+      const [edx, edz] = this.rotateXZ(gk.attackDirection, side, errDeg);
+      b.kick(edx, edz, PARAMS.gkPunchForce, gkKey, PARAMS.gkPunchLoftDeg);
+      if (worthLogging) this.pushEvent('save', gk.team, `${gk.name} 펀칭`);
+      return true;
+    }
+
+    return false; // 못 막았다 — 볼은 그대로 흐른다(골이 될 수도 있다)
+  }
+
+  /**
+   * 골킥 — 골문 앞에서 크게 띄워 전방으로 걷어찬다.
+   * 힘과 각도가 고정이라 "얼마나 멀리 가는지"는 정해져 있고, 고르는 건 방향뿐이다.
+   * 그래서 그 사거리쯤에 서 있는 동료 중 가장 열려 있는 쪽을 겨냥한다 — 아무도 없으면
+   * 그냥 정면으로 걷어찬다(경합볼이 된다).
+   */
+  executeGoalKick(gk) {
+    // 무항력 포물선 사거리 R = v²·sin(2θ)/g. 공기저항 때문에 실제로는 조금 못 미치므로
+    // 상수 하나를 더 두는 대신 여기서 깎아 쓴다 — 힘·각도를 바꾸면 조준도 같이 따라온다.
+    const rad = (PARAMS.goalKickLoftDeg * Math.PI) / 180;
+    const range = ((PARAMS.goalKickForce ** 2 * Math.sin(2 * rad)) / PARAMS.gravity) * 0.8;
+
+    const mates = gk.team === 'home' ? this.homeP : this.awayP;
+    let target = null;
+    let bestScore = -Infinity;
+    for (const m of mates) {
+      if (m === gk || m.role === 'GK') continue;
+      if ((m.x - gk.x) * gk.attackDirection <= 0) continue; // 앞으로 차는 킥이다 — 뒤에 있는 동료는 후보가 아니다
+      const d = vlen(m.x - gk.x, m.z - gk.z);
+      // 사거리에 가까울수록, 상대와 떨어져 있을수록 좋다.
+      const score =
+        -Math.abs(d - range) / FIELD.L + clamp(nearestOpponentDistance(this, m) / PARAMS.openPassRadius, 0, 1);
+      if (score > bestScore) {
+        bestScore = score;
+        target = m;
+      }
+    }
+
+    const gdx = target ? target.x - gk.x : gk.attackDirection;
+    const gdz = target ? target.z - gk.z : 0;
+    const errDeg = this.errorDegrees(gk, {
+      statValue: gk.passSkill,
+      distance: PARAMS.distanceErrorRef,
+      baseDeg: PARAMS.goalKickBaseErrorDeg,
+    });
+    const [edx, edz] = this.rotateXZ(gdx, gdz, errDeg);
+    this.ball.kick(edx, edz, PARAMS.goalKickForce, `${gk.team}:${gk.idx}`, PARAMS.goalKickLoftDeg);
+    gk.kc = PARAMS.kickCooldownTicks;
   }
 
   tryKick(p) {
@@ -654,15 +837,29 @@ export class Sim {
       // 볼이 이미 누군가의 발밑에 있다 — 그 사람이면 계속 갈지/풀지 재판단하고,
       // 상대편이면(같은 편은 아무 것도 안 함) 사거리 안일 때만 태클을 시도한다.
       if (this.ball.carrierKey === pKey) {
-        if (p.kc <= 0) this.carrierDecide(p);
+        if (p.kc <= 0) {
+          // 손에 넣은 볼을 가진 골키퍼는 패스/드리블을 저울질하지 않는다 — 그냥 배급한다.
+          // 일반 판단에 맡기면 '키핑'이 계속 이겨서 키퍼가 볼을 안고 경기를 세워 버린다.
+          if (p.role === 'GK') this.executeGoalKick(p);
+          else this.carrierDecide(p);
+        }
       } else if (p.team !== this.ball.carrierKey.split(':')[0] && p.kc <= 0) {
         this.tryTackleCarrier(p);
       }
       return;
     }
 
+    // 골키퍼는 손을 쓴다 — 발보다 사거리가 넓고 크로스바 높이까지 닿는다. 자기 페널티
+    // 에어리어 안에서만이고, 발로 처리하는 일반 경로보다 먼저 본다(자기 골문 앞 공중볼은
+    // 키퍼가 우선권을 갖는다).
+    if (p.role === 'GK' && this.tryGoalkeeperClaim(p)) return;
+
     // 볼이 자유 상태(아무도 안 갖고 있음) — 이 틱에 실제로 주울 수 있는 사람만 처리한다.
     if (p.kc > 0 || vlen(p.x - this.ball.x, p.z - this.ball.z) > PARAMS.kickDist) return;
+
+    // 머리보다 높이 뜬 볼은 이번 틱에 아무도 다루지 못한다. 이 게이트가 없으면 머리 위로
+    // 날아가는 공을 땅에서 그대로 낚아채서 로프트가 아무 의미도 갖지 못한다.
+    if (this.ball.y > PARAMS.headControlHeight) return;
 
     // 이 틱에 실제로 볼을 다루는 건 볼에 가장 가까운 딱 한 명이다. p가 그 사람이 아니면(더
     // 가까운 다른 선수가 있으면) 아무 것도 하지 않는다 — this.all이 항상 홈을 먼저 훑기 때문에,
@@ -678,6 +875,13 @@ export class Sim {
       }
     }
     if (closer) return; // 더 가까운 선수의 차례에 처리된다
+
+    // 발이 안 닿고 머리로만 닿는 높이 — 컨트롤(캐리어 등록)은 못 하고 헤딩으로 걷어내기만
+    // 된다. 그래서 띄운 공은 발밑 공처럼 그 자리에서 소유로 이어지지 않는다.
+    if (this.ball.y > PARAMS.footControlHeight) {
+      this.executeHeader(p);
+      return;
+    }
 
     // 상대가 같은 순간 볼에 붙어 있으면 줍기 전에 다툼부터 — 이겨야 잡는다.
     const opps = p.team === 'home' ? this.awayP : this.homeP;
@@ -715,6 +919,9 @@ export class Sim {
   /** @returns {boolean} 이번 틱에 골이 들어갔는지 — 아웃오브바운즈 판정을 건너뛸지 결정하는 데 쓴다. */
   checkGoal() {
     const b = this.ball;
+    // 크로스바를 넘어간 볼은 골이 아니다. 여기서 false를 돌려주면 checkOutOfBounds()가
+    // 이어받아 골킥으로 처리한다(마지막 터치가 공격 쪽이므로 규칙이 이미 맞다).
+    if (b.y >= GOAL_H) return false;
     if (b.x <= -HALF.L && Math.abs(b.z) < GOAL_W / 2) {
       const scoringTeam = this.homeP[0]?.attackDirection === -1 ? 'home' : 'away';
       const concedingTeam = scoringTeam === 'home' ? 'away' : 'home';
@@ -784,10 +991,16 @@ export class Sim {
     if (taker) {
       taker.x = this.ball.x;
       taker.z = this.ball.z;
-      this.ball.ownerKey = `${taker.team}:${taker.idx}`;
-      this.ball.carrierKey = `${taker.team}:${taker.idx}`;
-      this.ball.lastTouchKey = `${taker.team}:${taker.idx}`;
-      taker.kc = PARAMS.kickCooldownTicks;
+      if (type === 'goal-kick') {
+        // 골킥은 발밑에 붙여 드리블로 시작하지 않는다 — 그 자리에서 길게 걷어찬다.
+        // lastTouchKey는 executeGoalKick()이 부르는 ball.kick()이 알아서 채운다.
+        this.executeGoalKick(taker);
+      } else {
+        this.ball.ownerKey = `${taker.team}:${taker.idx}`;
+        this.ball.carrierKey = `${taker.team}:${taker.idx}`;
+        this.ball.lastTouchKey = `${taker.team}:${taker.idx}`;
+        taker.kc = PARAMS.kickCooldownTicks;
+      }
     }
     this.pushEvent(type, team, text);
   }
@@ -877,7 +1090,8 @@ export class Sim {
     return {
       tick: this.tick,
       players,
-      ball: [this.ball.x, this.ball.z, this.ball.vx, this.ball.vz],
+      // 높이(y, vy)는 뒤에 덧붙인다 — 4개짜리 옛 스냅샷도 그대로 복원되게 하려는 것이다.
+      ball: [this.ball.x, this.ball.z, this.ball.vx, this.ball.vz, this.ball.y, this.ball.vy],
       ownerKey: this.ball.ownerKey,
       carrierKey: this.ball.carrierKey,
       lastTouchKey: this.ball.lastTouchKey,
@@ -912,7 +1126,14 @@ export class Sim {
       p.energy = s.players[o + 5];
       p.kc = s.players[o + 6];
     });
-    [this.ball.x, this.ball.z, this.ball.vx, this.ball.vz] = s.ball;
+    const [bx, bz, bvx, bvz, by, bvy] = s.ball;
+    this.ball.x = bx;
+    this.ball.z = bz;
+    this.ball.vx = bvx;
+    this.ball.vz = bvz;
+    // 옛 스냅샷 호환: 높이가 없으면 땅에 있던 것으로 취급한다.
+    this.ball.y = by ?? PARAMS.ballRadius;
+    this.ball.vy = bvy ?? 0;
     this.ball.ownerKey = s.ownerKey;
     this.ball.carrierKey = 'carrierKey' in s ? s.carrierKey : null; // 옛 스냅샷 호환: 없으면 자유 상태로 취급
     this.ball.lastTouchKey = 'lastTouchKey' in s ? s.lastTouchKey : null; // 옛 스냅샷 호환: 없으면 알 수 없음 취급

@@ -869,14 +869,8 @@ export default function matchScreen(root, ctx) {
     ]),
   );
 
-  view = createMatchView(stage, sim, captainNum);
-  view.sync(0);
-  openKickoffBriefing('firstHalf');
-  last = performance.now();
-  raf = requestAnimationFrame(loop);
-
   // 화면을 떠날 때 반드시 루프와 WebGL 컨텍스트를 정리한다
-  return () => {
+  const cleanup = () => {
     cancelAnimationFrame(raf);
     window.removeEventListener("keydown", onKey);
     window.removeEventListener("pointerdown", onWindowPointerDown);
@@ -885,6 +879,38 @@ export default function matchScreen(root, ctx) {
     kickoffDialog.removeEventListener('keydown',trapKickoffFocus);
     kickoffDialog.remove();
     resultDialog.remove();
-    view.dispose();
+    view?.dispose();
   };
+
+  try {
+    view = createMatchView(stage, sim, captainNum);
+  } catch (err) {
+    // WebGL을 못 쓰는 환경(구형 기기·GPU 차단·컨텍스트 한도 초과)에서 WebGLRenderer는 던진다.
+    // 여기서 그대로 던지면 router가 root를 이미 비운 뒤라 사용자에게는 백지만 남고, 이 화면의
+    // cleanup도 등록되지 않아 keydown 리스너가 영영 안 떨어진다. 위 '경기를 시작할 수 없습니다'와
+    // 같은 방식으로 되돌아갈 길을 준다.
+    stage.append(
+      el('div', { class: 'screen page' }, [
+        el('h2', { class: 'h2', text: '3D 경기 화면을 열 수 없습니다' }),
+        el('p', {
+          class: 'lead small',
+          text: `이 브라우저·기기에서 WebGL을 사용할 수 없습니다. (${err.message})`,
+        }),
+        el('button', {
+          class: 'primary',
+          type: 'button',
+          text: '전술 설정으로',
+          onclick: () => ctx.navigate('tactics', undefined, { replace: true }),
+        }),
+      ])
+    );
+    return cleanup;
+  }
+
+  view.sync(0);
+  openKickoffBriefing('firstHalf');
+  last = performance.now();
+  raf = requestAnimationFrame(loop);
+
+  return cleanup;
 }

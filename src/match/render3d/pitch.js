@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { FIELD, HALF, GOAL_W } from '../../simulation/index.js';
+import { FIELD, HALF, GOAL_W, GOAL_H } from '../../simulation/index.js';
 
 /** 라인이 그려진 잔디 텍스처를 캔버스로 생성 (외부 이미지 의존 0) */
 function pitchTexture() {
@@ -39,14 +39,16 @@ function pitchTexture() {
 function goal(scene, xSign) {
   const grp = new THREE.Group();
   const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.4, metalness: 0.1 });
-  const post = new THREE.CylinderGeometry(0.18, 0.18, 2.6, 10);
+  // 골대 높이는 시뮬의 GOAL_H를 그대로 따른다 — 눈에 보이는 크로스바와 "골이냐 아니냐"의
+  // 경계가 어긋나면, 바 밑으로 들어간 것처럼 보이는 볼이 골킥으로 판정된다.
+  const post = new THREE.CylinderGeometry(0.18, 0.18, GOAL_H, 10);
   const p1 = new THREE.Mesh(post, mat);
-  p1.position.set(0, 1.3, -GOAL_W / 2);
+  p1.position.set(0, GOAL_H / 2, -GOAL_W / 2);
   const p2 = new THREE.Mesh(post, mat);
-  p2.position.set(0, 1.3, GOAL_W / 2);
+  p2.position.set(0, GOAL_H / 2, GOAL_W / 2);
   const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, GOAL_W, 10), mat);
   bar.rotation.x = Math.PI / 2;
-  bar.position.set(0, 2.6, 0);
+  bar.position.set(0, GOAL_H, 0);
   [p1, p2, bar].forEach((o) => {
     o.castShadow = true;
     grp.add(o);

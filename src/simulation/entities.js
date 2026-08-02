@@ -64,8 +64,11 @@ export class Ball {
   reset() {
     this.x = 0;
     this.z = 0;
+    // 공 중심 높이. 지면에 놓인 상태가 곧 반지름이라, y === ballRadius가 "땅에 있다"는 뜻이다.
+    this.y = PARAMS.ballRadius;
     this.vx = 0;
     this.vz = 0;
+    this.vy = 0;
     this.ownerKey = null; // `${team}:${idx}` — 참조 대신 키로 들고 있어야 스냅샷이 순수해진다
     // 지금 드리블 중인 선수(ownerKey와 달리 여러 틱 동안 유지된다). kick()하면 놓는다.
     this.carrierKey = null;
@@ -74,20 +77,58 @@ export class Ball {
     // ownerKey는 킥하는 순간 바로 null이 돼서 그때는 이미 늦다).
     this.lastTouchKey = null;
   }
-  kick(dx, dz, force, byKey) {
+  /** 지면에서 떠 있는지 — 발로 잡을지/헤딩할지, 크로스바 밑으로 들어갔는지를 이걸로 가른다. */
+  get airborne() {
+    return this.y > PARAMS.ballRadius + 1e-6;
+  }
+
+  /**
+   * @param {number} loftDeg 위로 띄우는 각도(도). 0이면 예전 그대로 땅으로만 굴러간다 —
+   *   force는 "총 속력"이라, 띄울수록 수평으로 나아가는 몫이 줄어든다(실제 킥과 같다).
+   */
+  kick(dx, dz, force, byKey, loftDeg = 0) {
     const l = vlen(dx, dz) || 1;
-    this.vx = (dx / l) * force;
-    this.vz = (dz / l) * force;
+    const rad = (loftDeg * Math.PI) / 180;
+    const horizontal = force * Math.cos(rad);
+    this.vx = (dx / l) * horizontal;
+    this.vz = (dz / l) * horizontal;
+    this.vy = force * Math.sin(rad);
     this.ownerKey = null;
     this.carrierKey = null; // 패스/슛/클리어 — 어느 쪽이든 킥하면 드리블이 끝난다
     if (byKey) this.lastTouchKey = byKey;
   }
+
+  /**
+   * 지금 궤적대로면 볼이 어디에 떨어지는지. 공기저항을 무시한 닫힌 해라서 실제 낙하점보다
+   * 아주 조금 멀지만, 매 틱 다시 계산하므로 다가갈수록 오차가 사라진다 — 선수·골키퍼가
+   * "떠 있는 공을 어디서 기다릴지" 정하는 데 쓴다.
+   * @returns {{x:number,z:number,t:number}}
+   */
+  predictLanding() {
+    if (!this.airborne && this.vy <= 0) return { x: this.x, z: this.z, t: 0 };
+    const dy = this.y - PARAMS.ballRadius;
+    const disc = this.vy * this.vy + 2 * PARAMS.gravity * dy;
+    if (disc <= 0) return { x: this.x, z: this.z, t: 0 };
+    const t = (this.vy + Math.sqrt(disc)) / PARAMS.gravity;
+    return { x: this.x + this.vx * t, z: this.z + this.vz * t, t };
+  }
+
   update(dt) {
-    this.vx += this.vx * PARAMS.ballFriction * dt;
-    this.vz += this.vz * PARAMS.ballFriction * dt;
-    if (vlen(this.vx, this.vz) < 0.15) {
-      this.vx = 0;
-      this.vz = 0;
+    // 떠 있는 동안은 잔디 마찰이 아니라 공기저항 + 중력을 받는다. 갓 차올린 순간(y는 아직
+    // 지면이지만 vy>0)도 공중으로 취급해야 첫 틱에 마찰로 속도를 깎이지 않는다.
+    if (this.airborne || this.vy > 0) {
+      const drag = PARAMS.ballAirDrag * dt;
+      this.vx += this.vx * drag;
+      this.vz += this.vz * drag;
+      this.vy += this.vy * drag;
+      this.vy -= PARAMS.gravity * dt;
+    } else {
+      this.vx += this.vx * PARAMS.ballFriction * dt;
+      this.vz += this.vz * PARAMS.ballFriction * dt;
+      if (vlen(this.vx, this.vz) < 0.15) {
+        this.vx = 0;
+        this.vz = 0;
+      }
     }
     const sp = vlen(this.vx, this.vz);
     if (sp > PARAMS.ballMaxSpeed) {
@@ -96,6 +137,18 @@ export class Ball {
     }
     this.x += this.vx * dt;
     this.z += this.vz * dt;
+    this.y += this.vy * dt;
+    if (this.y <= PARAMS.ballRadius) {
+      this.y = PARAMS.ballRadius;
+      if (this.vy < -PARAMS.ballBounceMinSpeed) {
+        // 튕긴다 — 수직은 반발계수만큼 되돌리고, 수평은 잔디에 먹힌 만큼 깎는다.
+        this.vy = -this.vy * PARAMS.ballBounce;
+        this.vx *= PARAMS.ballBounceGrip;
+        this.vz *= PARAMS.ballBounceGrip;
+      } else {
+        this.vy = 0; // 거의 다 죽은 바운스는 그냥 눕힌다(무한 미세 진동 방지)
+      }
+    }
     // 터치라인/골라인 경계 판정과 스로인/코너킥/골킥 재개는 sim.js의 checkOutOfBounds()가
     // 담당한다 — 여기서 튕겨 돌려보내지 않는다(실제로 밖으로 나가야 "아웃"을 판정할 수 있다).
   }

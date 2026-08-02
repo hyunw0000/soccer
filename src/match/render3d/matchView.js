@@ -7,6 +7,25 @@ import { createCameraRig } from './cameraRig.js';
 import { createStadiumEnvironment } from './stadiumEnvironment.js';
 import { MATCH_SIDE_STYLES } from '../matchSides.js';
 
+// 한 프레임에 이 이상 움직였으면 굴러간 게 아니라 순간이동(킥오프 리셋·되감기)으로 본다(m).
+// 상수로 박지 말고 물리에서 유도한다 — match.js가 프레임당 최대 6스텝을 돌리므로 정상 이동은
+// 최대 ballMaxSpeed(40) × dt(1/60) × 6 = 4m까지 나온다. 예전에 3m로 박아뒀더니 이 한계보다
+// 작아서, 배속(2x/3x)에서 빠른 슛이 순간이동으로 오판돼 굴림이 멈추는 구간이 있었다.
+// 여유를 두 배(12스텝)로 잡아 그 위만 순간이동으로 본다.
+const BALL_TELEPORT_DIST = PARAMS.ballMaxSpeed * PARAMS.dt * 12;
+
+// 공중볼 스핀 계수 — 지면 굴림(1.0) 대비 이 비율로만 돈다.
+// 지면 굴림 공식(각도 = 이동거리/반지름)은 "바닥에 붙어 구른다"는 전제라, 뜬 공에 그대로
+// 쓰면 30m 골킥이 30/0.35 ≈ 86rad(약 13.6바퀴)를 돌아 화면에서 스트로브처럼 번쩍인다.
+// 0.15면 같은 30m 비행에서 약 2바퀴 — 긴 킥의 백스핀 느낌이 나면서 무늬도 읽힌다.
+const AIRBORNE_SPIN_FACTOR = 0.15;
+
+// 스핀 계수를 지면(1.0)과 공중(0.15) 사이에서 보간하는 높이(m).
+// airborne 여부로 딱 끊으면 착지하는 프레임에 회전 속도가 6.6배(=1/0.15) 급변한다
+// (실측: 착지 직전 0.104rad → 직후 0.694rad). 잔디에 거의 닿은 높이에서는 이미 굴림에
+// 가까우므로, 이 높이 안에서 부드럽게 이어 붙여 그 불연속을 없앤다.
+const SPIN_BLEND_HEIGHT = 0.6;
+
 /**
  * 축구공 — 흰 바탕에 검은 오각형 12개(텔스타 무늬). 외부 이미지 의존 0.
  *
@@ -15,9 +34,6 @@ import { MATCH_SIDE_STYLES } from '../matchSides.js';
  * 오각형의 중심이므로, 각 삼각형이 그 12방향 중 하나에 충분히 가까우면 검게 칠한다.
  * 면 단위로 칠해서 오각형 경계가 선명하게 떨어진다.
  */
-// 한 프레임에 이 이상 움직였으면 굴러간 게 아니라 순간이동(킥오프 리셋·되감기)으로 본다(m).
-const BALL_TELEPORT_DIST = 3;
-
 function makeBall() {
   // detail 5 = 삼각형 720개. 오각형 경계가 삼각형 단위로 끊기므로 너무 낮으면 계단처럼 보인다.
   const geo = new THREE.IcosahedronGeometry(PARAMS.ballRadius, 5);
@@ -109,6 +125,16 @@ export function createMatchView(container, sim, captainNum = null) {
   const rollAxis = new THREE.Vector3();
   const rollQuat = new THREE.Quaternion();
 
+  // 공중볼 그림자 — 탑뷰에서는 높이가 안 보여서, 공이 떠 있으면 "어디에 떨어지는지"를
+  // 알 수 있는 단서가 이 원 하나뿐이다. 높이가 올라갈수록 크고 옅어진다.
+  const ballShadow = new THREE.Mesh(
+    new THREE.CircleGeometry(PARAMS.ballRadius, 20),
+    new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.3, depthWrite: false })
+  );
+  ballShadow.rotation.x = -Math.PI / 2;
+  ballShadow.renderOrder = 1;
+  scene.add(ballShadow);
+
   // 되감기 후 드래그로 경로를 그릴 때 쓰는 피킹/좌표변환 도구 — 화면 ↔ 필드 바닥(y=0) 변환은
   // 이 파일만 안다. sim/screens는 화면 좌표를 몰라도 되게 여기서 다 끝낸다.
   const raycaster = new THREE.Raycaster();
@@ -183,14 +209,27 @@ export function createMatchView(container, sim, captainNum = null) {
     const dist = Math.hypot(dx, dz);
     // 킥오프 리셋·되감기·재개처럼 순간이동한 프레임은 굴리지 않는다(한 프레임에 이 거리는 못 간다).
     if (dist > 1e-6 && dist < BALL_TELEPORT_DIST) {
+      // 지면에 붙어 있을 때만 진짜 "구름"이다. 뜬 공은 바닥과 안 맞물리므로 같은 거리 기반이되
+      // 계수를 낮춰 완만한 스핀만 준다(AIRBORNE_SPIN_FACTOR 주석 참고). 거리 기반이라 배속·
+      // 일시정지에도 그대로 맞물린다. 지면↔공중은 높이로 보간해서 착지 프레임에 회전 속도가
+      // 튀지 않게 한다(SPIN_BLEND_HEIGHT 주석 참고).
+      const heightAboveGround = Math.max(0, b.y - PARAMS.ballRadius);
+      const airT = Math.min(heightAboveGround / SPIN_BLEND_HEIGHT, 1);
+      const spin = 1 + (AIRBORNE_SPIN_FACTOR - 1) * airT;
       rollAxis.set(dz, 0, -dx).normalize(); // 위(0,1,0) × 진행방향
-      rollQuat.setFromAxisAngle(rollAxis, dist / PARAMS.ballRadius);
+      rollQuat.setFromAxisAngle(rollAxis, (dist / PARAMS.ballRadius) * spin);
       ballMesh.quaternion.premultiply(rollQuat); // 월드 기준으로 굴린다
     }
     prevBallX = b.x;
     prevBallZ = b.z;
 
-    ballMesh.position.set(b.x, PARAMS.ballRadius, b.z);
+    ballMesh.position.set(b.x, b.y, b.z);
+    // 높이 0.35m(지면)에서 1배, 높이 8m 이상이면 2.2배까지 커지고 그만큼 옅어진다.
+    const height = Math.max(0, b.y - PARAMS.ballRadius);
+    const spread = Math.min(height / 8, 1);
+    ballShadow.position.set(b.x, 0.02, b.z);
+    ballShadow.scale.setScalar(1 + spread * 1.2);
+    ballShadow.material.opacity = 0.3 * (1 - spread * 0.7);
   }
 
   function render() {

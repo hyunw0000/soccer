@@ -2,6 +2,9 @@
 export const FIELD = { L: 105, W: 68 };
 export const HALF = { L: FIELD.L / 2, W: FIELD.W / 2 };
 export const GOAL_W = 12; // 골 너비 (프로토타입에서는 관대하게)
+export const GOAL_H = 2.44; // 크로스바 높이 — 이보다 높이 지나간 볼은 골이 아니라 골킥이다
+// 페널티 에어리어 — 골키퍼가 손을 쓸 수 있는 유일한 구역이다(실측 16.5m × 40.32m).
+export const PENALTY_AREA = { depth: 16.5, halfWidth: 20.16 };
 
 export const PARAMS = {
   maxSpeed: 7.2, // m/s (스프린트)
@@ -22,6 +25,66 @@ export const PARAMS = {
   ballMaxSpeed: 40,
   ballRadius: 0.35,
   dt: 1 / 60,
+
+  // ---------- 공중볼(높이) ----------
+  // 볼은 x/z만이 아니라 y도 갖는다. 로프트 각이 0인 킥은 예전처럼 땅으로만 굴러가므로,
+  // 아래 loft 값들을 전부 0으로 두면 높이 도입 전 동작으로 돌아간다.
+  gravity: 9.81,
+  ballAirDrag: -0.14, // 공중일 때 잔디 마찰 대신 받는 감쇠(마찰보다 훨씬 약하다)
+  ballBounce: 0.42, // 지면 반발계수 — 튄 뒤 남는 수직 속도 비율
+  ballBounceGrip: 0.72, // 바운드할 때 잔디에 먹히는 수평 속도 비율
+  ballBounceMinSpeed: 0.6, // 이보다 느리게 떨어지면 안 튀고 그대로 눕는다(무한 미세 바운스 방지)
+
+  // 킥 종류별 띄우는 각도(도). 여기가 "언제 공이 뜨는가"를 한곳에서 정한다.
+  passLoftDeg: 0, // 짧은 패스는 땅볼
+  longPassLoftDeg: 11, // longPassDistance를 넘는 패스는 살짝 띄워 보낸다
+  longPassDistance: 22,
+  shootLoftDeg: 5, // 슛은 살짝만 — 크로스바(2.44m) 밑으로 깔리는 게 기본이다
+  shotVerticalErrorScale: 0.35, // 슛 좌우 오차각을 이 비율만큼 상하 오차로도 쓴다(뜬 슛 = 크로스바 위)
+  clearLoftDeg: 26, // 걷어내기는 크게 띄운다
+  // 헤딩은 낮게 때린다. 여기를 올리면 "헤딩으로 띄운 공을 다시 헤딩으로 띄우는" 되먹임이
+  // 생겨서 볼이 경기 내내 공중에 머문다(34도로 뒀을 때 공중 체류가 절반을 넘었다).
+  headerLoftDeg: 9,
+  goalKickLoftDeg: 33, // 골킥 — 크게 띄워 하프라인 근처까지 보낸다
+  gkPunchLoftDeg: 24,
+
+  // 높이별로 볼을 다룰 수 있는 사람이 갈린다. 이 게이트가 없으면 머리 위로 날아가는 공을
+  // 땅에서 그대로 낚아채서 로프트가 아무 의미도 갖지 못한다.
+  footControlHeight: 0.75, // 이 높이까지는 발로 잡아서 드리블을 시작할 수 있다
+  headControlHeight: 2.2, // 여기까지는 헤딩으로 걷어낼 수만 있다(컨트롤 불가). 그 위는 아무도 못 건드린다
+  headerForce: 15,
+  headerBaseErrorDeg: 14, // 헤딩은 발보다 방향이 훨씬 거칠다
+
+  // ---------- 골키퍼 ----------
+  // 손을 쓰기 때문에 필드 플레이어의 kickDist(1.6m)·footControlHeight(0.75m)와 다른 값을 쓴다.
+  // 페널티 에어리어 밖에서는 이 규칙이 아예 적용되지 않고 발로만 다룬다.
+  gkReachRadius: 2.2, // 다이빙 포함 좌우 도달 거리(m)
+  gkReachHeight: 2.6, // 손이 닿는 높이 — 크로스바보다 아주 살짝 위
+  // 캐치 확률은 감점을 **곱한다**. 뺄셈으로 두면 감점 하나(특히 속도)가 기본 확률을 통째로
+  // 상쇄해서 실전 슛이 전부 하한값에 눌러붙는다 — 실제로 그래서 키퍼가 60%를 놓쳤다.
+  // 곱셈이면 어느 항도 혼자서 확률을 0으로 못 만들고, 나쁜 조건이 겹쳐야 비로소 뚫린다.
+  gkCatchBaseProb: 0.92, // 모든 조건이 완벽할 때(느린 볼·정면·발밑)의 캐치 확률
+  gkHandlingRefStat: 70, // 이 스탯이 "평균 골키퍼"(보정 1.0)
+  gkCatchSpeedRef: 45, // 이 속도(m/s)에서 속도 감점이 최대가 된다
+  gkCatchSpeedPenalty: 0.55, // 최대 속도 감점 비율
+  gkCatchHeightPenalty: 0.25, // 높이 감점(닿는 한계 높이에서 최대)
+  gkCatchReachPenalty: 0.45, // 거리 감점(사거리 끝에서 최대)
+  gkCatchMin: 0.04,
+  gkCatchMax: 0.95,
+  // 못 잡았을 때 그래도 손끝에 걸려 쳐낼 확률 — 남은 확률(1-캐치) 중 이 비율.
+  // 나머지는 완전히 지나쳐서 볼이 그대로 흐른다(=실점 가능). 이 값이 1이면 골이 안 들어간다.
+  gkParryShare: 0.45,
+  gkPunchForce: 17,
+  gkPunchBaseErrorDeg: 16, // 쳐내기는 방향을 고를 여유가 없다
+  gkHoldTicks: 40, // 잡은 뒤 다음 판단(패스/골킥)까지 들고 있는 시간
+  gkSaveEventSpeed: 18, // 이 속도 이상으로 날아온 볼을 막았을 때만 "선방"으로 기록한다
+  // 공중볼 낙하 예측으로 키퍼가 골문에서 나오는 최대 거리(m). 크게 잡으면 크로스에 다 나와서
+  // 골문이 빈다.
+  gkComeOutRange: 11,
+
+  // 골킥은 캐리어 드리블로 시작하지 않고 그 자리에서 길게 걷어찬다.
+  goalKickForce: 25,
+  goalKickBaseErrorDeg: 8,
   halfMinutes: 45, // matchMinute 기준 전/후반 길이 (1초 = 게임 1분 스케일)
   centerCircleRadius: 9.15, // 킥오프 규정 거리
   kickoffUnlockSpeed: 0.5, // 이 이상으로 볼이 움직이면 킥오프 제한 해제
