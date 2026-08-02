@@ -308,7 +308,8 @@ export default function matchScreen(root, ctx) {
     pathPlayer = null;
   }
 
-  const banner = el("div", { class: "banner" }, [
+  // 탑뷰 + 드래그로 경로를 지시할 때 그라운드를 가리지 않도록 화면 상단에 붙인다(.pause-banner)
+  const banner = el("div", { class: "banner pause-banner" }, [
     el("b", { text: "일시정지 — 지금 지시를 바꿀 수 있습니다" }),
     el("span", { text: "되감은 시점부터 새 전술로 경기가 다시 흘러갑니다." }),
   ]);

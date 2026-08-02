@@ -58,6 +58,23 @@
 .phase-banner .ctl {
   margin-top: 6px;
 }
+/* 일시정지 배너 — 화면 한가운데에 두면 탑뷰에서 그라운드를 통째로 가려
+   드래그로 경로를 지시할 수 없다. 상단에 얇은 한 줄로 붙여 둔다. */
+.banner.pause-banner {
+  top: 14px;
+  transform: translate(-50%, 0);
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: center;
+  gap: 4px 12px;
+  max-width: calc(100vw - 32px);
+  padding: 8px 18px;
+}
+@media (max-width:720px) {
+  .banner.pause-banner { flex-direction: column; gap: 2px; }
+}
+
 /* 재생 배속 버튼 행. 카메라·전술 버튼과 같은 .ctl 토큰을 그대로 쓰고 배치만 지정한다 */
 .speed-row {
   display: flex;
