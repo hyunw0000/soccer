@@ -338,7 +338,7 @@ export default function tacticsScreen(root, ctx) {
       ctx.navigate("match");
     },
   },[
-    el("span",{text:"MATCH 54 · KICKOFF"}),
+    el("span",{text:runStep ? `MATCH ${runStep.matchId} · KICKOFF` : "KICKOFF"}),
     el("strong",{text:"역사를 바꿀 KICK OFF →"}),
   ]);
   const floatingKickoffBtn=el("button",{
@@ -359,11 +359,19 @@ export default function tacticsScreen(root, ctx) {
     },
   });
 
+  const advanceRuleText = runStep?.stage === "group"
+    ? `승리 또는 무승부 시 ${runStep.advanceLabel} 진출`
+    : runStep?.stage === "final"
+      ? `승리 시 ${runStep.advanceLabel}`
+      : runStep
+        ? `승리 시 ${runStep.advanceLabel} 진출`
+        : "";
+
   const kickoffCard=el("section",{class:"tactics-match-card","aria-label":`${opponent.name} 대 대한민국 경기 준비`},[
     el("header",{},[
       el("div",{},[
-        el("p",{class:"eyebrow",text:"GROUP A · MATCH 54"}),
-        el("h3",{text:"운명을 가를 마지막 경기"}),
+        el("p",{class:"eyebrow",text:runStep?.eyebrow ?? "FRIENDLY MATCH"}),
+        el("h3",{text:runStep?.stage === "group" ? "운명을 가를 마지막 경기" : `${runStep?.roundLabel ?? ""} 진출을 가를 경기`}),
       ]),
       previousBtn,
     ]),
@@ -372,7 +380,7 @@ export default function tacticsScreen(root, ctx) {
       el("b",{class:"tactics-match-card__versus",text:"VS"}),
       el("div",{class:"tactics-match-card__team"},[CountryFlag({teamId:"KOR",size:"medium"}),el("strong",{text:"대한민국"})]),
     ]),
-    el("p",{class:"tactics-match-card__rule",text:"승리 또는 무승부 시 32강 진출"}),
+    el("p",{class:"tactics-match-card__rule",text:advanceRuleText}),
     kickoffBtn,
   ]);
 

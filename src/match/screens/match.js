@@ -275,7 +275,11 @@ export default function matchScreen(root, ctx) {
     if (!canDrawPath()) return;
     // hud/sidepanel/controls가 stage와 형제 요소로 겹쳐 있어서, 화면 위치에 따라 클릭이
     // stage가 아니라 그 오버레이 쪽으로 먼저 잡힐 수 있다(형제라 버블링이 stage로 안 온다) —
-    // 그래서 stage가 아니라 window에서 좌표만 보고 판단한다.
+    // 그래서 stage가 아니라 window에서 좌표만 보고 판단한다. 다만 시작점(target)이 애초에
+    // 오버레이(버튼/패널/배너/다이얼로그) 위였다면 그건 필드 드래그가 아니라 그 UI를 조작하려던
+    // 것이다 — 여기서 걸러내지 않으면 그 뒤에 서 있는 선수를 라인으로 잡아버려서(특히 터치에서는
+    // pointerdown의 preventDefault가 뒤이은 click 자체를 삼켜버려) "버튼을 눌러도 안 먹는" 현상이 난다.
+    if (!stage.contains(e.target)) return;
     const picked = view.pickPlayer(e.clientX, e.clientY);
     if (!picked || picked.team !== "home") return; // 우리 팀 선수만 지시할 수 있다
     pathPlayer = picked;
