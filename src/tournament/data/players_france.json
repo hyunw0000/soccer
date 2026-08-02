@@ -1,0 +1,569 @@
+{
+  "meta": {
+    "team": "프랑스",
+    "teamEn": "France",
+    "teamCode": "FRA",
+    "stage": "qf",
+    "stageLabel": "8강",
+    "stageOrder": 4,
+    "coach": "디디에 데샹",
+    "formationId": "4-3-3",
+    "style": "블록을 내려 두고 음바페의 뒷공간 한 방으로 끝내는 세계 최강의 역습.",
+    "strength": 81,
+    "captainId": "fra_mbappe",
+    "startingXI": [
+      "fra_maignan",
+      "fra_hernandez",
+      "fra_saliba",
+      "fra_upamecano",
+      "fra_kounde",
+      "fra_rabiot",
+      "fra_tchouameni",
+      "fra_zaireemery",
+      "fra_mbappe",
+      "fra_thuram",
+      "fra_dembele"
+    ],
+    "source": "2026 FIFA 북중미 월드컵 최종 26인 명단(위키백과 2026 FIFA World Cup squads, wc-26.net 팀 스쿼드) 기준",
+    "note": "이름·등번호·소속팀·포지션은 실제 대회 명단 참고값이다. 공개 자료에서 등번호가 겹치거나 빠진 자리는 포지션에 맞게 정리했다. 능력치(stats)는 전부 밸런싱용 더미값이며 overall은 세부 스탯의 포지션 가중 평균으로 파생한다. 선발 11인(startingXI)과 포메이션은 각 팀의 대표 전형이며 실제 경기 선발과 다를 수 있다.",
+    "count": 26,
+    "positions": [
+      "GK",
+      "DF",
+      "MF",
+      "FW"
+    ],
+    "statKeys": [
+      "overall",
+      "attack",
+      "defense",
+      "stamina",
+      "pace",
+      "pass",
+      "shoot"
+    ]
+  },
+  "players": [
+    {
+      "id": "fra_samba",
+      "name": "브리스 삼바",
+      "nameEn": "Brice Samba",
+      "num": 1,
+      "pos": "GK",
+      "detail": "GK",
+      "club": "RC 랑스",
+      "age": 32,
+      "stats": {
+        "overall": 77,
+        "attack": 20,
+        "defense": 80,
+        "stamina": 72,
+        "pace": 60,
+        "pass": 74,
+        "shoot": 18
+      },
+      "squad2026": true
+    },
+    {
+      "id": "fra_gusto",
+      "name": "말로 귀스토",
+      "nameEn": "Malo Gusto",
+      "num": 2,
+      "pos": "DF",
+      "detail": "RB",
+      "club": "첼시",
+      "age": 23,
+      "stats": {
+        "overall": 77,
+        "attack": 70,
+        "defense": 76,
+        "stamina": 84,
+        "pace": 86,
+        "pass": 74,
+        "shoot": 48
+      },
+      "squad2026": true
+    },
+    {
+      "id": "fra_digne",
+      "name": "뤼카 디뉴",
+      "nameEn": "Lucas Digne",
+      "num": 3,
+      "pos": "DF",
+      "detail": "LB",
+      "club": "아스톤 빌라",
+      "age": 33,
+      "stats": {
+        "overall": 74,
+        "attack": 70,
+        "defense": 74,
+        "stamina": 78,
+        "pace": 74,
+        "pass": 80,
+        "shoot": 52
+      },
+      "squad2026": true
+    },
+    {
+      "id": "fra_upamecano",
+      "name": "다요 우파메카노",
+      "nameEn": "Dayot Upamecano",
+      "num": 4,
+      "pos": "DF",
+      "detail": "CB",
+      "club": "바이에른 뮌헨",
+      "age": 27,
+      "stats": {
+        "overall": 78,
+        "attack": 48,
+        "defense": 84,
+        "stamina": 84,
+        "pace": 86,
+        "pass": 72,
+        "shoot": 44
+      },
+      "squad2026": true
+    },
+    {
+      "id": "fra_kounde",
+      "name": "쥘 쿤데",
+      "nameEn": "Jules Kounde",
+      "num": 5,
+      "pos": "DF",
+      "detail": "RB",
+      "club": "FC 바르셀로나",
+      "age": 27,
+      "stats": {
+        "overall": 81,
+        "attack": 66,
+        "defense": 84,
+        "stamina": 84,
+        "pace": 88,
+        "pass": 78,
+        "shoot": 46
+      },
+      "squad2026": true
+    },
+    {
+      "id": "fra_kone",
+      "name": "마누 코네",
+      "nameEn": "Manu Kone",
+      "num": 6,
+      "pos": "MF",
+      "detail": "DM",
+      "club": "AS 로마",
+      "age": 25,
+      "stats": {
+        "overall": 76,
+        "attack": 70,
+        "defense": 76,
+        "stamina": 86,
+        "pace": 80,
+        "pass": 78,
+        "shoot": 60
+      },
+      "squad2026": true
+    },
+    {
+      "id": "fra_dembele",
+      "name": "우스만 뎀벨레",
+      "nameEn": "Ousmane Dembele",
+      "num": 7,
+      "pos": "FW",
+      "detail": "RW",
+      "club": "파리 생제르맹",
+      "age": 29,
+      "stats": {
+        "overall": 85,
+        "attack": 90,
+        "defense": 40,
+        "stamina": 80,
+        "pace": 91,
+        "pass": 82,
+        "shoot": 84
+      },
+      "squad2026": true
+    },
+    {
+      "id": "fra_tchouameni",
+      "name": "오렐리앵 추아메니",
+      "nameEn": "Aurelien Tchouameni",
+      "num": 8,
+      "pos": "MF",
+      "detail": "DM",
+      "club": "레알 마드리드",
+      "age": 26,
+      "stats": {
+        "overall": 79,
+        "attack": 72,
+        "defense": 84,
+        "stamina": 86,
+        "pace": 76,
+        "pass": 84,
+        "shoot": 64
+      },
+      "squad2026": true
+    },
+    {
+      "id": "fra_thuram",
+      "name": "마르퀴스 튀랑",
+      "nameEn": "Marcus Thuram",
+      "num": 9,
+      "pos": "FW",
+      "detail": "ST",
+      "club": "인터 밀란",
+      "age": 28,
+      "stats": {
+        "overall": 82,
+        "attack": 86,
+        "defense": 44,
+        "stamina": 82,
+        "pace": 86,
+        "pass": 74,
+        "shoot": 84
+      },
+      "squad2026": true
+    },
+    {
+      "id": "fra_mbappe",
+      "name": "킬리안 음바페",
+      "nameEn": "Kylian Mbappe",
+      "num": 10,
+      "pos": "FW",
+      "detail": "LW",
+      "club": "레알 마드리드",
+      "age": 27,
+      "captain": true,
+      "stats": {
+        "overall": 90,
+        "attack": 94,
+        "defense": 38,
+        "stamina": 84,
+        "pace": 97,
+        "pass": 82,
+        "shoot": 93
+      },
+      "squad2026": true
+    },
+    {
+      "id": "fra_olise",
+      "name": "마이클 올리세",
+      "nameEn": "Michael Olise",
+      "num": 11,
+      "pos": "FW",
+      "detail": "RW",
+      "club": "바이에른 뮌헨",
+      "age": 24,
+      "stats": {
+        "overall": 83,
+        "attack": 88,
+        "defense": 44,
+        "stamina": 80,
+        "pace": 84,
+        "pass": 88,
+        "shoot": 82
+      },
+      "squad2026": true
+    },
+    {
+      "id": "fra_barcola",
+      "name": "브래들리 바르콜라",
+      "nameEn": "Bradley Barcola",
+      "num": 12,
+      "pos": "FW",
+      "detail": "LW",
+      "club": "파리 생제르맹",
+      "age": 23,
+      "stats": {
+        "overall": 80,
+        "attack": 82,
+        "defense": 40,
+        "stamina": 80,
+        "pace": 92,
+        "pass": 76,
+        "shoot": 76
+      },
+      "squad2026": true
+    },
+    {
+      "id": "fra_kante",
+      "name": "은골로 캉테",
+      "nameEn": "Ngolo Kante",
+      "num": 13,
+      "pos": "MF",
+      "detail": "DM",
+      "club": "알 이티하드",
+      "age": 35,
+      "stats": {
+        "overall": 76,
+        "attack": 66,
+        "defense": 84,
+        "stamina": 88,
+        "pace": 76,
+        "pass": 76,
+        "shoot": 56
+      },
+      "squad2026": true
+    },
+    {
+      "id": "fra_rabiot",
+      "name": "아드리앵 라비오",
+      "nameEn": "Adrien Rabiot",
+      "num": 14,
+      "pos": "MF",
+      "detail": "CM",
+      "club": "AC 밀란",
+      "age": 31,
+      "stats": {
+        "overall": 78,
+        "attack": 76,
+        "defense": 74,
+        "stamina": 86,
+        "pace": 74,
+        "pass": 80,
+        "shoot": 70
+      },
+      "squad2026": true
+    },
+    {
+      "id": "fra_konate",
+      "name": "이브라히마 코나테",
+      "nameEn": "Ibrahima Konate",
+      "num": 15,
+      "pos": "DF",
+      "detail": "CB",
+      "club": "리버풀",
+      "age": 27,
+      "stats": {
+        "overall": 78,
+        "attack": 46,
+        "defense": 85,
+        "stamina": 84,
+        "pace": 88,
+        "pass": 72,
+        "shoot": 42
+      },
+      "squad2026": true
+    },
+    {
+      "id": "fra_maignan",
+      "name": "마이크 메냥",
+      "nameEn": "Mike Maignan",
+      "num": 16,
+      "pos": "GK",
+      "detail": "GK",
+      "club": "AC 밀란",
+      "age": 31,
+      "stats": {
+        "overall": 84,
+        "attack": 24,
+        "defense": 88,
+        "stamina": 76,
+        "pace": 64,
+        "pass": 82,
+        "shoot": 20
+      },
+      "squad2026": true
+    },
+    {
+      "id": "fra_saliba",
+      "name": "윌리엄 살리바",
+      "nameEn": "William Saliba",
+      "num": 17,
+      "pos": "DF",
+      "detail": "CB",
+      "club": "아스널",
+      "age": 25,
+      "stats": {
+        "overall": 81,
+        "attack": 50,
+        "defense": 88,
+        "stamina": 84,
+        "pace": 88,
+        "pass": 78,
+        "shoot": 44
+      },
+      "squad2026": true
+    },
+    {
+      "id": "fra_zaireemery",
+      "name": "워런 자이르에메리",
+      "nameEn": "Warren Zaire-Emery",
+      "num": 18,
+      "pos": "MF",
+      "detail": "CM",
+      "club": "파리 생제르맹",
+      "age": 20,
+      "stats": {
+        "overall": 79,
+        "attack": 76,
+        "defense": 74,
+        "stamina": 86,
+        "pace": 80,
+        "pass": 82,
+        "shoot": 66
+      },
+      "squad2026": true
+    },
+    {
+      "id": "fra_hernandez",
+      "name": "테오 에르난데스",
+      "nameEn": "Theo Hernandez",
+      "num": 19,
+      "pos": "DF",
+      "detail": "LB",
+      "club": "알 힐랄",
+      "age": 28,
+      "stats": {
+        "overall": 78,
+        "attack": 80,
+        "defense": 72,
+        "stamina": 86,
+        "pace": 90,
+        "pass": 76,
+        "shoot": 62
+      },
+      "squad2026": true
+    },
+    {
+      "id": "fra_doue",
+      "name": "데지레 두에",
+      "nameEn": "Desire Doue",
+      "num": 20,
+      "pos": "FW",
+      "detail": "AM",
+      "club": "파리 생제르맹",
+      "age": 21,
+      "stats": {
+        "overall": 82,
+        "attack": 86,
+        "defense": 44,
+        "stamina": 80,
+        "pace": 88,
+        "pass": 84,
+        "shoot": 80
+      },
+      "squad2026": true
+    },
+    {
+      "id": "fra_lucashernandez",
+      "name": "뤼카 에르난데스",
+      "nameEn": "Lucas Hernandez",
+      "num": 21,
+      "pos": "DF",
+      "detail": "LB",
+      "club": "파리 생제르맹",
+      "age": 30,
+      "stats": {
+        "overall": 75,
+        "attack": 58,
+        "defense": 80,
+        "stamina": 80,
+        "pace": 78,
+        "pass": 70,
+        "shoot": 44
+      },
+      "squad2026": true
+    },
+    {
+      "id": "fra_mateta",
+      "name": "장필리프 마테타",
+      "nameEn": "Jean-Philippe Mateta",
+      "num": 22,
+      "pos": "FW",
+      "detail": "ST",
+      "club": "크리스털 팰리스",
+      "age": 29,
+      "stats": {
+        "overall": 76,
+        "attack": 78,
+        "defense": 44,
+        "stamina": 80,
+        "pace": 76,
+        "pass": 66,
+        "shoot": 82
+      },
+      "squad2026": true
+    },
+    {
+      "id": "fra_areola",
+      "name": "알퐁스 아레올라",
+      "nameEn": "Alphonse Areola",
+      "num": 23,
+      "pos": "GK",
+      "detail": "GK",
+      "club": "웨스트햄 유나이티드",
+      "age": 33,
+      "stats": {
+        "overall": 75,
+        "attack": 18,
+        "defense": 78,
+        "stamina": 70,
+        "pace": 58,
+        "pass": 72,
+        "shoot": 16
+      },
+      "squad2026": true
+    },
+    {
+      "id": "fra_cherki",
+      "name": "라얀 셰르키",
+      "nameEn": "Rayan Cherki",
+      "num": 24,
+      "pos": "MF",
+      "detail": "AM",
+      "club": "맨체스터 시티",
+      "age": 22,
+      "stats": {
+        "overall": 77,
+        "attack": 86,
+        "defense": 42,
+        "stamina": 76,
+        "pace": 82,
+        "pass": 88,
+        "shoot": 78
+      },
+      "squad2026": true
+    },
+    {
+      "id": "fra_akliouche",
+      "name": "마그네스 아클리우슈",
+      "nameEn": "Maghnes Akliouche",
+      "num": 25,
+      "pos": "FW",
+      "detail": "RW",
+      "club": "AS 모나코",
+      "age": 24,
+      "stats": {
+        "overall": 77,
+        "attack": 80,
+        "defense": 44,
+        "stamina": 78,
+        "pace": 84,
+        "pass": 80,
+        "shoot": 72
+      },
+      "squad2026": true
+    },
+    {
+      "id": "fra_lacroix",
+      "name": "막상스 라크루아",
+      "nameEn": "Maxence Lacroix",
+      "num": 26,
+      "pos": "DF",
+      "detail": "CB",
+      "club": "크리스털 팰리스",
+      "age": 26,
+      "stats": {
+        "overall": 74,
+        "attack": 44,
+        "defense": 80,
+        "stamina": 80,
+        "pace": 80,
+        "pass": 68,
+        "shoot": 40
+      },
+      "squad2026": true
+    }
+  ]
+}

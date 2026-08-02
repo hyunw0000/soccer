@@ -1,52 +1,78 @@
-/**
- * 중앙 화면 전환기.
- * 각 화면은 mount(root, ctx, params) 함수를 export하고 정리 함수를 반환한다.
- * navigate()만 공개해 화면이 서로를 직접 렌더링하지 않도록 한다.
- *
- * history state에 route를 기록하므로 뒤로가기/앞으로가기를 지원한다.
- * URL path는 바꾸지 않아 기존 정적 배포와 직접 접속 동작은 그대로 유지한다.
- */
-export function createRouter(root, screens) {
+import { ROUTES, ROUTE_ALIASES, routeNameFromPath, routePath } from './routes.js';
+
+export function createRouter(root, screens, { canAccess = () => true } = {}) {
   let cleanup = null;
   let currentName = null;
+  let currentParams = null;
+
+  const resolveName = (name) => {
+    if (typeof name === 'string' && name.startsWith('/')) return routeNameFromPath(name);
+    return ROUTE_ALIASES[name] ?? name;
+  };
+
+  function guardedName(name) {
+    const resolved = resolveName(name);
+    if (resolved === 'notFound') return resolved;
+    if (!ROUTES[resolved]) return 'notFound';
+    if (!canAccess(resolved, ROUTES[resolved])) return 'setup';
+    // 완료된 사용자가 루트로 다시 들어오면 명단으로 보내되,
+    // 이름 수정을 위해 명시적으로 연 setup 화면은 그대로 허용한다.
+    if (resolved === 'start' && canAccess('roster', ROUTES.roster)) return 'roster';
+    return resolved;
+  }
 
   function render(name, params) {
-    if (!screens[name]) throw new Error(`unknown screen: ${name}`);
-    if (cleanup) cleanup();
+    if (currentName === name && currentParams === params) return;
+    cleanup?.();
     cleanup = null;
     root.replaceChildren();
     currentName = name;
-    cleanup = screens[name](root, ctx, params) ?? null;
+    currentParams = params;
+    const nextCleanup = (screens[name] ?? screens.notFound)(root, ctx, params);
+    cleanup = typeof nextCleanup === 'function' ? nextCleanup : null;
   }
 
   function navigate(name, params, { replace = false, fromHistory = false } = {}) {
-    render(name, params);
-    if (fromHistory || typeof window === 'undefined') return;
+    const requested = resolveName(name);
+    const resolved = guardedName(requested);
+    const guarded = resolved !== requested;
+    const path = routePath(resolved) ?? window.location.pathname;
 
-    const historyState = { screen: name, params: params ?? null };
-    if (replace) window.history.replaceState(historyState, '');
-    else window.history.pushState(historyState, '');
+    if (!fromHistory && typeof window !== 'undefined') {
+      const method = replace || guarded ? 'replaceState' : 'pushState';
+      window.history[method]({ route: resolved, params: params ?? null }, '', path);
+    } else if (fromHistory && guarded && typeof window !== 'undefined') {
+      window.history.replaceState({ route: resolved, params: null }, '', path);
+    }
+    render(resolved, params);
   }
 
   const onPopState = (event) => {
-    const route = event.state;
-    if (route?.screen && screens[route.screen]) {
-      navigate(route.screen, route.params ?? undefined, { fromHistory: true });
-    }
+    const name = event.state?.route ?? routeNameFromPath(window.location.pathname);
+    navigate(name, event.state?.params ?? undefined, { fromHistory: true });
   };
 
-  if (typeof window !== 'undefined') window.addEventListener('popstate', onPopState);
+  const onDocumentClick = (event) => {
+    const link = event.target.closest?.('a[data-route]');
+    if (!link || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    navigate(link.dataset.route);
+  };
+
+  window.addEventListener('popstate', onPopState);
+  document.addEventListener('click', onDocumentClick);
 
   const ctx = {
     navigate,
-    get current() {
-      return currentName;
-    },
+    get current() { return currentName; },
     destroy() {
-      if (cleanup) cleanup();
+      cleanup?.();
       cleanup = null;
-      if (typeof window !== 'undefined') window.removeEventListener('popstate', onPopState);
+      window.removeEventListener('popstate', onPopState);
+      document.removeEventListener('click', onDocumentClick);
     },
   };
+
+  ctx.start = () => navigate(routeNameFromPath(window.location.pathname), undefined, { replace: true });
   return ctx;
 }
