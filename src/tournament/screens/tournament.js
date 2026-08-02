@@ -65,7 +65,14 @@ function currentMatchCard(progress,ctx,onRetry) {
 
   return el('section',{class:cardClass,'aria-label':`${title}, ${countries[homeTeamId].nameKo} 대 ${countries[awayTeamId].nameKo}, ${status}`},[
     el('header',{},[
-      el('div',{},[el('p',{class:'wc-eyebrow',text:step.eyebrow}),el('h2',{text:title})]),
+      el('div',{},[
+        champion ? el('div',{class:'wc-champion-mark'},[
+          el('span',{class:'wc-champion-mark__trophy','aria-hidden':'true'}),
+          el('span',{text:'WORLD CHAMPIONS'}),
+        ]) : null,
+        el('p',{class:'wc-eyebrow',text:step.eyebrow}),
+        el('h2',{text:title}),
+      ]),
       el('b',{class:'wc-compact-final__status',text:status}),
     ]),
     el('div',{class:'wc-compact-final__teams'},[

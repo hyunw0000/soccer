@@ -19,6 +19,63 @@
 .wc-compact-final__cta { display:flex; width:100%; min-height:38px; align-items:center; justify-content:center; margin-top:12px; border:1px solid rgba(75,182,222,.68); padding:8px 14px; color:#fff; background:linear-gradient(110deg,#146d9c,#a62036); font-size:14px; font-weight:800; }
 .wc-compact-final__cta:hover { filter:brightness(1.1); }
 .wc-compact-final__cta:focus-visible { outline:2px solid #fff; outline-offset:3px; }
+.wc-compact-final.is-champion {
+  border-color:#e6bd53;
+  background:
+    radial-gradient(circle at 50% 0,rgba(255,220,111,.15),transparent 42%),
+    linear-gradient(rgba(219,178,72,.04) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(219,178,72,.04) 1px,transparent 1px),
+    rgba(3,15,22,.97);
+  background-size:auto,20px 20px,20px 20px,auto;
+  box-shadow:inset 3px 0 rgba(239,51,69,.62),inset -3px 0 rgba(35,142,208,.62),0 0 0 1px rgba(255,237,166,.08),0 15px 42px rgba(0,0,0,.34),0 0 30px rgba(220,171,48,.12);
+}
+.wc-compact-final.is-champion::before {
+  content:"";
+  position:absolute;
+  top:-1px;
+  right:12%;
+  left:12%;
+  height:2px;
+  background:linear-gradient(90deg,transparent,#d49b25,#fff1ad,#d49b25,transparent);
+  box-shadow:0 0 14px rgba(247,215,116,.5);
+}
+.wc-champion-mark { display:flex; align-items:center; gap:7px; margin-bottom:7px; color:#e4bd54; font-size:9px; font-weight:950; letter-spacing:.18em; }
+.wc-champion-mark__trophy {
+  position:relative;
+  width:16px;
+  height:14px;
+  border:2px solid #f7d774;
+  border-top:0;
+  border-radius:0 0 7px 7px;
+  background:linear-gradient(135deg,#8a5a08,#fff1ad 48%,#aa700f);
+  filter:drop-shadow(0 0 5px rgba(247,215,116,.4));
+}
+.wc-champion-mark__trophy::before {
+  content:"";
+  position:absolute;
+  top:12px;
+  left:5px;
+  width:6px;
+  height:5px;
+  border-bottom:2px solid #f7d774;
+  background:#c68b19;
+}
+.wc-compact-final.is-champion .wc-eyebrow { color:#cab071; }
+.wc-compact-final.is-champion h2 {
+  background:linear-gradient(135deg,#d19a28,#fff1ad 50%,#d39a24);
+  background-clip:text;
+  -webkit-background-clip:text;
+  color:transparent;
+  font-weight:900;
+}
+.wc-compact-final.is-champion .wc-compact-final__status {
+  border-color:#e6bd53;
+  color:#fff0a7;
+  background:rgba(181,126,24,.12);
+  box-shadow:0 0 15px rgba(224,177,62,.12);
+}
+.wc-compact-final.is-champion .wc-compact-final__versus { color:#fff0a7; text-shadow:0 0 16px rgba(224,177,62,.26); }
+.wc-compact-final.is-champion .wc-compact-final__rule { color:#e4cf91; }
 .wc-floating-prepare { position:fixed; z-index:110; top:7px; right:max(18px,calc((100vw - var(--game-page-max-width))/2 + 28px)); min-width:250px; min-height:48px; border:1px solid rgba(75,182,222,.68); padding:10px 18px; color:#fff; background:linear-gradient(110deg,#146d9c,#a62036); font-size:13px; font-weight:850; letter-spacing:.02em; box-shadow:0 0 18px rgba(239,51,69,.22); }
 .wc-floating-prepare:hover { filter:brightness(1.1); }
 .wc-floating-prepare:focus-visible { outline:2px solid #fff; outline-offset:3px; }

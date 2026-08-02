@@ -70,7 +70,9 @@ export default function matchScreen(root, ctx) {
   let matchPhase = 'kickoffBriefing';
   let paused = true;
   let concedeChoicePending = false; // 실점 직후 "되돌릴지/진행할지" 명시적으로 물어보는 중인지
+  let koreaGoalPending = false; // 득점 축하 후 상대 킥오프를 사용자가 직접 재개하기 전인지
   let lastNotifiedConcedeTick = null; // 같은 실점에 배너를 두 번 띄우지 않으려는 표시
+  let lastNotifiedKoreaGoalTick = null;
   let rewindsLeft = REWIND_LIMIT;
   let acc = 0;
   let last = performance.now();
@@ -103,6 +105,8 @@ export default function matchScreen(root, ctx) {
   function setPaused(v) {
     // 하프타임/풀타임 중에는 '후반 시작' 버튼 없이 일반 재개로 넘어갈 수 없다
     if (!v && (sim.phase !== "playing" || matchPhase !== 'playing')) return;
+    // 대한민국 득점 뒤에는 일반 재개가 아니라 전용 "킥오프 재개" 버튼으로만 다시 시작한다.
+    if (!v && koreaGoalPending) return;
     paused = v;
     pauseBtn.textContent = paused ? "▶ 재개" : "⏸ 일시정지";
     pauseBtn.classList.toggle("on", paused);
@@ -116,10 +120,11 @@ export default function matchScreen(root, ctx) {
     updateBanners();
   }
 
-  // 일시정지/실점 선택 배너는 동시에 뜨지 않는다. 경기 결과는 별도 모달로 표시한다.
+  // 득점/실점 선택/일시정지 배너는 동시에 뜨지 않는다. 경기 결과는 별도 모달로 표시한다.
   function updateBanners() {
     const finished = matchResult !== null;
-    banner.classList.toggle("show", !finished && paused && sim.phase === "playing" && !concedeChoicePending);
+    banner.classList.toggle("show", !finished && paused && sim.phase === "playing" && !concedeChoicePending && !koreaGoalPending);
+    koreaGoalBanner.classList.toggle("show", !finished && koreaGoalPending);
     concedeBanner.classList.toggle("show", !finished && concedeChoicePending);
     updateSpeedButtons();
   }
@@ -133,6 +138,14 @@ export default function matchScreen(root, ctx) {
     concedeRewindBtn.textContent = `⏪ 운명 되돌리기 · ${rewindsLeft}회 남음`;
     concedeRewindBtn.disabled = rewindsLeft <= 0 || !sim.canRewind();
     setPaused(true); // setPaused가 updateBanners()를 호출해 concedeBanner도 같이 뜬다
+  }
+
+  function showKoreaGoal(ev) {
+    koreaGoalPending = true;
+    koreaGoalClock.textContent = formatEventClock(ev);
+    koreaGoalScorer.textContent = ev.text || "대한민국 득점";
+    koreaGoalScore.textContent = `${homeCode} ${sim.score.home} : ${sim.score.away} ${awayCode}`;
+    setPaused(true);
   }
 
   function setSpeed(v) {
@@ -249,6 +262,8 @@ export default function matchScreen(root, ctx) {
     const snap = rewind.findNearestTick(targetTick);
     if (!snap) return;
     concedeChoicePending = false; // R키로 바로 되감아도 실점 선택 배너는 닫아야 한다
+    koreaGoalPending = false;
+    lastNotifiedKoreaGoalTick = null;
     sim.restore(snap);
     sim.markRewindUsed();
     rewindsLeft--;
@@ -329,6 +344,32 @@ export default function matchScreen(root, ctx) {
   const banner = el("div", { class: "banner pause-banner" }, [
     el("b", { text: "일시정지 — 지금 지시를 바꿀 수 있습니다" }),
     el("span", { text: "되감은 시점부터 새 전술로 경기가 다시 흘러갑니다." }),
+  ]);
+
+  // 대한민국 득점 순간에는 자동 정지한다. Sim은 이미 상대팀 킥오프 위치로 리셋된 상태이며,
+  // 감독이 아래 버튼을 눌러야 다음 틱부터 경기가 다시 흐른다.
+  const koreaGoalClock = el("span", { class: "korea-goal__clock", text: "" });
+  const koreaGoalScorer = el("strong", { class: "korea-goal__scorer", text: "" });
+  const koreaGoalScore = el("b", { class: "korea-goal__score", text: "" });
+  const koreaGoalBanner = el("div", { class: "banner korea-goal-banner" }, [
+    el("p", { class: "korea-goal__eyebrow" }, [
+      CountryFlag({ teamId: "KOR", size: "small" }),
+      el("span", { text: "KOREA REPUBLIC · GOAL" }),
+    ]),
+    el("h2", { text: "대한민국 GOAL!" }),
+    koreaGoalScorer,
+    koreaGoalScore,
+    koreaGoalClock,
+    el("button", {
+      class: "primary korea-goal__resume",
+      type: "button",
+      text: "상대팀 킥오프로 재개 →",
+      onclick: () => {
+        koreaGoalPending = false;
+        view?.sync(0);
+        setPaused(false);
+      },
+    }),
   ]);
 
   // 실점 순간 "되돌릴지/진행할지" 명시적으로 묻는 배너 — 조용히 지나가지 않는다
@@ -729,10 +770,15 @@ export default function matchScreen(root, ctx) {
       else updateBanners();
     }
 
-    // 실점 감지 — 방금 돈 틱들 사이에 우리 팀 실점이 새로 생겼으면 자동 정지하고 선택을 받는다.
-    // 그냥 지나가면 되감기 기능이 있는 의미가 없다.
+    // 득점/실점 감지 — 대한민국 득점은 상대 킥오프 전 축하 화면에서 멈추고,
+    // 실점은 되돌릴지 선택할 수 있도록 멈춘다.
     for (let i = renderedEvents; i < sim.events.length; i++) {
       const ev = sim.events[i];
+      if (ev.type === "goal" && ev.team === "home" && ev.tick !== lastNotifiedKoreaGoalTick) {
+        lastNotifiedKoreaGoalTick = ev.tick;
+        showKoreaGoal(ev);
+        break;
+      }
       if (ev.type === "goal" && ev.team === "away" && ev.tick !== lastNotifiedConcedeTick) {
         lastNotifiedConcedeTick = ev.tick;
         showConcedeChoice(ev);
@@ -989,6 +1035,7 @@ export default function matchScreen(root, ctx) {
     el("div", { class: "screen match", "data-match-tag": runStep?.eyebrow ?? "FRIENDLY MATCH" }, [
       stage,
       banner,
+      koreaGoalBanner,
       concedeBanner,
       el("div", { class: "hud" }, [
         scoreEl,
