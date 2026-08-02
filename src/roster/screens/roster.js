@@ -221,8 +221,8 @@ export default function squadScreen(root, ctx) {
     el('div', { class: 'screen page' }, [
       el('header', { class: 'topbar' }, [
         el('div', {}, [
-          el('p', { class: 'eyebrow', text: 'STEP 2 / 3' }),
-          el('h2', { class: 'h2', text: '소집 명단과 주장을 정하세요' }),
+          el('p', { class: 'eyebrow', text: 'KOREA REPUBLIC · NATIONAL SQUAD' }),
+          el('h2', { class: 'h2', text: '역사를 바꿀 26인' }),
         ]),
         el('div', { class: 'topbar-right' }, [
           counter,
@@ -231,7 +231,7 @@ export default function squadScreen(root, ctx) {
         ]),
       ]),
       el('p', { class: 'lead' }, [
-        `감독 `,
+        `대한민국의 운명을 함께할 선수단입니다. 감독 `,
         el('b', { text: state.managerName || '이름 없음' }),
         ` — 선수를 골라 가운데 화살표로 옮깁니다(더블클릭하면 바로 이동). 최대 ${MAX_POOL}명, ☆를 눌러 주장을 지정합니다.`,
       ]),

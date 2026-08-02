@@ -13,9 +13,10 @@
   display: flex;
   flex-direction: column;
   min-width: 0;
-  border: 1px solid var(--line);
-  background: rgba(3, 15, 22, 0.55);
-  padding: 4px 12px 12px;
+  border: 1px solid var(--game-border);
+  background: linear-gradient(145deg,var(--game-surface),rgba(2,12,18,.96));
+  padding: 8px 16px 16px;
+  box-shadow:0 14px 34px rgba(0,0,0,.18);
 }
 
 .transfer-panel .h3 { margin: 10px 0 4px; }
@@ -45,13 +46,14 @@
   gap: 2px;
   padding: 12px 0;
   background: linear-gradient(180deg, rgba(9, 40, 51, 0.9), rgba(2, 14, 20, 0.9));
-  border: 1px solid var(--line);
+  min-height:54px;
+  border: 1px solid var(--game-border);
   color: var(--fg);
   cursor: pointer;
 }
 
 .move-btn:hover:not(:disabled) {
-  border-color: var(--line-strong);
+  border-color: var(--game-border-strong);
   background: linear-gradient(180deg, rgba(17, 78, 96, 0.95), rgba(4, 24, 33, 0.95));
 }
 
@@ -74,4 +76,9 @@
   .move-btn { flex: 1; grid-auto-flow: column; padding: 10px 0; }
   .move-btn .move-arrow { transform: rotate(90deg); }
   .transfer-body { max-height: 42vh; }
+}
+
+@media (max-width:560px) {
+  .transfer { gap:10px; }
+  .transfer-body { max-height:50vh; }
 }

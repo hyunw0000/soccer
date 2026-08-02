@@ -5,7 +5,7 @@
  */
 
 .tac-console {
-  --tac-edge: rgba(255, 255, 255, 0.09);
+  --tac-edge: var(--game-border);
   --tac-ink: rgba(255, 255, 255, 0.055);
 
   display: grid;
@@ -14,14 +14,14 @@
   margin-top: 16px;
   background: var(--tac-edge);
   border: 1px solid var(--tac-edge);
-  border-radius: 12px;
+  border-radius: 0;
   overflow: hidden;
 }
 
 /* ---------- 전술 목록 ---------- */
 
 .tac-list {
-  background: rgba(2, 9, 14, 0.92);
+  background: linear-gradient(180deg,var(--game-surface-elevated),rgba(2,9,14,.98));
   padding: 12px 0 14px;
 }
 
@@ -102,7 +102,7 @@
   display: flex;
   flex-direction: column;
   min-width: 0;
-  background: rgba(4, 13, 19, 0.92);
+  background: linear-gradient(145deg,var(--game-surface),rgba(2,12,18,.97));
 }
 
 .tac-main-head {
@@ -158,7 +158,7 @@
 .tac-tab:hover { color: var(--fg); }
 
 .tac-tab.on {
-  border-bottom-color: var(--fg);
+  border-bottom-color: var(--game-accent-red);
   color: var(--fg);
   font-weight: 700;
 }
@@ -266,6 +266,7 @@
 }
 
 .tt-cell.on { background: var(--accent); }
+.tt-cell.on { background:linear-gradient(90deg,var(--game-accent-blue),var(--game-accent-red)); }
 .tt-bar:hover .tt-cell { background: rgba(255, 255, 255, 0.18); }
 .tt-bar:hover .tt-cell.on { background: color-mix(in srgb, var(--accent) 82%, white); }
 
@@ -481,4 +482,10 @@
   .tac-preset { width: auto; border-left: 0; border-radius: 6px; }
   .tac-pane.team { grid-template-columns: minmax(0, 1fr); }
   .tac-side { max-width: 300px; }
+}
+
+@media (max-width:560px) {
+  .tac-body { padding:14px 12px; }
+  .tac-tabs { gap:14px; overflow-x:auto; }
+  .tac-actions { flex-wrap:wrap; padding:12px; }
 }

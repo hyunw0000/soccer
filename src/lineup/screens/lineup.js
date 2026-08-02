@@ -30,6 +30,7 @@ export default function lineupScreen(root, ctx) {
     usable ? saved : autoLineup(squadPlayerIds, formationId, findById, { captainId }),
     captainId
   );
+  const lineupStatus = el('span',{class:'counter'});
 
   const editor = createLineupEditor({
     squadPlayerIds,
@@ -76,6 +77,9 @@ export default function lineupScreen(root, ctx) {
 
   function updateNext() {
     const { ok } = editor.getValidation();
+    const selected = editor.getLineup().assignments.filter(({playerId})=>playerId).length;
+    lineupStatus.textContent = `${selected}/11 · ${ok?'준비 완료':'선택 중'}`;
+    lineupStatus.classList.toggle('warn',!ok);
     nextBtn.disabled = !ok;
     nextBtn.title = ok ? '' : '선발 11명이 유효해야 다음 단계로 넘어갈 수 있습니다.';
   }
@@ -84,10 +88,11 @@ export default function lineupScreen(root, ctx) {
     el('div', { class: 'screen page' }, [
       el('header', { class: 'topbar' }, [
         el('div', {}, [
-          el('p', { class: 'eyebrow', text: 'LINEUP' }),
-          el('h2', { class: 'h2', text: '선발 11명을 세우세요' }),
+          el('p', { class: 'eyebrow', text: 'STARTING XI · MATCH 54' }),
+          el('h2', { class: 'h2', text: '남아공전에 나설 선발 명단' }),
         ]),
         el('div', { class: 'topbar-right' }, [
+          lineupStatus,
           el('button', {
             class: 'ghost',
             type: 'button',
