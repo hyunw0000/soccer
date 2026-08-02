@@ -29,6 +29,7 @@ export default function lineupScreen(root, ctx) {
         el('div', {}, [
           el('p', { class: 'eyebrow', text: 'SCOUTING · MATCH 54' }),
           el('h2', { class: 'h2', text: '상대 선수단을 확인하세요' }),
+          el('p',{class:'topbar-description',text:'다음 상대의 포메이션과 핵심 선수를 분석해 경기 계획을 준비합니다.'}),
         ]),
         el('div', { class: 'topbar-right' }, [
           el('span',{class:'counter',text:opponent?.name?`다음 상대 · ${opponent.name}`:'다음 상대 확인 중'}),
