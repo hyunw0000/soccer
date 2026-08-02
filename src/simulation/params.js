@@ -47,4 +47,38 @@ export const PARAMS = {
   visionMaxMissChance: 0.5, // 후보 하나를 못 보고 지나칠 확률의 상한
   personalityDeviateMax: 0.5, // boldness가 극단(0 또는 1)일 때 1등을 안 고르는 확률의 상한
   personalityTopN: 3, // 대안을 고를 때 훑는 후보 범위(점수 상위 N개)
+
+  // 드리블(볼 소유 유지) — 잡으면 그 자리에서 바로 안 놓고, 발밑에 붙인 채로 전진하다가
+  // 판단 주기마다 계속 갈지/패스·슛으로 풀지 정한다. "차고 뛰어가서 다시 잡기"를 없앤다.
+  dribbleDecisionTicks: 24, // 판단 주기(틱) — 이 동안은 계속 드리블하며 재판단 안 함
+  dribbleCarryOffset: 0.9, // 캐리어 발밑 앞쪽으로 볼을 붙여두는 거리(m)
+  dribbleLookahead: 6, // 드리블 목표를 몇 m 앞으로 계속 갱신할지
+  dribbleBaseChance: 0.4, // 패스 후보가 있어도 그냥 계속 드리블할 기본 확률
+  dribbleRiskInfluence: 0.4, // risk 지시가 드리블 확률을 얼마나 더 흔드는지(±)
+  mandatoryShotDistance: 12, // 골문에서 이 거리 안이면 확률 없이 무조건 슛 — 드리블로 골라인까지 걸어들어가는 걸 막는다
+
+  // 판단/실행 분리 리팩터링(decision.js) — 실행 성공확률 sigmoid 계수. §6.7 공식의
+  // "패스스탯×체력승수" 같은 0..100 스케일 항이 sigmoid에 그대로 들어가면 거의 항상
+  // 포화(승률 0 또는 1에 붙음)돼서, Scale/Divisor로 정규화한다. 값은 실전 로스터로 돌려본
+  // 빈도 비교(슛/드리블/패스 비율)로 조정했다 — 아래 "판단 빈도 비교" 결과 참고.
+  passStatScale: 45,
+  passStatDivisor: 18,
+  passDistanceCoef: 0.05,
+  passPressureCoef: 0.8, // §6.7 고정값
+  passFirstTouchCoef: 0.3, // §6.7 고정값 (수신자 퍼스트터치 — 계약에 없어 dribbleSkill 대리)
+  passFailErrorMultiplier: 3, // 실행 실패 시 오차각을 이만큼 키운다(성공/실패를 이진 소멸이 아니라 큰 오차로 표현)
+  shootStatScale: 42,
+  shootStatDivisor: 16,
+  shootDistanceCoef: 0.08,
+  shootAngleCoef: 1.6,
+  shotFailErrorMultiplier: 2.2,
+
+  // 태클 확률의 압박강도 항 — defender의 압박 지시(0..1)를 다른 항(수비력/드리블력, 0..100)과
+  // 같은 "스탯형 0..100" 스케일로 맞추려면 ×100이 필요하다. §6.7의 "(1+압박강도/200)"은
+  // 압박강도가 0..100 스케일이라는 전제라서, ×100 정규화 후 그대로 나눈다.
+  tacklePressingScale: 100,
+  tacklePressingDivisor: 200,
+  tackleDistanceDecayMin: 0.5, // 사거리(kickDist) 끝에서도 이 밑으로는 안 깎는다
+
+  clearBaseErrorDeg: 6, // 캐리어가 압박에 밀려 그냥 걷어낼 때의 기본 오차각(패스보다 급하게 찬다)
 };

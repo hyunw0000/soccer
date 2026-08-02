@@ -1,9 +1,10 @@
 import { PARAMS, FIELD, HALF, GOAL_W } from './params.js';
 import { vlen, clamp } from './math.js';
-import { Rng } from './rng.js';
+import { Rng, seededRandom, seededRandomPlayerId, ACTION_ID } from './rng.js';
 import { Player, Ball } from './entities.js';
 import { assignmentSlot, INSTRUCTION_FALLBACK } from './coordinates.js';
 import { arrive, pursuit, separation, closest } from './steering.js';
+import { chooseAction, effectivePressing } from './decision.js';
 
 const SIM_TACTIC_FALLBACK = { lineHeight: 0.5, pressing: 0.5, tempo: 0.5, width: 0.5 };
 const TACTIC_KEYS = Object.keys(SIM_TACTIC_FALLBACK);
@@ -120,6 +121,7 @@ export class Sim {
           idx: i,
           meta: meta.get(a.playerId),
           slot: assignmentSlot(a, team, width),
+          isCaptain: a.playerId === lineup.captainId,
         })
     );
   }
@@ -219,6 +221,7 @@ export class Sim {
       this.ball.kick(partner.x - taker.x, partner.z - taker.z, PARAMS.passForce);
     } else if (taker) {
       this.ball.ownerKey = `${taker.team}:${taker.idx}`;
+      this.ball.carrierKey = `${taker.team}:${taker.idx}`;
     }
     this.kickoffLock = { team: kickoffTeam, active: true };
   }
@@ -282,6 +285,8 @@ export class Sim {
       let fx = 0;
       let fz = 0;
 
+      const isCarrier = this.ball.carrierKey === `${p.team}:${p.idx}`;
+
       if (p.command) {
         // 감독이 되감기 후 드래그로 내린 경로 지시 — 기본 AI보다 우선한다.
         const wp = p.command.waypoints[p.command.index];
@@ -294,6 +299,17 @@ export class Sim {
         const gx = (mine ? -HALF.L : HALF.L) + (mine ? 2 : -2);
         const gz = clamp(this.ball.z * 0.5, -GOAL_W / 2, GOAL_W / 2);
         [fx, fz] = arrive(p, gx, gz);
+      } else if (isCarrier && p.dribbleMode === 'hold') {
+        // 키핑 — 판단(decision.js scoreHoldCandidate)이 "제자리에서 볼을 지킨다"를 골랐을 때.
+        // 목표를 자기 자신으로 두면 arrive()가 [0,0]을 돌려줘 정지 상태가 된다.
+        [fx, fz] = arrive(p, p.x, p.z);
+      } else if (isCarrier) {
+        // 드리블 중 — 공을 몰고 상대 골 쪽으로 전진한다(목표를 매 틱 앞으로 다시 잡아 계속
+        // 전진하게 만든다). 개인 지시(roaming)로 살짝 좌우 흔들림을 준다.
+        const dir = mine ? 1 : -1;
+        const tx = clamp(p.x + dir * PARAMS.dribbleLookahead, -HALF.L, HALF.L);
+        const tz = clamp(p.z + (p.ins.roaming - 0.5) * PARAMS.dribbleLookahead, -HALF.W, HALF.W);
+        [fx, fz] = arrive(p, tx, tz);
       } else if (p === chaser) {
         [fx, fz] = pursuit(p, this.ball);
       } else {
@@ -340,16 +356,37 @@ export class Sim {
       }
       p.x = clamp(p.x + p.vx * dt, -HALF.L - 1, HALF.L + 1);
       p.z = clamp(p.z + p.vz * dt, -HALF.W, HALF.W);
+      if (isCarrier) {
+        // 드리블로는 골라인을 절대 못 넘는다(골은 슛으로만) — mandatoryShotDistance가 미리
+        // 슛을 강제하지만, 그 전에라도 몸으로 넘어가 버리는 걸 여기서 한 번 더 확실히 막는다.
+        // dribbleCarryOffset(볼을 몸 앞에 붙이는 거리)만큼 더 여유를 둬야, 붙어있는 볼까지
+        // 골라인에 안 닿는다 — 안 그러면 슛으로 놓는 순간 볼이 이미 골라인 위에 있어서
+        // 슛이 날아가기도 전에 골로 잡히는 버그가 난다(실제로 겪었다).
+        const goalLimit = HALF.L - PARAMS.dribbleCarryOffset - 0.5;
+        p.x = mine ? Math.min(p.x, goalLimit) : Math.max(p.x, -goalLimit);
+      }
       if (sp > 0.5) p.heading = Math.atan2(p.vx, p.vz);
       if (p.kc > 0) p.kc--;
+
+      if (isCarrier) {
+        // 볼을 발밑 앞쪽에 붙여둔다 — 따로 물리 갱신하지 않고 매 틱 캐리어 위치로 스냅한다.
+        // 여기도 골라인 바로 앞(-0.5m 여유)까지만 허용해 위 클램프와 이중으로 막는다.
+        this.ball.x = clamp(p.x + Math.sin(p.heading) * PARAMS.dribbleCarryOffset, -HALF.L + 0.5, HALF.L - 0.5);
+        this.ball.z = clamp(p.z + Math.cos(p.heading) * PARAMS.dribbleCarryOffset, -HALF.W, HALF.W);
+        this.ball.vx = p.vx;
+        this.ball.vz = p.vz;
+      }
 
       const drain = (sp / PARAMS.maxSpeed) * (0.6 + press * 0.8) * (110 - p.stamina) / 100;
       p.energy = clamp(p.energy - drain * dt * 0.004, 0.35, 1);
     }
 
     for (const p of this.all) this.tryKick(p);
-    this.ball.update(dt);
-    this.checkGoal();
+    // 드리블 중엔 이미 위(캐리어 처리)에서 매 틱 위치를 붙여놨다 — 마찰/관성 물리를 또 적용하면 안 된다.
+    if (!this.ball.carrierKey) this.ball.update(dt);
+    // 골은 슛(킥)으로만 넣는다 — 드리블로 공을 몰고 골라인을 그냥 지나가는 건 골이 아니다.
+    // 캐리어가 있는 동안은 골 판정을 아예 안 한다(아래 carrierDecide의 골문 근처 슛 강제와 짝).
+    if (!this.ball.carrierKey) this.checkGoal();
     this.tick++;
     this.updatePhase();
   }
@@ -390,7 +427,145 @@ export class Sim {
     return [dx * c - dz * s, dx * s + dz * c];
   }
 
+  /**
+   * 수비(defender) vs 공격(attacker) 다툼의 승패만 판정한다(부수효과 없음).
+   * §6.7: 탈취확률 = (수비력×체력승수)/(수비력+드리블력) × (1+압박강도/200) × 거리감쇠
+   * - 압박강도: defender의 압박 지시(0..1, effectivePressing)를 다른 항(수비력/드리블력,
+   *   0..100 스탯 스케일)과 맞추려고 ×tacklePressingScale(100)로 정규화한다 — 단위를
+   *   안 맞추면 이 항이 사실상 무시되거나(0..1 그대로면 /200이 거의 1) 반대로 스탯 항을
+   *   압도해버린다.
+   * - 거리감쇠: 실제 몸싸움 거리(둘 사이 실측 거리, kickDist 기준)가 멀수록 승률을 깎는다.
+   * - 확률 판정은 이번 리팩터링에서 지정한 seededRandom(tick, playerId, actionId) —
+   *   defender가 태클을 "시도하는" 쪽이라 defender를 playerId로 쓴다.
+   */
+  resolveTackle(defender, attacker, actionId = ACTION_ID.TACKLE_LOOSE_BALL) {
+    const staminaMult = 0.55 + 0.45 * defender.energy;
+    const def = defender.defenseSkill * staminaMult;
+    const base = def / (def + attacker.dribbleSkill);
+    const pressingPct = effectivePressing(this, defender) * PARAMS.tacklePressingScale;
+    const pressureBonus = 1 + pressingPct / PARAMS.tacklePressingDivisor;
+    const dist = vlen(defender.x - attacker.x, defender.z - attacker.z);
+    const distanceDecay = clamp(1 - dist / PARAMS.kickDist, PARAMS.tackleDistanceDecayMin, 1);
+    const winProb = clamp(base * pressureBonus * distanceDecay, PARAMS.tackleWinMin, PARAMS.tackleWinMax);
+    const roll = seededRandom(this.tick, seededRandomPlayerId(defender.team, defender.idx), actionId);
+    return roll < winProb;
+  }
+
+  /** 태클 성공 시 수비가 그 자리에서 걷어낸다 — 클리어링도 킥이라 같은 오차 모델을 그대로 쓴다. */
+  clearBall(defender) {
+    this.ball.ownerKey = `${defender.team}:${defender.idx}`;
+    const cdx = defender.atkX - defender.x;
+    const cdz = 0 - defender.z;
+    const errDeg = this.errorDegrees(defender, {
+      statValue: defender.passSkill,
+      distance: PARAMS.distanceErrorRef,
+      baseDeg: PARAMS.passBaseErrorDeg,
+    });
+    const [edx, edz] = this.rotateXZ(cdx, cdz, errDeg);
+    this.ball.kick(edx, edz, PARAMS.clearForce); // kick()이 carrierKey도 같이 지운다
+    this.pushEvent('tackle', defender.team, `${defender.name} 볼 탈취`);
+  }
+
+  /** 캐리어를 드리블 중에 노리는 상대. 사거리 안에 실제로 붙어야 다툰다. */
+  tryTackleCarrier(defender) {
+    const carrier = this.playerByKey(this.ball.carrierKey);
+    if (!carrier) return;
+    if (vlen(defender.x - carrier.x, defender.z - carrier.z) > PARAMS.kickDist) return;
+    defender.kc = PARAMS.kickCooldownTicks;
+    // 캐리어의 kc(재판단 주기)는 여기서 건드리지 않는다 — 건드리면 수비가 계속 붙어서
+    // (수비 쿨다운 8틱 < 캐리어 판단주기 24틱) 매번 재시도할 때마다 캐리어 재판단이 밀려서,
+    // 이기든 지든 캐리어가 영원히 패스/슛을 못 하고 드리블만 하게 되는 버그가 났었다.
+    // (이 버그는 test_carrier_kc_regression.mjs로 명시적으로 재현·재확인한다.)
+    if (this.resolveTackle(defender, carrier, ACTION_ID.TACKLE_CARRIER)) this.clearBall(defender);
+  }
+
+  /**
+   * 캐리어가 판단 주기(dribbleDecisionTicks)마다 무엇을 할지 정한다.
+   * 판단(어떤 행동을 고를지 — chooseAction, 확률 없음)과 실행(고른 행동이 성공하는지 —
+   * execute*, 확률 판정 1회)을 분리한다. 새 행동은 decision.js의 후보 목록에 추가하고
+   * 여기 execute* 하나만 늘리면 되고, 기존 execute*는 서로 건드리지 않는다 — 이게
+   * "새 행동을 추가하면 기존 행동이 안 나오는" 폭포수 if-else 버그의 재발 방지책이다.
+   */
+  carrierDecide(p) {
+    const action = chooseAction(this, p);
+    switch (action.type) {
+      case 'pass':
+        return this.executePass(p, action);
+      case 'shoot':
+        return this.executeShoot(p, action);
+      case 'dribble':
+        return this.executeDribble(p);
+      case 'hold':
+        return this.executeHold(p);
+      case 'clear':
+        return this.executeClear(p);
+      default:
+        return this.executeDribble(p); // 이론상 도달하지 않는다 — hold가 항상 후보라 chooseAction은 null을 안 낸다
+    }
+  }
+
+  /** 패스 실행 — 성공확률(§6.7)을 seededRandom으로 한 번만 굴린다. 실패해도 소멸 대신 큰 오차로 표현. */
+  executePass(p, action) {
+    const target = action.target;
+    const dx = target.x - p.x;
+    const dz = target.z - p.z;
+    const roll = seededRandom(this.tick, seededRandomPlayerId(p.team, p.idx), ACTION_ID.PASS_SUCCESS);
+    const succeeded = roll < action.meta.successProb;
+    const baseDeg = succeeded ? PARAMS.passBaseErrorDeg : PARAMS.passBaseErrorDeg * PARAMS.passFailErrorMultiplier;
+    const errDeg = this.errorDegrees(p, { statValue: p.passSkill, distance: action.meta.distance, baseDeg });
+    const [edx, edz] = this.rotateXZ(dx, dz, errDeg);
+    this.ball.kick(edx, edz, PARAMS.passForce);
+  }
+
+  /** 슛 실행 — 마찬가지로 성공확률을 한 번만 굴려서 오차 폭을 정한다. */
+  executeShoot(p, action) {
+    const gdx = p.atkX - p.x;
+    const gdz = 0 - p.z;
+    const roll = seededRandom(this.tick, seededRandomPlayerId(p.team, p.idx), ACTION_ID.SHOOT_SUCCESS);
+    const succeeded = roll < action.meta.successProb;
+    const baseDeg = succeeded ? PARAMS.shotBaseErrorDeg : PARAMS.shotBaseErrorDeg * PARAMS.shotFailErrorMultiplier;
+    const errDeg = this.errorDegrees(p, { statValue: p.shootSkill, distance: action.meta.distance, baseDeg });
+    const [edx, edz] = this.rotateXZ(gdx, gdz, errDeg);
+    this.ball.kick(edx, edz, PARAMS.shootForce);
+  }
+
+  /** 드리블 유지 — "계속 갈지"는 이미 판단(점수 비교)에서 끝났다. 확률 판정 없음. */
+  executeDribble(p) {
+    p.dribbleMode = 'advance';
+    p.kc = PARAMS.dribbleDecisionTicks;
+  }
+
+  /** 키핑 — 다음 판단 주기까지 제자리에서 볼을 지킨다. 확률 판정 없음. */
+  executeHold(p) {
+    p.dribbleMode = 'hold';
+    p.kc = PARAMS.dribbleDecisionTicks;
+  }
+
+  /** 클리어 — 압박에 밀린 캐리어가 무조건 앞으로 걷어낸다. 클리어링이라 오차를 크게 잡는다. */
+  executeClear(p) {
+    const cdx = p.atkX - p.x;
+    const cdz = 0 - p.z;
+    const errDeg = this.errorDegrees(p, { statValue: p.passSkill, distance: PARAMS.distanceErrorRef, baseDeg: PARAMS.clearBaseErrorDeg });
+    const [edx, edz] = this.rotateXZ(cdx, cdz, errDeg);
+    this.ball.kick(edx, edz, PARAMS.clearForce);
+    this.pushEvent('tackle', p.team, `${p.name} 압박에 클리어`);
+  }
+
   tryKick(p) {
+    const pKey = `${p.team}:${p.idx}`;
+
+    if (this.ball.carrierKey) {
+      // 볼이 이미 누군가의 발밑에 있다 — 그 사람이면 계속 갈지/풀지 재판단하고,
+      // 상대편이면(같은 편은 아무 것도 안 함) 사거리 안일 때만 태클을 시도한다.
+      if (this.ball.carrierKey === pKey) {
+        if (p.kc <= 0) this.carrierDecide(p);
+      } else if (p.team !== this.ball.carrierKey.split(':')[0] && p.kc <= 0) {
+        this.tryTackleCarrier(p);
+      }
+      return;
+    }
+
+    // 볼이 자유 상태(아무도 안 갖고 있음) — 이 틱에 실제로 주울 수 있는 사람만 처리한다.
     if (p.kc > 0 || vlen(p.x - this.ball.x, p.z - this.ball.z) > PARAMS.kickDist) return;
 
     // 이 틱에 실제로 볼을 다루는 건 볼에 가장 가까운 딱 한 명이다. p가 그 사람이 아니면(더
@@ -408,11 +583,7 @@ export class Sim {
     }
     if (closer) return; // 더 가까운 선수의 차례에 처리된다
 
-    p.kc = PARAMS.kickCooldownTicks;
-
-    // 상대가 같은 순간 볼에 붙어 있으면 태클/인터셉트 다툼 — 수비스탯(체력승수 포함) vs
-    // 드리블스탯. 이겨야 원래 하려던 패스/슛/드리블이 그대로 나간다. 지면 상대가 그 자리에서
-    // 걷어낸다(그 클리어링도 킥이라 같은 오차 모델을 그대로 쓴다 — 별도 성공/실패 판정 없음).
+    // 상대가 같은 순간 볼에 붙어 있으면 줍기 전에 다툼부터 — 이겨야 잡는다.
     const opps = p.team === 'home' ? this.awayP : this.homeP;
     let challenger = null;
     let cbd = PARAMS.kickDist;
@@ -425,94 +596,20 @@ export class Sim {
       }
     }
     if (challenger) {
+      p.kc = PARAMS.kickCooldownTicks;
       challenger.kc = PARAMS.kickCooldownTicks; // 승패 무관 — 이번 틱엔 둘 다 다시 못 다툰다
-      const staminaMult = 0.55 + 0.45 * challenger.energy;
-      const def = challenger.defenseSkill * staminaMult;
-      const winProb = clamp(def / (def + p.dribbleSkill), PARAMS.tackleWinMin, PARAMS.tackleWinMax);
-      if (this.rng.next() < winProb) {
-        this.ball.ownerKey = `${challenger.team}:${challenger.idx}`;
-        const cdx = challenger.atkX - challenger.x;
-        const cdz = 0 - challenger.z;
-        const errDeg = this.errorDegrees(challenger, {
-          statValue: challenger.passSkill,
-          distance: PARAMS.distanceErrorRef,
-          baseDeg: PARAMS.passBaseErrorDeg,
-        });
-        const [edx, edz] = this.rotateXZ(cdx, cdz, errDeg);
-        this.ball.kick(edx, edz, PARAMS.clearForce);
-        this.pushEvent('tackle', challenger.team, `${challenger.name} 볼 탈취`);
+      if (this.resolveTackle(challenger, p)) {
+        this.clearBall(challenger);
         return;
       }
+      // 수비가 졌으면 공격이 그대로 잡는다 — 아래로 이어져 캐리어가 된다.
     }
 
-    this.ball.ownerKey = `${p.team}:${p.idx}`;
-
-    const gdx = p.atkX - p.x;
-    const gdz = 0 - p.z;
-    const gd = vlen(gdx, gdz);
-    const tempo = p.team === 'home' ? this.tactics.tempo : 0.5;
-    // 개인 지시는 홈팀 선수에게만 있다 (원정은 전부 0.5로 들어온다).
-    const risk = p.ins.risk;
-    const long = p.ins.passLength;
-
-    // 골문에 가까우면 슛. 템포가 높을수록, 모험적인 선수일수록 과감하게 때린다.
-    if (gd < 30 && this.rng.next() < 0.25 + tempo * 0.3 + (risk - 0.5) * 0.3) {
-      const errDeg = this.errorDegrees(p, { statValue: p.shootSkill, distance: gd, baseDeg: PARAMS.shotBaseErrorDeg });
-      const [edx, edz] = this.rotateXZ(gdx, gdz, errDeg);
-      this.ball.kick(edx, edz, PARAMS.shootForce);
-      return;
-    }
-
-    let best = null;
-    let bs = -Infinity;
-    const candidates = [];
-    const mates = p.team === 'home' ? this.homeP : this.awayP;
-    for (const m of mates) {
-      if (m === p || m.role === 'GK') continue;
-      const d = vlen(m.x - p.x, m.z - p.z);
-      if (d < PARAMS.minPass || d > PARAMS.maxPass) continue;
-      // 인지 필터: 시야가 나쁘면 좋은 동료가 후보 목록에 아예 안 잡힌다(성공/실패가 아니라
-      // "못 봄"). 시야 60 이상이면 절대 안 놓친다.
-      const missChance = clamp((PARAMS.visionRefStat - p.visionSkill) / 100, 0, PARAMS.visionMaxMissChance);
-      if (this.rng.next() < missChance) continue;
-      const fwd = (m.x - p.x) * (p.team === 'home' ? 1 : -1);
-      // 템포가 높으면 전진 패스 가중치가 커진다 (점유 → 직선).
-      // 리스크는 전진 패스를 더 노리게 하고, 패스 길이는 먼 동료의 감점을 줄인다.
-      const sc = fwd * (0.7 + tempo * 0.8 + (risk - 0.5) * 0.6) - d * (0.26 - long * 0.22);
-      candidates.push({ m, sc, fwd });
-      if (sc > bs) {
-        bs = sc;
-        best = m;
-      }
-    }
-    // 선택 개성: "자아"는 무작위 선택이 아니라 1등을 매번 고르지는 않는 것이다.
-    // boldness가 중립(0.5)이면 항상 점수 1등. 과감할수록 가끔 후보 중 가장 전진적인 대안을,
-    // 신중할수록 가끔 가장 안전한(덜 전진적인) 대안을 대신 고른다 — 그 "가끔"의 빈도가 성격이다.
-    if (best && candidates.length > 1) {
-      const bold = p.boldness - 0.5;
-      const deviateProb = Math.abs(bold) * 2 * PARAMS.personalityDeviateMax;
-      if (this.rng.next() < deviateProb) {
-        const ranked = [...candidates].sort((a, b) => b.sc - a.sc).slice(0, PARAMS.personalityTopN);
-        if (bold > 0) {
-          // 과감: 1등이 아닌 아무 대안이나 — 점수 1등이 곧 "제일 전진적인 패스"인 경우가
-          // 많은 이 공식 특성상, 2등 이하로 새는 것 자체가 이미 "무리한 선택"으로 읽힌다.
-          const alts = ranked.slice(1);
-          if (alts.length) best = alts[Math.floor(this.rng.next() * alts.length)].m;
-        } else {
-          // 신중: 후보 중 가장 안전한(덜 전진적인) 쪽으로 확실히 문다.
-          best = ranked.reduce((a, b) => (b.fwd < a.fwd ? b : a)).m;
-        }
-      }
-    }
-    if (best) {
-      const dx = best.x - p.x;
-      const dz = best.z - p.z;
-      const errDeg = this.errorDegrees(p, { statValue: p.passSkill, distance: vlen(dx, dz), baseDeg: PARAMS.passBaseErrorDeg });
-      const [edx, edz] = this.rotateXZ(dx, dz, errDeg);
-      this.ball.kick(edx, edz, PARAMS.passForce);
-      return;
-    }
-    this.ball.kick(gdx, gdz, PARAMS.dribbleForce);
+    // 첫 터치 — 곧바로 패스/슛을 정하지 않고 일단 발밑에 붙인다(캐리어 등록). 실제 판단은
+    // carrierDecide()가 판단 주기마다 한다 — 그래서 "잡자마자 반사적으로 패스"가 안 생긴다.
+    this.ball.ownerKey = pKey;
+    this.ball.carrierKey = pKey;
+    p.kc = PARAMS.dribbleDecisionTicks;
   }
 
   checkGoal() {
@@ -610,6 +707,7 @@ export class Sim {
       players,
       ball: [this.ball.x, this.ball.z, this.ball.vx, this.ball.vz],
       ownerKey: this.ball.ownerKey,
+      carrierKey: this.ball.carrierKey,
       score: { ...this.score },
       rng: this.rng.s,
       eventCount: this.events.length,
@@ -624,6 +722,9 @@ export class Sim {
       commands: this.all.map((p) =>
         p.command ? { waypoints: p.command.waypoints.map((w) => ({ x: w.x, z: w.z })), index: p.command.index } : null
       ),
+      // 키핑(hold) vs 전진 드리블(advance) — 다음 판단 주기까지 유지되는 캐리어 상태라
+      // 되감기 후에도 그대로 재현돼야 한다. 1/0 숫자 배열로 담아 SNAP_STRIDE 구조를 안 건드린다.
+      dribbleModes: this.all.map((p) => (p.dribbleMode === 'hold' ? 1 : 0)),
     };
   }
 
@@ -640,6 +741,7 @@ export class Sim {
     });
     [this.ball.x, this.ball.z, this.ball.vx, this.ball.vz] = s.ball;
     this.ball.ownerKey = s.ownerKey;
+    this.ball.carrierKey = 'carrierKey' in s ? s.carrierKey : null; // 옛 스냅샷 호환: 없으면 자유 상태로 취급
     this.score = { ...s.score };
     this.tick = s.tick;
     this.rng.s = s.rng;
@@ -660,6 +762,12 @@ export class Sim {
       this.all.forEach((p, i) => {
         const c = s.commands[i];
         p.command = c ? { waypoints: c.waypoints.map((w) => ({ ...w })), index: c.index } : null;
+      });
+    }
+    // 옛 스냅샷 호환: dribbleModes가 없으면 기본값('advance')을 그대로 둔다.
+    if (s.dribbleModes) {
+      this.all.forEach((p, i) => {
+        p.dribbleMode = s.dribbleModes[i] ? 'hold' : 'advance';
       });
     }
   }
