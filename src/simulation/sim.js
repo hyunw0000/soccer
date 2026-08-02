@@ -22,6 +22,17 @@ const SNAP_STRIDE = 7;
 // 실점 이벤트로부터 몇 초(clockSeconds 단위) 전을 되감기 목표로 삼을지는
 // PARAMS.rewindLookbackSeconds가 정한다 — 밸런스 상수는 params.js 한 곳에 모은다.
 
+/**
+ * 재개 종류별 전용 실행. restart()가 볼과 키커를 자리에 놓은 뒤 여기서 실제 동작을 한다.
+ * 표로 둔 이유는 프리킥·페널티킥이 들어올 자리를 미리 열어 두기 위해서다 —
+ * 여기 없는 종류는 예전처럼 발밑에 붙여 두고 일반 판단 파이프라인이 처리한다.
+ */
+const RESTART_EXECUTORS = {
+  'goal-kick': (sim, taker) => sim.executeGoalKick(taker),
+  corner: (sim, taker) => sim.executeCornerKick(taker),
+  'throw-in': (sim, taker) => sim.executeThrowIn(taker),
+};
+
 const inCoordRange = (n) => Number.isFinite(n) && n >= -COORD_LIMIT && n <= COORD_LIMIT;
 
 /**
@@ -110,6 +121,9 @@ export class Sim {
     this.half = 1;
     this.phase = 'playing'; // 'playing' | 'halftime' | 'fulltime'
     this.kickoffLock = null; // { team, active } — 킥오프 제한 구역 규칙
+    // { from, until } — 코너킥이 날아오는 동안 문전 배치를 붙잡는다. 숫자 두 개뿐이라
+    // 스냅샷이 무거워지지 않고, kickoffLock과 같은 방식이라 되감기 처리도 똑같다.
+    this.setPieceHold = null;
     this.lastRewindTick = null; // 되감기를 실제로 사용한 시점(쿨다운 판정용) — restore()가 아니라 markRewindUsed()가 갱신한다
 
     this.homeP = this.buildSide('home', this.homeLineup, this.setup.homeTeam.players, this.tactics.width);
@@ -396,6 +410,17 @@ export class Sim {
     if (this.kickoffLock?.active && vlen(this.ball.vx, this.ball.vz) > PARAMS.kickoffUnlockSpeed) {
       this.kickoffLock = null;
     }
+    // 세트피스 홀드는 볼이 더 이상 안 올라가면서 헤딩 높이 밑으로 내려오면 풀린다.
+    // 킥 직후에는 vy > 0이라 곧바로 해제되지 않는다. 상한(until)은 안전장치다.
+    //
+    // 여기 조건이 `vy < 0`이면 안 된다 — 땅에 놓인 볼은 vy가 정확히 0이라 조건이 영원히
+    // 거짓이 되고, 홀드가 상한 170틱(2.8초)을 통째로 채운다. 그동안 볼 쫓는 한 명 말고는
+    // 아무도 안 움직여서 캐리어가 무방비로 몰고 간다 — 실측으로 단독 드리블 최장 기록이
+    // 38.9m에서 71.2m로 뛰어 validate-tactics-impact가 이걸 잡아냈다.
+    const hold = this.setPieceHold;
+    if (hold && (this.tick >= hold.until || (this.ball.vy <= 0 && this.ball.y <= PARAMS.headControlHeight))) {
+      this.setPieceHold = null;
+    }
 
     const dt = PARAMS.dt;
     const t = this.tactics;
@@ -470,6 +495,20 @@ export class Sim {
         vlen(this.ball.x - p.x, this.ball.z - p.z) < clamp((press - 0.5) * 2, 0, 1) * PARAMS.pressSupportRadius
       ) {
         [fx, fz] = pursuit(p, this.ball);
+      } else if (this.setPieceHold) {
+        // 코너킥이 날아오는 동안의 문전 움직임.
+        //
+        // 배치를 안 붙잡으면 다들 자기 대형 자리로 되돌아가서 볼이 도착할 무렵엔 박스가
+        // 빈다 — 실측으로 킥 순간 박스 안 공격수 7.00명이 도착 순간 3.01명까지 빠졌다
+        // (체공 2.23초 동안 10m 넘게 움직인다).
+        //
+        // 그렇다고 전부 얼리면 반대로 무너진다. 볼을 쫓는 한 명(chaser)만 움직이니 수비가
+        // 낙하 지점 경합을 아예 안 해서 코너 득점률이 50.9%까지 치솟았다(실제 축구는 2~3%).
+        // 그래서 낙하 예측 지점 근처에 있는 선수는 **양 팀 모두** 그리로 달려들고,
+        // 나머지만 자리를 지킨다. 이러면 공중볼 다툼이 실제로 벌어진다.
+        const land = this.ball.predictLanding();
+        const near = vlen(land.x - p.x, land.z - p.z) < PARAMS.setPieceContestRadius;
+        [fx, fz] = near ? arrive(p, land.x, land.z) : arrive(p, p.x, p.z);
       } else {
         // 대형 전체가 같은 폭으로 밀린다(blockShift가 이미 경기장 안에 들어오도록 비율을
         // 맞춰 둔 값이다). 우리팀이 공을 갖고 있을 때만 개인차 있는 침투런을 얹는다.
@@ -1302,10 +1341,13 @@ export class Sim {
     if (taker) {
       taker.x = this.ball.x;
       taker.z = this.ball.z;
-      if (type === 'goal-kick') {
-        // 골킥은 발밑에 붙여 드리블로 시작하지 않는다 — 그 자리에서 길게 걷어찬다.
-        // lastTouchKey는 executeGoalKick()이 부르는 ball.kick()이 알아서 채운다.
-        this.executeGoalKick(taker);
+      // 재개 종류마다 실제로 하는 동작이 다르다 — 골킥은 길게 걷어차고, 코너킥은 문전으로
+      // 올리고, 스로인은 손으로 던진다. 전용 실행이 없는 종류(프리킥·오프사이드)만
+      // 예전처럼 발밑에 붙여 두고 일반 판단 파이프라인에 넘긴다.
+      const execute = RESTART_EXECUTORS[type];
+      if (execute) {
+        // lastTouchKey는 각 실행이 부르는 ball.kick()이 알아서 채운다.
+        execute(this, taker);
       } else {
         this.ball.ownerKey = `${taker.team}:${taker.idx}`;
         this.ball.carrierKey = `${taker.team}:${taker.idx}`;
@@ -1314,6 +1356,136 @@ export class Sim {
       }
     }
     this.pushEvent(type, team, text);
+  }
+
+  /**
+   * 코너킥 문전 배치 — 실제 코너처럼 양 팀을 골문 앞에 모은다.
+   *
+   * 이게 없으면 코너를 아무리 정확히 올려도 박스에 아무도 없어서 그냥 골키퍼 볼이 된다
+   * (코너가 처음 생겼을 때 실제로 그랬다 — 코너 34번에서 나온 골 0). 킥오프가 대형을
+   * 되돌리는 것과 같은 방식이라 새로운 개념을 들이지 않는다.
+   *
+   * 좌표는 "골라인에서 몇 m 떨어져(depth), 어느 폭(z)에 서는가"다. 공격은 골에어리어 앞부터
+   * 페널티 스폿 뒤까지 퍼지고, 수비는 그보다 한 겹 골문 쪽에 선다.
+   */
+  setCornerFormation(taker) {
+    const dir = taker.attackDirection;
+    const goalX = dir * HALF.L;
+    const place = (players, spots) => {
+      let i = 0;
+      for (const p of players) {
+        if (p === taker || p.role === 'GK' || p.sentOff || p.injured) continue;
+        const spot = spots[i++ % spots.length];
+        p.x = goalX - dir * spot[0];
+        p.z = spot[1];
+        p.vx = 0;
+        p.vz = 0;
+        // 세트피스 배치는 그 자리에서 다시 판단하게 한다 — 안 그러면 직전 판단의 쿨다운이
+        // 남아 코너가 올라오는 동안 아무도 볼에 반응하지 못한다.
+        p.kc = 0;
+      }
+    };
+    const attackers = taker.team === 'home' ? this.homeP : this.awayP;
+    const defenders = taker.team === 'home' ? this.awayP : this.homeP;
+    place(attackers, PARAMS.cornerAttackSpots);
+    place(defenders, PARAMS.cornerDefendSpots);
+  }
+
+  /**
+   * 코너킥 — 코너 아크에서 문전으로 띄워 올린다.
+   *
+   * 힘은 거리에서 역산한다. 골킥처럼 힘을 고정하면 짧은 코너에서 볼이 골라인을 그대로
+   * 넘어가 버린다(코너 스팟에서 문전까지가 34m인데 고정 힘은 그 하나에만 맞기 때문이다).
+   * 무항력 포물선 R = v²·sin(2θ)/g 에 공기저항 보정을 넣고 v를 역산한다 — 각도를 바꾸면
+   * 힘이 저절로 따라온다.
+   */
+  executeCornerKick(taker) {
+    this.setCornerFormation(taker);
+    const dir = taker.attackDirection;
+    // 겨냥점은 사람이 아니라 "위험 지역"이다 — 실제 코너도 존을 보고 올린다. 그 존에
+    // 가장 가까운 동료를 목표로 삼아, 배치와 조준이 어긋나지 않게 한다.
+    const aimX = dir * (HALF.L - PARAMS.cornerAimDepth);
+    const mates = taker.team === 'home' ? this.homeP : this.awayP;
+    let target = null;
+    let best = Infinity;
+    for (const m of mates) {
+      if (m === taker || m.role === 'GK' || m.sentOff || m.injured) continue;
+      const d = vlen(m.x - aimX, m.z);
+      if (d < best) {
+        best = d;
+        target = m;
+      }
+    }
+    const tx = target ? target.x : aimX;
+    const tz = target ? target.z : 0;
+    const dist = vlen(tx - taker.x, tz - taker.z);
+    const rad = (PARAMS.cornerLoftDeg * Math.PI) / 180;
+    const force = clamp(
+      Math.sqrt((dist * PARAMS.gravity) / (Math.sin(2 * rad) * PARAMS.loftRangeEfficiency)),
+      PARAMS.cornerMinForce,
+      PARAMS.cornerMaxForce
+    );
+    const errDeg = this.errorDegrees(taker, {
+      statValue: taker.passSkill,
+      distance: PARAMS.distanceErrorRef,
+      baseDeg: PARAMS.cornerBaseErrorDeg,
+    });
+    const [edx, edz] = this.rotateXZ(tx - taker.x, tz - taker.z, errDeg);
+    this.ball.kick(edx, edz, force, `${taker.team}:${taker.idx}`, PARAMS.cornerLoftDeg);
+    taker.kc = PARAMS.kickCooldownTicks;
+    // 볼이 문전에 내려올 때까지 배치를 붙잡는다. 안 잡으면 2.23초 체공 동안 다들 자기
+    // 대형 자리로 돌아가 박스가 빈다.
+    this.setPieceHold = { from: this.tick, until: this.tick + PARAMS.setPieceHoldMaxTicks };
+  }
+
+  /**
+   * 스로인 — 손으로 던진다.
+   *
+   * 발로 차는 것보다 짧고 느리고 높이 뜬다. 그래서 스로인은 상대 진영 깊숙이 보내는 수단이
+   * 아니라 "가까운 동료에게 안전하게 넘기는" 재개다. 사거리를 사람이 던질 수 있는 범위로
+   * 제한하는 게 핵심이고, 그래서 조준도 그 안에서만 고른다.
+   *
+   * 규칙 두 개가 저절로 지켜진다 — 스로인은 오프사이드가 없고(여기서 ball.kick을 직접
+   * 부르므로 tryKick의 오프사이드 검사를 타지 않는다), 직접 득점도 안 된다(터치라인에서
+   * throwInForce로는 골문에 닿지 않는다).
+   */
+  executeThrowIn(taker) {
+    const dir = taker.attackDirection;
+    const mates = taker.team === 'home' ? this.homeP : this.awayP;
+    let target = null;
+    let bestScore = -Infinity;
+    for (const m of mates) {
+      if (m === taker || m.sentOff || m.injured) continue;
+      const d = vlen(m.x - taker.x, m.z - taker.z);
+      if (d < PARAMS.minPass || d > PARAMS.throwInRange) continue;
+      // 열려 있을수록, 앞에 있을수록 좋다. 던지는 힘이 약해서 상대가 붙어 있는 동료에게
+      // 넘기면 그대로 뺏긴다.
+      const forward = ((m.x - taker.x) * dir) / PARAMS.throwInRange;
+      const score = clamp(nearestOpponentDistance(this, m) / PARAMS.openPassRadius, 0, 1) + forward * 0.5;
+      if (score > bestScore) {
+        bestScore = score;
+        target = m;
+      }
+    }
+    // 받을 동료가 없으면 라인을 따라 앞쪽으로 던진다(경합볼이 된다) — 던지지 않고 들고
+    // 있으면 볼이 라인 위에 멈춘 채로 경기가 굳는다.
+    const tdx = target ? target.x - taker.x : dir * PARAMS.throwInRange * 0.6;
+    const tdz = target ? target.z - taker.z : -Math.sign(taker.z) * PARAMS.throwInRange * 0.3;
+    const dist = vlen(tdx, tdz);
+    const errDeg = this.errorDegrees(taker, {
+      statValue: taker.passSkill,
+      distance: PARAMS.distanceErrorRef,
+      baseDeg: PARAMS.throwInBaseErrorDeg,
+    });
+    const [edx, edz] = this.rotateXZ(tdx, tdz, errDeg);
+    const rad = (PARAMS.throwInLoftDeg * Math.PI) / 180;
+    const force = clamp(
+      Math.sqrt((dist * PARAMS.gravity) / (Math.sin(2 * rad) * PARAMS.loftRangeEfficiency)),
+      PARAMS.throwInMinForce,
+      PARAMS.throwInMaxForce
+    );
+    this.ball.kick(edx, edz, force, `${taker.team}:${taker.idx}`, PARAMS.throwInLoftDeg);
+    taker.kc = PARAMS.kickCooldownTicks;
   }
 
   /**
@@ -1422,6 +1594,7 @@ export class Sim {
       half: this.half,
       phase: this.phase,
       kickoffLock: this.kickoffLock ? { ...this.kickoffLock } : null,
+      setPieceHold: this.setPieceHold ? { ...this.setPieceHold } : null,
       lastRewindTick: this.lastRewindTick,
       // 경로 지시는 좌표 배열이라 SNAP_STRIDE 숫자 배열에 안 들어간다 — 선수 순서(this.all)와
       // 나란한 별도 배열로 얕은 구조 복제한다. 되감기 후 안 바꾸면 그대로 재현돼야 하므로
@@ -1484,6 +1657,9 @@ export class Sim {
     if (s.half !== undefined) this.half = s.half;
     if (s.phase !== undefined) this.phase = s.phase;
     if ('kickoffLock' in s) this.kickoffLock = s.kickoffLock ? { ...s.kickoffLock } : null;
+    // 옛 스냅샷 호환: setPieceHold가 없던 시절엔 홀드 자체가 없었으므로 null이 그 시점의
+    // 정확한 상태다(현재 값을 남기면 되감은 뒤에 있지도 않던 홀드가 걸린다).
+    this.setPieceHold = s.setPieceHold ? { ...s.setPieceHold } : null;
     if ('lastRewindTick' in s) this.lastRewindTick = s.lastRewindTick;
     // 옛 스냅샷 호환: commands가 없으면 현재 지시 상태를 그대로 둔다(건드리지 않음).
     if (s.commands) {
