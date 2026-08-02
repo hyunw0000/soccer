@@ -1,6 +1,6 @@
 import './tactics.css';
 import { el } from '../../shared/index.js';
-import { state, setState } from '../../app/public.js';
+import { gameProgress, state, setState } from '../../app/public.js';
 import { findById } from '../../roster/index.js';
 import { getNextOpponent } from '../../tournament/index.js';
 import {
@@ -287,7 +287,12 @@ export default function tacticsScreen(root, ctx) {
   ]);
 
   // 상대는 tournament의 공개 API에서만 가져온다. 상대 데이터를 여기서 만들지 않는다.
-  const opponent = state.currentOpponent ?? getNextOpponent(state.tournamentBracket ?? null);
+  // 어느 라운드를 치르는지는 저장된 결과에서 파생한 진행 상태가 정한다.
+  const runStep = gameProgress().activeStep;
+  const opponent = state.currentOpponent ?? getNextOpponent(runStep?.stage ?? 'group');
+  const tournamentRef = runStep
+    ? { tournamentId: 'world-championship-2026', roundId: runStep.roundId, bracketMatchId: runStep.matchId }
+    : null;
 
   /**
    * 전술 목록이 바뀔 때 거치는 단 하나의 경로.
@@ -324,7 +329,9 @@ export default function tacticsScreen(root, ctx) {
       tactics,
       slotTactics: slotBook,
       opponent,
-      tournamentRef: state.currentTournamentRef ?? null,
+      tournamentRef,
+      // 같은 라운드를 다시 치를 때도 시뮬레이션이 똑같이 흘러가지 않도록 시도 횟수를 seed에 섞는다.
+      matchId: `${tournamentRef?.bracketMatchId ?? 'friendly'}:KOR-vs-${opponent.id}#${state.matchAttempt}`,
       playerCatalog: findById,
     };
     const check = validateMatchSetupInput(input);
@@ -344,6 +351,7 @@ export default function tacticsScreen(root, ctx) {
       slotTactics: slotBook,
       tactics,
       currentOpponent: opponent,
+      currentTournamentRef: tournamentRef,
       // 경기 화면은 이 값만 읽는다. 만들지 못했으면 지워서 옛 설정으로 시작하지 않게 한다.
       pendingMatchSetup: matchSetup ?? null,
     });
@@ -364,7 +372,7 @@ export default function tacticsScreen(root, ctx) {
     el('div', { class: 'screen page' }, [
       el('header', { class: 'topbar' }, [
         el('div', {}, [
-          el('p', { class: 'eyebrow', text: 'MATCH PLAN · SOUTH AFRICA' }),
+          el('p', { class: 'eyebrow', text: `MATCH PLAN · ${runStep?.eyebrow ?? 'FRIENDLY MATCH'}` }),
           el('h2', { class: 'h2', text: '승부를 바꿀 전술' }),
           el('p',{class:'topbar-description',text:'포메이션과 팀 지시를 조정해 경기의 흐름을 설계합니다.'}),
         ]),

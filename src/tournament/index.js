@@ -97,6 +97,16 @@ export { bracketLayout, officialTournamentMatches, roundOf32Matches, knockoutRou
 export { GROUP_A_TEAM_IDS, groupACompletedMatches, koreaSouthAfricaMatch } from './data/groupA.js';
 export { calculateGroupStandings, createGroupAState, createTournamentProgress, getMatchesForTeam, normalizeGroupAFinalResult, resolveKoreaQualification } from './domain/groupStandings.js';
 export {
+  GROUP_FINAL_MATCH_ID,
+  KOREA_RUN,
+  applyKoreaMatchResult,
+  clearKoreaMatchResult,
+  createGameProgress,
+  findRunStep,
+  normalizeKnockoutResults,
+  outcomeOf,
+} from './domain/gameProgress.js';
+export {
   QUALIFICATION_STATUSES,
   applyKoreaQualification,
   createInitialBracket,

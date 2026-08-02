@@ -1,7 +1,8 @@
 import { CountryFlag, countries, el } from '../../shared/index.js';
-import { createGameTimelineBracket, createOfficialBracket, validateBracket } from '../domain/bracket.js';
+import { createOfficialBracket, validateBracket } from '../domain/bracket.js';
 import { tournamentRounds } from '../data/bracket.js';
-import { createTournamentProgress, getMatchesForTeam } from '../domain/groupStandings.js';
+import { getMatchesForTeam } from '../domain/groupStandings.js';
+import { createGameProgress } from '../domain/gameProgress.js';
 import './tournament.css';
 
 const STATUS_LABELS = Object.freeze({
@@ -16,6 +17,9 @@ const STATUS_LABELS = Object.freeze({
 
 const KOREA_PATH = new Set([73, 90, 97, 101, 104]);
 const SUB_VIEWS = Object.freeze(['group','knockout']);
+// 좁은 카드에 들어가야 하는 이름만 짧게 쓴다. 나머지는 국가 사전의 정식 이름 그대로다.
+const SHORT_NAMES = Object.freeze({ RSA:'남아공' });
+const shortName = (teamId) => SHORT_NAMES[teamId] ?? countries[teamId]?.nameKo ?? teamId;
 
 const goalDifference = (value) => value > 0 ? `+${value}` : String(value);
 
@@ -28,28 +32,60 @@ function groupTeam(teamId, size = 'small') {
   ]);
 }
 
-function compactFinalMatchCard(groupState,ctx) {
-  const final = groupState.finalMatch;
-  const hasResult = final.status === 'completed';
-  const status = groupState.qualificationStatus === 'qualified' ? '32강 진출' : groupState.qualificationStatus === 'eliminated' ? '조별리그 탈락' : '경기 전';
-  const team = (teamId,label) => el('div',{class:'wc-compact-team'},[
+/**
+ * 히어로 자리의 "지금 이 경기" 카드.
+ *
+ * 진행 상태 하나만 보고 그린다 — 아직 치르지 않았으면 준비 CTA를, 탈락했으면 결과와
+ * 다시 시도 버튼을, 우승했으면 우승 표시를 낸다.
+ */
+function currentMatchCard(progress,ctx,onRetry) {
+  const step = progress.activeStep;
+  if (!step) return null;
+  const played = progress.played.find((entry) => entry.matchId === step.matchId) ?? null;
+  const eliminated = progress.status === 'eliminated';
+  const champion = progress.status === 'champion';
+  const status = champion ? '우승'
+    : eliminated ? (step.stage === 'group' ? '조별리그 탈락' : `${step.roundLabel} 탈락`)
+    : played ? '종료' : '경기 전';
+  const title = champion ? '역사를 다시 썼습니다'
+    : step.stage === 'group' ? '운명을 가를 마지막 경기'
+    : `${step.roundLabel} · ${shortName(step.opponentTeamId)}전`;
+  const [homeTeamId,awayTeamId] = step.koreaSide === 'home' ? ['KOR',step.opponentTeamId] : [step.opponentTeamId,'KOR'];
+  const [homeScore,awayScore] = !played ? [null,null]
+    : step.koreaSide === 'home' ? [played.koreaScore,played.opponentScore] : [played.opponentScore,played.koreaScore];
+  const rule = champion ? '결승까지 모두 이겼습니다. 대한민국이 2026 월드 챔피언십의 주인공입니다.'
+    : eliminated ? `${played?.outcome === 'draw' ? '무승부' : '패배'}로 ${step.roundLabel}에서 탈락했습니다. 다시 시도할 수 있습니다.`
+    : step.stage === 'group' ? '승리해야만 A조 2위로 32강에 오릅니다. 무승부와 패배는 탈락입니다.'
+    : `승리하면 ${step.advanceLabel}, 무승부와 패배는 탈락입니다.`;
+  const team = (teamId) => el('div',{class:'wc-compact-team'},[
     CountryFlag({teamId,size:'medium'}),
-    el('strong',{text:label}),
+    el('strong',{text:shortName(teamId)}),
   ]);
-  return el('section',{class:`wc-compact-final${hasResult?' is-completed':''}`,'aria-label':`운명을 가를 마지막 경기, 남아프리카공화국 대 대한민국, ${status}`},[
+  const cardClass = `wc-compact-final${played?' is-completed':''}${eliminated?' is-eliminated':''}${champion?' is-champion':''}`;
+
+  return el('section',{class:cardClass,'aria-label':`${title}, ${countries[homeTeamId].nameKo} 대 ${countries[awayTeamId].nameKo}, ${status}`},[
     el('header',{},[
-      el('div',{},[el('p',{class:'wc-eyebrow',text:'GROUP A · MATCH 54'}),el('h2',{text:'운명을 가를 마지막 경기'})]),
+      el('div',{},[el('p',{class:'wc-eyebrow',text:step.eyebrow}),el('h2',{text:title})]),
       el('b',{class:'wc-compact-final__status',text:status}),
     ]),
     el('div',{class:'wc-compact-final__teams'},[
-      team('RSA','남아공'),
-      el('strong',{class:'wc-compact-final__versus',text:hasResult?`${final.homeScore} : ${final.awayScore}`:'VS'}),
-      team('KOR','대한민국'),
+      team(homeTeamId),
+      el('strong',{class:'wc-compact-final__versus',text:played?`${homeScore} : ${awayScore}`:'VS'}),
+      team(awayTeamId),
     ]),
-    el('p',{class:'wc-compact-final__rule',text:hasResult
-      ? (groupState.qualificationStatus==='qualified'?'대한민국이 A조 2위로 32강에 진출했습니다.':'대한민국의 조별리그 탈락이 확정되었습니다.')
-      : '승리 또는 무승부 시 32강 진출'}),
-    !hasResult ? el('button',{type:'button',class:'wc-compact-final__cta',text:'남아공전 준비하기','aria-label':'남아프리카공화국전 선수단 준비 화면으로 이동',onclick:()=>ctx.navigate('roster')}) : null,
+    el('p',{class:'wc-compact-final__rule',text:rule}),
+    !played ? el('button',{
+      type:'button',class:'wc-compact-final__cta',
+      text:`${shortName(step.opponentTeamId)}전 준비하기`,
+      'aria-label':`${countries[step.opponentTeamId].nameKo}전 선수단 준비 화면으로 이동`,
+      onclick:()=>ctx.navigate('roster'),
+    }) : null,
+    played && !champion ? el('button',{
+      type:'button',class:'wc-compact-final__cta wc-compact-final__cta--retry',
+      text:`↻ ${step.roundLabel} 다시 시도`,
+      'aria-label':`${step.roundLabel}을 다시 치릅니다`,
+      onclick:()=>onRetry?.(step.matchId),
+    }) : null,
   ]);
 }
 
@@ -333,8 +369,12 @@ function bracketView(bracket) {
 export default function tournamentScreen(root, ctx, params = {}) {
   const candidateBracket = params.bracket ?? null;
   const savedBracket = candidateBracket && validateBracket(candidateBracket).valid ? candidateBracket : null;
-  const tournamentProgress = createTournamentProgress(params.groupAFinalResult ?? null);
-  const groupState = tournamentProgress.group;
+  // 조 순위·대진표·탈락 여부는 저장된 경기 결과 하나에서 전부 파생한다.
+  const progress = createGameProgress({
+    groupAFinalResult: params.groupAFinalResult ?? null,
+    knockoutResults: params.knockoutResults ?? [],
+  });
+  const groupState = progress.group;
   const qualificationStatus = groupState.qualificationStatus;
   const searchParams = new URLSearchParams(window.location.search);
   const requestedTimeline = searchParams.get('timeline');
@@ -367,17 +407,23 @@ export default function tournamentScreen(root, ctx, params = {}) {
   let disposeBracket = () => {};
 
   const renderView = () => {
-    const savedGameMatchesState = savedBracket?.timeline === 'game' && savedBracket.qualificationStatus === qualificationStatus;
+    // 게임 시간선은 진행 상태가 만든 대진표가 유일한 원본이다 — 치른 경기 결과가 그대로 들어 있다.
     const bracket = viewMode === 'qualified-preview'
-      ? (savedGameMatchesState ? savedBracket : tournamentProgress.bracket)
+      ? progress.bracket
       : (savedBracket?.timeline === 'official' ? savedBracket : createOfficialBracket());
     currentButton.setAttribute('aria-pressed', String(viewMode === 'current'));
     previewButton.setAttribute('aria-pressed', String(viewMode === 'qualified-preview'));
     if (viewMode === 'qualified-preview') {
       statusBanner.className = qualificationStatus === 'qualified' ? 'wc-qualified-banner' : 'wc-pending-banner';
       statusBanner.textContent = qualificationStatus === 'qualified'
-        ? '대한민국이 A조 2위로 32강에 진출했습니다. Match 73부터 새로운 역사가 시작됩니다.'
-        : '대한민국이 A조 2위로 진출할 경우의 예상 경로입니다. 진출 확정 전까지 Match 73의 홈팀은 미정입니다.';
+        ? (progress.status === 'eliminated'
+            ? `대한민국은 ${progress.lastPlayed?.roundLabel ?? '토너먼트'}에서 여정을 마쳤습니다. 그 경기를 다시 치를 수 있습니다.`
+            : progress.status === 'champion'
+              ? '대한민국이 결승까지 모두 이기고 우승했습니다.'
+              : `대한민국이 A조 2위로 32강에 진출했습니다. 다음 상대는 ${countries[progress.nextStep?.opponentTeamId ?? 'CAN'].nameKo}입니다.`)
+        : qualificationStatus === 'eliminated'
+          ? '대한민국은 A조 최종전에서 승리하지 못해 조별리그에서 탈락했습니다. 이 경로는 진출했을 경우의 예상입니다.'
+          : '대한민국이 A조 2위로 진출할 경우의 예상 경로입니다. 진출 확정 전까지 Match 73의 홈팀은 미정입니다.';
     } else {
       statusBanner.className = 'wc-pending-banner';
       statusBanner.textContent = 'FIFA 공식 결과 기준의 현재 대진입니다. Match 73은 남아프리카공화국 대 캐나다입니다.';
@@ -453,7 +499,7 @@ export default function tournamentScreen(root, ctx, params = {}) {
         el('h1', { text: '운명을 다시 쓰는 대회' }),
         el('p', { text: '조별리그 마지막 승부부터 결승까지, 모든 결과가 역사를 바꿉니다.' }),
       ]),
-      compactFinalMatchCard(groupState,ctx),
+      currentMatchCard(progress,ctx,params.onRetry),
     ]),
     subTabs,groupPanel,knockoutPanel,
   ]));

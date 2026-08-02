@@ -1,5 +1,11 @@
 import { defaultPool, findById } from '../roster/index.js';
 import { TACTIC_DEFAULT } from '../tactics/index.js';
+import {
+  applyKoreaMatchResult,
+  clearKoreaMatchResult,
+  createGameProgress,
+  normalizeKnockoutResults,
+} from '../tournament/domain/gameProgress.js';
 
 export const STORAGE_KEY = 'football-manager-simulator';
 
@@ -25,10 +31,17 @@ const initial = {
   startingLineup: null,
   currentOpponent: null,
   pendingMatchSetup: null,
+  // 지금 치르는 대회 경기 { tournamentId, roundId, bracketMatchId }. MatchSetup의 seed가 여기서 나온다.
+  currentTournamentRef: null,
   // TournamentBracket version 2. 공식 원본과 게임 시간선을 구분한다.
   tournamentBracket: null,
-  // 남아공전이 끝난 뒤에만 { homeScore, awayScore }를 저장한다.
+  // 남아공전이 끝난 뒤에만 { homeScore, awayScore }를 저장한다. home이 남아공이다.
   groupAFinalResult: null,
+  // 32강부터의 우리 경기 결과 [{ matchId, koreaScore, opponentScore }]. 진행 순서대로만 쌓인다.
+  knockoutResults: [],
+  // 경기를 치를 때마다 오르는 번호. MatchSetup의 seed에 섞어서 같은 라운드를 다시 치러도
+  // 지난번과 똑같은 경기가 반복되지 않게 한다.
+  matchAttempt: 0,
 };
 
 export const state = { ...initial, ...load() };
@@ -48,13 +61,61 @@ export function resetState() {
     startingLineup: null,
     currentOpponent: null,
     pendingMatchSetup: null,
+    currentTournamentRef: null,
     tournamentBracket: null,
     groupAFinalResult: null,
+    knockoutResults: [],
+    matchAttempt: 0,
   });
   save();
 }
 
 export const captain = () => findById(state.captainId);
+
+/** 저장된 결과에서 파생한 지금 상황 — 다음 상대·대진표·탈락 여부는 전부 여기서 읽는다. */
+export const gameProgress = () =>
+  createGameProgress({ groupAFinalResult: state.groupAFinalResult, knockoutResults: state.knockoutResults });
+
+/**
+ * 방금 끝난 경기 결과를 저장한다. 점수는 항상 우리 팀 관점이다.
+ * @returns {object} 반영된 뒤의 진행 상태
+ */
+export function recordKoreaMatch({ matchId, koreaScore, opponentScore }) {
+  const saved = applyKoreaMatchResult(
+    { groupAFinalResult: state.groupAFinalResult, knockoutResults: state.knockoutResults },
+    { matchId, koreaScore, opponentScore }
+  );
+  const progress = createGameProgress(saved);
+  setState({
+    ...saved,
+    tournamentBracket: progress.bracket,
+    // 다음 라운드 상대는 새로 뽑아야 한다 — 이전 경기 설정을 물려받으면 같은 상대를 다시 만난다.
+    currentOpponent: null,
+    pendingMatchSetup: null,
+    currentTournamentRef: null,
+    // 다시 시도를 누르지 않고 같은 라운드를 또 치러도 지난 경기가 그대로 재생되지 않게 한다.
+    matchAttempt: state.matchAttempt + 1,
+  });
+  return progress;
+}
+
+/** 그 경기를 치르기 직전으로 되돌린다. 다시 치르면 시뮬레이션도 다르게 흘러간다. */
+export function retryKoreaMatch(matchId) {
+  const saved = clearKoreaMatchResult(
+    { groupAFinalResult: state.groupAFinalResult, knockoutResults: state.knockoutResults },
+    matchId
+  );
+  const progress = createGameProgress(saved);
+  setState({
+    ...saved,
+    tournamentBracket: progress.bracket,
+    currentOpponent: null,
+    pendingMatchSetup: null,
+    currentTournamentRef: null,
+    matchAttempt: state.matchAttempt + 1,
+  });
+  return progress;
+}
 
 function save() {
   try {
@@ -74,6 +135,8 @@ function save() {
         slotTactics: state.slotTactics,
         tournamentBracket: state.tournamentBracket,
         groupAFinalResult: state.groupAFinalResult,
+        knockoutResults: state.knockoutResults,
+        matchAttempt: state.matchAttempt,
       })
     );
   } catch {
@@ -128,6 +191,9 @@ function load() {
     if (v.groupAFinalResult && Number.isInteger(v.groupAFinalResult.homeScore) && v.groupAFinalResult.homeScore >= 0 && Number.isInteger(v.groupAFinalResult.awayScore) && v.groupAFinalResult.awayScore >= 0) {
       out.groupAFinalResult = { homeScore:v.groupAFinalResult.homeScore, awayScore:v.groupAFinalResult.awayScore };
     }
+    // 토너먼트 결과는 경로·순서·점수까지 도메인이 다시 검사한다. 통과한 앞부분만 남는다.
+    out.knockoutResults = out.groupAFinalResult ? normalizeKnockoutResults(v.knockoutResults) : [];
+    if (Number.isInteger(v.matchAttempt) && v.matchAttempt >= 0) out.matchAttempt = v.matchAttempt;
     if (v.tactics && typeof v.tactics === 'object') {
       out.tactics = { ...TACTIC_DEFAULT };
       for (const k of Object.keys(TACTIC_DEFAULT)) {

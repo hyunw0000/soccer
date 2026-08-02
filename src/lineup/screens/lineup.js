@@ -1,6 +1,6 @@
 import './lineup.css';
 import { el } from '../../shared/index.js';
-import { state, setState } from '../../app/public.js';
+import { gameProgress, state, setState } from '../../app/public.js';
 import { getNextOpponent } from '../../tournament/index.js';
 import { createOpponentScouting } from './opponentScouting.js';
 
@@ -15,7 +15,9 @@ import { createOpponentScouting } from './opponentScouting.js';
  * 이 화면은 mount 함수만 공개하고 다른 화면을 직접 렌더링하지 않는다.
  */
 export default function lineupScreen(root, ctx) {
-  const opponent = state.currentOpponent ?? getNextOpponent(state.tournamentBracket ?? null);
+  // 지금 치를 라운드는 저장된 결과에서 파생한 진행 상태가 정한다 — 이기면 다음 상대로 바뀐다.
+  const runStep = gameProgress().activeStep;
+  const opponent = state.currentOpponent ?? getNextOpponent(runStep?.stage ?? 'group');
   const scouting = createOpponentScouting({ stage: opponent.stage });
 
   function persist() {
@@ -27,7 +29,7 @@ export default function lineupScreen(root, ctx) {
     el('div', { class: 'screen page' }, [
       el('header', { class: 'topbar' }, [
         el('div', {}, [
-          el('p', { class: 'eyebrow', text: 'SCOUTING · MATCH 54' }),
+          el('p', { class: 'eyebrow', text: `SCOUTING · ${runStep?.eyebrow ?? 'FRIENDLY MATCH'}` }),
           el('h2', { class: 'h2', text: '상대 선수단을 확인하세요' }),
           el('p',{class:'topbar-description',text:'다음 상대의 포메이션과 핵심 선수를 분석해 경기 계획을 준비합니다.'}),
         ]),

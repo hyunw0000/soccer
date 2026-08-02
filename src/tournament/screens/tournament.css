@@ -19,6 +19,13 @@
 .wc-compact-final__cta { display:flex; width:100%; min-height:38px; align-items:center; justify-content:center; margin-top:12px; border:1px solid rgba(75,182,222,.68); padding:8px 14px; color:#fff; background:linear-gradient(110deg,#146d9c,#a62036); font-size:14px; font-weight:800; }
 .wc-compact-final__cta:hover { filter:brightness(1.1); }
 .wc-compact-final__cta:focus-visible { outline:2px solid #fff; outline-offset:3px; }
+.wc-compact-final.is-eliminated { box-shadow:inset 3px 0 rgba(239,51,69,.75),inset -3px 0 rgba(239,51,69,.55),0 12px 30px rgba(0,0,0,.24); }
+.wc-compact-final.is-eliminated .wc-compact-final__status { border-color:#a3313d; color:#ff8a92; }
+.wc-compact-final.is-eliminated .wc-compact-final__rule { color:#ff9aa1; }
+.wc-compact-final.is-champion .wc-compact-final__status { border-color:#b58f2a; color:#f2d54a; }
+.wc-compact-final.is-champion .wc-compact-final__rule { color:#f2d54a; }
+/* 다시 시도 — 진출 CTA와 색을 나눠 "앞으로 가기"와 "되돌리기"를 구분한다 */
+.wc-compact-final__cta--retry { border-color:rgba(239,81,95,.68); background:linear-gradient(110deg,#6d1524,#a62036); }
 .wc-subtabs { display:flex; width:min(100% - 40px,1540px); margin:28px auto 0; scroll-margin-top:calc(var(--app-navigation-height) + 16px); border-bottom:1px solid rgba(94,145,168,.3); gap:4px; }
 .wc-subtab { position: relative; min-width: 132px; border: 0; padding: 14px 24px; color: #728797; background: transparent; font-size: 13px; font-weight: 850; }
 .wc-subtab::after { content:""; position:absolute; right:18px; bottom:-1px; left:18px; height:2px; background:transparent; }
