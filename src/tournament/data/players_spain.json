@@ -7,8 +7,8 @@
     "stageLabel": "4강",
     "stageOrder": 5,
     "coach": "루이스 데 라 푸엔테",
-    "formationId": "4-3-3",
-    "style": "공을 놓지 않는 점유율 축구. 양 날개 1대1로 마지막을 부순다.",
+    "formationId": "4-2-3-1",
+    "style": "공을 놓지 않는 점유율 축구. 야말의 1대1로 마지막을 부순다.",
     "strength": 81,
     "captainId": "esp_rodri",
     "startingXI": [
@@ -16,16 +16,16 @@
       "esp_cucurella",
       "esp_laporte",
       "esp_cubarsi",
-      "esp_llorente",
-      "esp_pedri",
+      "esp_porro",
+      "esp_ruiz",
       "esp_rodri",
-      "esp_merino",
-      "esp_williams",
-      "esp_oyarzabal",
-      "esp_yamal"
+      "esp_baena",
+      "esp_olmo",
+      "esp_yamal",
+      "esp_oyarzabal"
     ],
-    "source": "2026 FIFA 북중미 월드컵 최종 26인 명단(위키백과 2026 FIFA World Cup squads, wc-26.net 팀 스쿼드) 기준",
-    "note": "이름·등번호·소속팀·포지션은 실제 대회 명단 참고값이다. 공개 자료에서 등번호가 겹치거나 빠진 자리는 포지션에 맞게 정리했다. 능력치(stats)는 전부 밸런싱용 더미값이며 overall은 세부 스탯의 포지션 가중 평균으로 파생한다. 선발 11인(startingXI)과 포메이션은 각 팀의 대표 전형이며 실제 경기 선발과 다를 수 있다.",
+    "source": "2026 FIFA 북중미 월드컵 최종 26인 명단(위키백과 2026 FIFA World Cup squads) 기준",
+    "note": "이름·등번호·소속팀·포지션은 실제 대회 명단 기준이다. 능력치(stats)는 전부 밸런싱용 더미값이며 overall은 세부 스탯의 포지션 가중 평균에서 파생한다. 포메이션(formationId)과 선발 11인(startingXI)은 2026-07-14 4강 프랑스전 실제 선발 11인이며, 슬롯 배열 순서(GK → DF → MF → FW)에 맞춰 적었다.",
     "count": 26,
     "positions": [
       "GK",
@@ -41,7 +41,8 @@
       "pace",
       "pass",
       "shoot"
-    ]
+    ],
+    "lineupSource": "2026-07-14 4강 프랑스전 실제 선발 11인"
   },
   "players": [
     {

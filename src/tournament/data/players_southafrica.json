@@ -8,25 +8,25 @@
     "stageLabel": "조별리그",
     "stageOrder": 1,
     "coach": "위고 브루스",
-    "formationId": "4-3-3",
-    "style": "두 줄로 촘촘히 버티다 빠른 측면 역습 한 방을 노린다.",
+    "formationId": "4-2-3-1",
+    "style": "네 명 뒤에 볼란치 둘을 깔고 버티다 빠른 측면 역습 한 방을 노린다.",
     "strength": 72,
     "captainId": "rsa_williams",
     "startingXI": [
       "rsa_williams",
       "rsa_modiba",
-      "rsa_sibisi",
+      "rsa_okon",
       "rsa_mbokazi",
       "rsa_mudau",
+      "rsa_mbatha",
       "rsa_sithole",
-      "rsa_mokoena",
-      "rsa_zwane",
       "rsa_appollis",
-      "rsa_foster",
-      "rsa_mofokeng"
+      "rsa_mofokeng",
+      "rsa_maseko",
+      "rsa_makgopa"
     ],
-    "source": "2026 FIFA 북중미 월드컵 최종 26인 명단(위키백과 2026 FIFA World Cup squads, wc-26.net 팀 스쿼드) 기준",
-    "note": "이름·등번호·소속팀·포지션은 실제 대회 명단 참고값이다. 공개 자료에서 등번호가 겹치거나 빠진 자리는 포지션에 맞게 정리했다. 능력치(stats)는 전부 밸런싱용 더미값이며 overall은 세부 스탯의 포지션 가중 평균으로 파생한다. 선발 11인(startingXI)과 포메이션은 각 팀의 대표 전형이며 실제 경기 선발과 다를 수 있다.",
+    "source": "2026 FIFA 북중미 월드컵 최종 26인 명단(위키백과 2026 FIFA World Cup squads) 기준",
+    "note": "이름·등번호·소속팀·포지션은 실제 대회 명단 기준이다. 능력치(stats)는 전부 밸런싱용 더미값이며 overall은 세부 스탯의 포지션 가중 평균에서 파생한다. 포메이션(formationId)과 선발 11인(startingXI)은 2026-06-25 조별리그 A조 3차전 대한민국전(남아공 1-0 승) 실제 선발 11인이며, 슬롯 배열 순서(GK → DF → MF → FW)에 맞춰 적었다.",
     "count": 26,
     "positions": [
       "GK",
@@ -42,7 +42,8 @@
       "pace",
       "pass",
       "shoot"
-    ]
+    ],
+    "lineupSource": "2026-06-25 조별리그 A조 3차전 대한민국전(남아공 1-0 승) 실제 선발 11인"
   },
   "players": [
     {
@@ -447,22 +448,22 @@
       "squad2026": true
     },
     {
-      "id": "rsa_morena",
-      "name": "타펠로 모레나",
-      "nameEn": "Thapelo Morena",
+      "id": "rsa_okon",
+      "name": "이메 오콘",
+      "nameEn": "Ime Okon",
       "num": 21,
-      "pos": "MF",
-      "detail": "RM",
-      "club": "마멜로디 선다운스",
-      "age": 32,
+      "pos": "DF",
+      "detail": "CB",
+      "club": "하노버 96",
+      "age": 22,
       "stats": {
-        "overall": 70,
-        "attack": 64,
-        "defense": 66,
-        "stamina": 84,
-        "pace": 86,
-        "pass": 66,
-        "shoot": 52
+        "overall": 69,
+        "attack": 38,
+        "defense": 73,
+        "stamina": 76,
+        "pace": 74,
+        "pass": 63,
+        "shoot": 34
       },
       "squad2026": true
     },
@@ -531,8 +532,8 @@
       "name": "카모겔로 세벨레벨레",
       "nameEn": "Kamogelo Sebelebele",
       "num": 25,
-      "pos": "MF",
-      "detail": "LM",
+      "pos": "FW",
+      "detail": "LW",
       "club": "올랜도 파이러츠",
       "age": 24,
       "stats": {
