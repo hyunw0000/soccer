@@ -74,6 +74,7 @@ export default function matchScreen(root, ctx) {
   let renderedEvents = 0;
   let lastPhase = sim.phase;
   let speed = 1; // 1 | 2 | 3 — 재생 배속(UI 상태). Sim/RewindBuffer에는 저장하지 않는다.
+  let matchResult = null; // fulltime 결과 기록. null인 동안만 경기 루프와 되감기를 허용한다.
 
   // 렌더러는 stage가 DOM에 붙은 뒤에 만든다.
   // 붙기 전에 만들면 clientWidth/Height가 0이라 캔버스가 0x0으로 생성돼 화면이 검게 남는다.
@@ -111,7 +112,7 @@ export default function matchScreen(root, ctx) {
   function updateBanners() {
     const finished = matchResult !== null;
     banner.classList.toggle("show", !finished && paused && sim.phase === "playing" && !concedeChoicePending);
-    phaseBanner.classList.toggle("show", !finished && sim.phase !== "playing" && !concedeChoicePending);
+    phaseBanner.classList.toggle("show", !finished && sim.phase === "fulltime" && !concedeChoicePending);
     concedeBanner.classList.toggle("show", !finished && concedeChoicePending);
     resultBanner.classList.toggle("show", finished);
     updateSpeedButtons();
@@ -201,7 +202,7 @@ export default function matchScreen(root, ctx) {
     const clockSeconds = tick * PARAMS.dt;
     const minute = Math.floor(clockSeconds);
     const sec = Math.floor((clockSeconds - minute) * 60);
-    return `${minute}:${String(sec).padStart(2, "0")}`;
+    return `${String(minute).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
   }
 
   // 실점 이벤트 시각
@@ -541,7 +542,7 @@ export default function matchScreen(root, ctx) {
     }
 
     scoreEl.textContent = `${homeCode} ${sim.score.home} : ${sim.score.away} ${awayCode}`;
-    clockEl.textContent = formatMatchClock();
+    clockEl.textContent = formatTickClock(sim.tick);
     updateRewindButton();
     const o = sim.playerByKey(sim.ball.ownerKey);
     possEl.textContent = o
