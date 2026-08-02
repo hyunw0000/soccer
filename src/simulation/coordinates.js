@@ -32,6 +32,7 @@ export function normalizeInstruction(input) {
 // 감독이 보드에서 끌어 놓은 자리를 뒤엎지 않을 만큼만 움직인다.
 const FORWARD_RANGE = 0.12; // ±0.06 → 필드 기준 약 ±6m
 const WIDTH_RANGE = 0.5; // 0.75배(중앙) … 1.25배(측면)
+const WORLD_EDGE_MARGIN = 1; // 최종 월드 좌표가 터치라인에서 최소 이만큼은 떨어져 있게 한다(m)
 
 /**
  * MatchSetup의 정규화 좌표 → 월드 좌표.
@@ -46,16 +47,30 @@ const WIDTH_RANGE = 0.5; // 0.75배(중앙) … 1.25배(측면)
  */
 export function normalizedToWorld({ x, z }, { side = 'home', width = 0.5, instruction = null } = {}) {
   const direction = side === 'home' ? 1 : -1;
-  const spread = 0.8 + width * 0.5;
+  // 이전 계수(0.8+width*0.5)는 전술 폭을 최대로 올려도 실제 포메이션 z_norm(~0.30, 풀백/윙어
+  // 기준)이 터치라인(HALF.W=34m)에서 7.5m 못 미쳐서, 스로인/코너킥이 사실상 안 나왔다(패스
+  // AI를 아무리 손봐도 애초에 아무도 그 자리까지 못 감 — 실측으로 확인). 상한을 터치라인
+  // 근처까지 닿을 만큼 올린다.
+  const spread = 1.0 + width * 0.6;
   const ins = instruction ? normalizeInstruction(instruction) : INSTRUCTION_FALLBACK;
 
   // 전진성은 자기 자리를 상대 골문 쪽으로 밀고, 개인 폭은 중앙에서 벌어진 거리를 늘린다.
   const px = x + (ins.forwardness - 0.5) * FORWARD_RANGE;
   const pz = z * (1 + (ins.width - 0.5) * WIDTH_RANGE);
 
+  // 기존 코드는 z_norm(정규화 값)만 [-0.5,0.5]로 자르고 그 뒤에 ×FIELD.W×spread를 곱했다 —
+  // 그러면 스케일을 아무리 키워도 "잘리는 건 스케일 전 값"이라 최종 월드 좌표가 필드 경계를
+  // 넘어갈 수 있었다. 팀 폭 지시와 개인 폭 지시가 둘 다 최대로 겹치면(둘 다 독립적으로 배수를
+  // 곱하는 구조라) 실측으로 확인한 것처럼 최종 z가 43m까지 나가서, 서로 다른 포지션(예: 풀백과
+  // 윙어)이 같은 값으로 겹친 채 터치라인에 나란히 clamp되는 문제가 있었다. 최종 월드 좌표
+  // 자체를 필드 경계 안쪽(터치라인에서 WORLD_EDGE_MARGIN만큼 여유)으로 다시 한번 자른다 —
+  // 어떤 지시 조합이 와도 이 함수가 필드 밖 좌표를 절대 내보내지 않는다는 걸 보장한다.
+  const worldZ = Math.min(0.5, Math.max(-0.5, pz)) * FIELD.W * spread;
+  const zLimit = FIELD.W / 2 - WORLD_EDGE_MARGIN;
+
   return {
     x: Math.min(0.5, Math.max(-0.5, px)) * FIELD.L * direction,
-    z: Math.min(0.5, Math.max(-0.5, pz)) * FIELD.W * spread * direction,
+    z: Math.min(zLimit, Math.max(-zLimit, worldZ)) * direction,
   };
 }
 

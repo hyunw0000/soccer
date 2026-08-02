@@ -70,9 +70,14 @@ export function scorePassCandidates(sim, p) {
   const gdSelf = vlen(p.atkX - p.x, 0 - p.z);
   const wForward = p.ins.forwardness;
   const wSafety = 1 - p.ins.risk;
-  const wWidth = p.ins.width;
   const preferredPassLength = 8 + p.ins.passLength * 32;
-  const desiredZ = (p.ins.width - 0.5) * 2 * HALF.W * 0.6; // 폭 지시가 노리는 좌우 위치(중앙 기준)
+  // widthBias를 순수하게 중립(0)으로 두니, forwardGain이 거의 항상 "그 순간 제일 전진해 있는
+  // 중앙 선수"를 이겨서 측면 선수는 지시가 없으면 사실상 절대 안 뽑혔다(실전 확인: 90분 동안
+  // 와이드 포지션 두 명 합쳐 픽업 3회, 수비수 4명은 0회 — 폭을 전혀 안 씀). 실제 팀은 지시가
+  // 없어도 어느 정도는 폭을 쓰므로, 기본값(0.5)에서도 작게나마 측면에 가산이 붙게
+  // PARAMS.widthDefaultBias만큼 기본으로 얹는다. 명시적으로 "좁게"(0) 지시하면 여전히
+  // 감산으로 돌아선다.
+  const widthBias = PARAMS.widthDefaultBias + (p.ins.width - 0.5) * 2; // 기본값(0.5)일 때도 소폭 가산
   const out = [];
   for (const m of mates) {
     if (m === p || m.role === 'GK') continue;
@@ -88,11 +93,12 @@ export function scorePassCandidates(sim, p) {
     const gdTarget = vlen(m.atkX - m.x, 0 - m.z);
     const forwardGain = clamp((gdSelf - gdTarget) / 30, -1, 1);
     const successProb = passSuccessProb(sim, p, m, d);
-    const widthFit = 1 - clamp(Math.abs(Math.abs(m.z) - Math.abs(desiredZ)) / HALF.W, 0, 1);
+    const wideness = clamp(Math.abs(m.z) / HALF.W, 0, 1); // 0=중앙, 1=터치라인
+    const widthFit = widthBias * wideness;
     const lengthPenalty = Math.abs(d - preferredPassLength) / PARAMS.maxPass;
     const captainBonus = m.isCaptain ? 0.15 : 0;
 
-    const score = wForward * forwardGain + wSafety * successProb + wWidth * widthFit - lengthPenalty + captainBonus;
+    const score = wForward * forwardGain + wSafety * successProb + widthFit - lengthPenalty + captainBonus;
     out.push({
       type: 'pass',
       target: m,
@@ -148,11 +154,17 @@ export function scoreDribbleCandidate(sim, p) {
   }
   const forwardGain = clamp((Number.isFinite(nearestAhead) ? nearestAhead : PARAMS.dribbleLookahead * 2) / 15, 0, 1);
   const breakExpect = clamp((p.dribbleSkill - nearestDefense) / 100 + 0.5, 0, 1);
-  const pressureDensity = densityCount * 0.18;
+  const pressureDensity = densityCount * PARAMS.dribblePressureCoef;
 
   const wForward = p.ins.forwardness;
   const risk = p.ins.risk;
-  const score = wForward * forwardGain + risk * breakExpect - pressureDensity;
+  // dribbleScoreScale: 실전 계측 결과, 압박이 하나도 안 잡히는(=흔한) 순간마다 드리블이
+  // "전진이득 만점 + 돌파기대 절반"으로 거의 항상 0.7~0.8점을 찍어서 패스를 압도적으로
+  // 이겼다(90분 실전 한 판에서 판단 96회 중 64회가 드리블, 패스는 겨우 15회 — 그래서
+  // 볼이 안 퍼지고 한 명이 몰다 태클로만 넘어갔다). 패스에는 있는 "성공확률" 항이 드리블에는
+  // 없어서 애초에 대칭이 아니었던 구조적 문제라, 전체 점수를 한 단계 낮춰 패스와 정직하게
+  // 경쟁하게 하고, 압박은 조금만 있어도 확실히 깎이게 계수를 올렸다.
+  const score = PARAMS.dribbleScoreScale * (wForward * forwardGain + risk * breakExpect) - pressureDensity;
   return { type: 'dribble', score, tiebreak: -2, meta: { densityCount } };
 }
 
