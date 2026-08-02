@@ -25,8 +25,8 @@ export const byPos = (pos) => PLAYERS.filter((p) => p.pos === pos);
 export const findById = (id) => PLAYERS.find((p) => p.id === id) ?? null;
 export const overall = (p) => p.stats.overall;
 
-/** 대회 26인 명단 우선 + 능력치 순 정렬 */
-export function defaultPool(limit = 23) {
+/** 기본 소집 명단은 실제 대회 명단(squad2026). 부족하면 능력치 순으로 채운다. */
+export function defaultPool(limit = 26) {
   return [...PLAYERS]
     .sort((a, b) => Number(b.squad2026) - Number(a.squad2026) || overall(b) - overall(a))
     .slice(0, limit)

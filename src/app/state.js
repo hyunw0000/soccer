@@ -12,7 +12,7 @@ const initial = {
   schemaVersion: 2,
   managerName: '',
   hasCompletedSetup: false,
-  poolIds: defaultPool(23),
+  poolIds: defaultPool(26),
   captainId: 'kor_son',
   formation: '4-3-3',
   oppFormation: '4-4-2',
@@ -27,7 +27,7 @@ export function setState(patch) {
 }
 
 export function resetState() {
-  Object.assign(state, initial, { poolIds: defaultPool(23), tactics: { ...TACTIC_DEFAULT } });
+  Object.assign(state, initial, { poolIds: defaultPool(26), tactics: { ...TACTIC_DEFAULT } });
   save();
 }
 
