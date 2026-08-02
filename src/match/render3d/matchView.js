@@ -4,6 +4,7 @@ import { createScene } from './scene.js';
 import { buildPitch } from './pitch.js';
 import { makePlayerRig, animateRig } from './playerRig.js';
 import { createCameraRig } from './cameraRig.js';
+import { createStadiumEnvironment } from './stadiumEnvironment.js';
 
 const HOME_COLOR = 0xc8102e;
 const AWAY_COLOR = 0x1f6feb;
@@ -13,7 +14,8 @@ const AWAY_COLOR = 0x1f6feb;
  * 이 파일만 두 세계를 동시에 안다. engine은 여기를 모르고, screens는 sim을 직접 그리지 않는다.
  */
 export function createMatchView(container, sim, captainNum = null) {
-  const { renderer, scene, camera, controls, dispose } = createScene(container);
+  const { renderer, scene, camera, controls, dispose: disposeScene } = createScene(container);
+  const stadiumEnvironment = createStadiumEnvironment(scene);
   buildPitch(scene);
   const cam = createCameraRig(camera, controls);
 
@@ -54,6 +56,11 @@ export function createMatchView(container, sim, captainNum = null) {
     cam.update(sim.ball);
     controls.update();
     renderer.render(scene, camera);
+  }
+
+  function dispose() {
+    stadiumEnvironment.dispose();
+    disposeScene();
   }
 
   return { sync, render, setCam: cam.set, get camMode() { return cam.mode; }, dispose };

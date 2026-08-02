@@ -29,7 +29,7 @@ export function createCameraRig(camera, controls) {
       camera.position.lerp(tmp.set(ball.x - 14, 10, ball.z + 18), 0.06);
       controls.target.lerp(tmp.set(ball.x, 0, ball.z), 0.1);
     } else {
-      camera.position.lerp(tmp.set(ball.x * 0.4, 42, 78), 0.04);
+      camera.position.lerp(tmp.set(ball.x * 0.4, 36, 78), 0.04);
       controls.target.lerp(tmp.set(ball.x * 0.5, 0, 0), 0.05);
     }
   }

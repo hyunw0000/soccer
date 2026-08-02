@@ -14,7 +14,11 @@ export function createScene(container) {
   });
   const { w: w0, h: h0 } = sizeOf();
 
-  const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+  const renderer = new THREE.WebGLRenderer({
+    antialias: true,
+    alpha: true,
+    powerPreference: 'high-performance',
+  });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(w0, h0);
   renderer.shadowMap.enabled = true;
@@ -22,11 +26,11 @@ export function createScene(container) {
   container.appendChild(renderer.domElement);
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x0b141f);
-  scene.fog = new THREE.Fog(0x0b141f, 120, 260);
+  scene.background = new THREE.Color(0x03080c);
+  scene.fog = new THREE.Fog(0x03080c, 150, 300);
 
   const camera = new THREE.PerspectiveCamera(50, w0 / h0, 0.1, 600);
-  camera.position.set(0, 55, 90);
+  camera.position.set(0, 36, 78);
 
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.target.set(0, 0, 0);

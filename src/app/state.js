@@ -1,7 +1,7 @@
 import { defaultPool, findById } from '../roster/index.js';
 import { TACTIC_DEFAULT } from '../tactics/index.js';
 
-const STORAGE_KEY = 'soccer-manager-3d/v1';
+export const STORAGE_KEY = 'football-manager-simulator';
 
 /**
  * 화면 간에 공유되는 감독 세션.
@@ -9,7 +9,9 @@ const STORAGE_KEY = 'soccer-manager-3d/v1';
  * 감독 이름(닉네임)과 선택한 선수 id뿐이다. 개인정보·인증정보는 저장하지 않는다.
  */
 const initial = {
+  schemaVersion: 2,
   managerName: '',
+  hasCompletedSetup: false,
   poolIds: defaultPool(26),
   captainId: 'kor_son',
   formation: '4-3-3',
@@ -36,7 +38,9 @@ function save() {
     localStorage.setItem(
       STORAGE_KEY,
       JSON.stringify({
+        schemaVersion: 2,
         managerName: state.managerName,
+        hasCompletedSetup: state.hasCompletedSetup,
         poolIds: state.poolIds,
         captainId: state.captainId,
         formation: state.formation,
@@ -55,7 +59,8 @@ function load() {
     const v = JSON.parse(raw);
     // 저장값은 신뢰하지 않는다: 타입/범위를 검증해 통과한 것만 받는다
     const out = {};
-    if (typeof v.managerName === 'string') out.managerName = v.managerName.slice(0, 20);
+    if (typeof v.managerName === 'string') out.managerName = v.managerName.trim().slice(0, 20);
+    if (v.hasCompletedSetup === true && out.managerName) out.hasCompletedSetup = true;
     if (Array.isArray(v.poolIds)) {
       const ids = v.poolIds.filter((id) => typeof id === 'string' && findById(id));
       if (ids.length >= 11) out.poolIds = ids.slice(0, 26);

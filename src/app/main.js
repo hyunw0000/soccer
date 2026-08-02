@@ -1,6 +1,15 @@
 import '../shared/styles/base.css';
+import './layout/app-layout.css';
 import { createRouter } from './router.js';
 import managerScreen from './screens/managerName.js';
+import {
+  lineupPlaceholder,
+  notFoundScreen,
+  simulationPlaceholder,
+  tournamentPlaceholder,
+} from './screens/placeholders.js';
+import { withAppLayout } from './layout/AppLayout.js';
+import { state } from './public.js';
 import { rosterScreen } from '../roster/index.js';
 import { tacticsScreen } from '../tactics/index.js';
 import { matchScreen } from '../match/index.js';
@@ -13,13 +22,19 @@ export function startApp(root = document.getElementById('app')) {
   if (!root) throw new Error('app root not found');
 
   const router = createRouter(root, {
-    manager: managerScreen,
-    squad: rosterScreen,
-    tactics: tacticsScreen,
-    match: matchScreen,
+    start: managerScreen,
+    setup: managerScreen,
+    roster: withAppLayout(rosterScreen, '/roster'),
+    tournament: withAppLayout(tournamentPlaceholder, '/tournament'),
+    lineup: withAppLayout(lineupPlaceholder, '/lineup'),
+    tactics: withAppLayout(tacticsScreen, '/tactics'),
+    simulation: withAppLayout(simulationPlaceholder, '/simulation'),
+    match: withAppLayout(matchScreen, '/match'),
+    notFound: notFoundScreen,
+  }, {
+    canAccess: (_name, route) => route.public === true || state.hasCompletedSetup === true,
   });
 
-  // 저장된 감독명이 있어도 타이틀 화면에서 새 게임을 시작한다.
-  router.navigate('manager', undefined, { replace: true });
+  router.start();
   return router;
 }
