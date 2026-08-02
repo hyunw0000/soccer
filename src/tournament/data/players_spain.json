@@ -1,0 +1,569 @@
+{
+  "meta": {
+    "team": "스페인",
+    "teamEn": "Spain",
+    "teamCode": "ESP",
+    "stage": "sf",
+    "stageLabel": "4강",
+    "stageOrder": 5,
+    "coach": "루이스 데 라 푸엔테",
+    "formationId": "4-3-3",
+    "style": "공을 놓지 않는 점유율 축구. 양 날개 1대1로 마지막을 부순다.",
+    "strength": 81,
+    "captainId": "esp_rodri",
+    "startingXI": [
+      "esp_simon",
+      "esp_cucurella",
+      "esp_laporte",
+      "esp_cubarsi",
+      "esp_llorente",
+      "esp_pedri",
+      "esp_rodri",
+      "esp_merino",
+      "esp_williams",
+      "esp_oyarzabal",
+      "esp_yamal"
+    ],
+    "source": "2026 FIFA 북중미 월드컵 최종 26인 명단(위키백과 2026 FIFA World Cup squads, wc-26.net 팀 스쿼드) 기준",
+    "note": "이름·등번호·소속팀·포지션은 실제 대회 명단 참고값이다. 공개 자료에서 등번호가 겹치거나 빠진 자리는 포지션에 맞게 정리했다. 능력치(stats)는 전부 밸런싱용 더미값이며 overall은 세부 스탯의 포지션 가중 평균으로 파생한다. 선발 11인(startingXI)과 포메이션은 각 팀의 대표 전형이며 실제 경기 선발과 다를 수 있다.",
+    "count": 26,
+    "positions": [
+      "GK",
+      "DF",
+      "MF",
+      "FW"
+    ],
+    "statKeys": [
+      "overall",
+      "attack",
+      "defense",
+      "stamina",
+      "pace",
+      "pass",
+      "shoot"
+    ]
+  },
+  "players": [
+    {
+      "id": "esp_raya",
+      "name": "다비드 라야",
+      "nameEn": "David Raya",
+      "num": 1,
+      "pos": "GK",
+      "detail": "GK",
+      "club": "아스널",
+      "age": 30,
+      "stats": {
+        "overall": 82,
+        "attack": 22,
+        "defense": 85,
+        "stamina": 74,
+        "pace": 60,
+        "pass": 82,
+        "shoot": 18
+      },
+      "squad2026": true
+    },
+    {
+      "id": "esp_pubill",
+      "name": "마르크 푸비야",
+      "nameEn": "Marc Pubill",
+      "num": 2,
+      "pos": "DF",
+      "detail": "RB",
+      "club": "아틀레티코 마드리드",
+      "age": 23,
+      "stats": {
+        "overall": 74,
+        "attack": 64,
+        "defense": 74,
+        "stamina": 82,
+        "pace": 82,
+        "pass": 72,
+        "shoot": 46
+      },
+      "squad2026": true
+    },
+    {
+      "id": "esp_grimaldo",
+      "name": "알레한드로 그리말도",
+      "nameEn": "Alejandro Grimaldo",
+      "num": 3,
+      "pos": "DF",
+      "detail": "LB",
+      "club": "바이어 레버쿠젠",
+      "age": 30,
+      "stats": {
+        "overall": 77,
+        "attack": 80,
+        "defense": 70,
+        "stamina": 82,
+        "pace": 80,
+        "pass": 86,
+        "shoot": 68
+      },
+      "squad2026": true
+    },
+    {
+      "id": "esp_garcia",
+      "name": "에릭 가르시아",
+      "nameEn": "Eric Garcia",
+      "num": 4,
+      "pos": "DF",
+      "detail": "CB",
+      "club": "FC 바르셀로나",
+      "age": 25,
+      "stats": {
+        "overall": 75,
+        "attack": 56,
+        "defense": 78,
+        "stamina": 80,
+        "pace": 74,
+        "pass": 82,
+        "shoot": 46
+      },
+      "squad2026": true
+    },
+    {
+      "id": "esp_llorente",
+      "name": "마르코스 요렌테",
+      "nameEn": "Marcos Llorente",
+      "num": 5,
+      "pos": "DF",
+      "detail": "RB",
+      "club": "아틀레티코 마드리드",
+      "age": 31,
+      "stats": {
+        "overall": 80,
+        "attack": 74,
+        "defense": 78,
+        "stamina": 88,
+        "pace": 86,
+        "pass": 76,
+        "shoot": 62
+      },
+      "squad2026": true
+    },
+    {
+      "id": "esp_merino",
+      "name": "미켈 메리노",
+      "nameEn": "Mikel Merino",
+      "num": 6,
+      "pos": "MF",
+      "detail": "CM",
+      "club": "아스널",
+      "age": 30,
+      "stats": {
+        "overall": 79,
+        "attack": 78,
+        "defense": 74,
+        "stamina": 86,
+        "pace": 70,
+        "pass": 82,
+        "shoot": 74
+      },
+      "squad2026": true
+    },
+    {
+      "id": "esp_torres",
+      "name": "페란 토레스",
+      "nameEn": "Ferran Torres",
+      "num": 7,
+      "pos": "FW",
+      "detail": "ST",
+      "club": "FC 바르셀로나",
+      "age": 26,
+      "stats": {
+        "overall": 80,
+        "attack": 82,
+        "defense": 42,
+        "stamina": 80,
+        "pace": 84,
+        "pass": 76,
+        "shoot": 82
+      },
+      "squad2026": true
+    },
+    {
+      "id": "esp_ruiz",
+      "name": "파비안 루이스",
+      "nameEn": "Fabian Ruiz",
+      "num": 8,
+      "pos": "MF",
+      "detail": "CM",
+      "club": "파리 생제르맹",
+      "age": 30,
+      "stats": {
+        "overall": 78,
+        "attack": 78,
+        "defense": 70,
+        "stamina": 82,
+        "pace": 68,
+        "pass": 86,
+        "shoot": 72
+      },
+      "squad2026": true
+    },
+    {
+      "id": "esp_gavi",
+      "name": "가비",
+      "nameEn": "Gavi",
+      "num": 9,
+      "pos": "MF",
+      "detail": "CM",
+      "club": "FC 바르셀로나",
+      "age": 21,
+      "stats": {
+        "overall": 77,
+        "attack": 76,
+        "defense": 70,
+        "stamina": 86,
+        "pace": 76,
+        "pass": 82,
+        "shoot": 62
+      },
+      "squad2026": true
+    },
+    {
+      "id": "esp_olmo",
+      "name": "다니 올모",
+      "nameEn": "Dani Olmo",
+      "num": 10,
+      "pos": "MF",
+      "detail": "AM",
+      "club": "FC 바르셀로나",
+      "age": 28,
+      "stats": {
+        "overall": 78,
+        "attack": 86,
+        "defense": 50,
+        "stamina": 78,
+        "pace": 78,
+        "pass": 86,
+        "shoot": 82
+      },
+      "squad2026": true
+    },
+    {
+      "id": "esp_pino",
+      "name": "예레미 피노",
+      "nameEn": "Yeremy Pino",
+      "num": 11,
+      "pos": "FW",
+      "detail": "RW",
+      "club": "크리스털 팰리스",
+      "age": 23,
+      "stats": {
+        "overall": 76,
+        "attack": 78,
+        "defense": 44,
+        "stamina": 80,
+        "pace": 86,
+        "pass": 76,
+        "shoot": 72
+      },
+      "squad2026": true
+    },
+    {
+      "id": "esp_porro",
+      "name": "페드로 포로",
+      "nameEn": "Pedro Porro",
+      "num": 12,
+      "pos": "DF",
+      "detail": "RB",
+      "club": "토트넘 홋스퍼",
+      "age": 26,
+      "stats": {
+        "overall": 77,
+        "attack": 76,
+        "defense": 72,
+        "stamina": 84,
+        "pace": 84,
+        "pass": 80,
+        "shoot": 62
+      },
+      "squad2026": true
+    },
+    {
+      "id": "esp_joangarcia",
+      "name": "조안 가르시아",
+      "nameEn": "Joan Garcia",
+      "num": 13,
+      "pos": "GK",
+      "detail": "GK",
+      "club": "FC 바르셀로나",
+      "age": 25,
+      "stats": {
+        "overall": 79,
+        "attack": 20,
+        "defense": 82,
+        "stamina": 72,
+        "pace": 60,
+        "pass": 76,
+        "shoot": 16
+      },
+      "squad2026": true
+    },
+    {
+      "id": "esp_laporte",
+      "name": "에므리크 라포르트",
+      "nameEn": "Aymeric Laporte",
+      "num": 14,
+      "pos": "DF",
+      "detail": "CB",
+      "club": "알 나스르",
+      "age": 32,
+      "stats": {
+        "overall": 76,
+        "attack": 52,
+        "defense": 82,
+        "stamina": 78,
+        "pace": 72,
+        "pass": 82,
+        "shoot": 44
+      },
+      "squad2026": true
+    },
+    {
+      "id": "esp_baena",
+      "name": "알렉스 바에나",
+      "nameEn": "Alex Baena",
+      "num": 15,
+      "pos": "MF",
+      "detail": "AM",
+      "club": "아틀레티코 마드리드",
+      "age": 25,
+      "stats": {
+        "overall": 76,
+        "attack": 80,
+        "defense": 52,
+        "stamina": 80,
+        "pace": 76,
+        "pass": 84,
+        "shoot": 74
+      },
+      "squad2026": true
+    },
+    {
+      "id": "esp_rodri",
+      "name": "로드리",
+      "nameEn": "Rodri",
+      "num": 16,
+      "pos": "MF",
+      "detail": "DM",
+      "club": "맨체스터 시티",
+      "age": 30,
+      "captain": true,
+      "stats": {
+        "overall": 83,
+        "attack": 80,
+        "defense": 86,
+        "stamina": 88,
+        "pace": 68,
+        "pass": 90,
+        "shoot": 74
+      },
+      "squad2026": true
+    },
+    {
+      "id": "esp_williams",
+      "name": "니코 윌리엄스",
+      "nameEn": "Nico Williams",
+      "num": 17,
+      "pos": "FW",
+      "detail": "LW",
+      "club": "아틀레틱 빌바오",
+      "age": 24,
+      "stats": {
+        "overall": 82,
+        "attack": 86,
+        "defense": 40,
+        "stamina": 84,
+        "pace": 94,
+        "pass": 76,
+        "shoot": 78
+      },
+      "squad2026": true
+    },
+    {
+      "id": "esp_zubimendi",
+      "name": "마르틴 수비멘디",
+      "nameEn": "Martin Zubimendi",
+      "num": 18,
+      "pos": "MF",
+      "detail": "DM",
+      "club": "아스널",
+      "age": 27,
+      "stats": {
+        "overall": 78,
+        "attack": 72,
+        "defense": 82,
+        "stamina": 84,
+        "pace": 70,
+        "pass": 86,
+        "shoot": 60
+      },
+      "squad2026": true
+    },
+    {
+      "id": "esp_yamal",
+      "name": "라민 야말",
+      "nameEn": "Lamine Yamal",
+      "num": 19,
+      "pos": "FW",
+      "detail": "RW",
+      "club": "FC 바르셀로나",
+      "age": 19,
+      "stats": {
+        "overall": 85,
+        "attack": 92,
+        "defense": 40,
+        "stamina": 80,
+        "pace": 88,
+        "pass": 88,
+        "shoot": 84
+      },
+      "squad2026": true
+    },
+    {
+      "id": "esp_pedri",
+      "name": "페드리",
+      "nameEn": "Pedri",
+      "num": 20,
+      "pos": "MF",
+      "detail": "CM",
+      "club": "FC 바르셀로나",
+      "age": 23,
+      "stats": {
+        "overall": 81,
+        "attack": 84,
+        "defense": 66,
+        "stamina": 84,
+        "pace": 76,
+        "pass": 92,
+        "shoot": 70
+      },
+      "squad2026": true
+    },
+    {
+      "id": "esp_oyarzabal",
+      "name": "미켈 오야르사발",
+      "nameEn": "Mikel Oyarzabal",
+      "num": 21,
+      "pos": "FW",
+      "detail": "ST",
+      "club": "레알 소시에다드",
+      "age": 29,
+      "stats": {
+        "overall": 81,
+        "attack": 84,
+        "defense": 48,
+        "stamina": 82,
+        "pace": 80,
+        "pass": 78,
+        "shoot": 86
+      },
+      "squad2026": true
+    },
+    {
+      "id": "esp_cubarsi",
+      "name": "파우 쿠바르시",
+      "nameEn": "Pau Cubarsi",
+      "num": 22,
+      "pos": "DF",
+      "detail": "CB",
+      "club": "FC 바르셀로나",
+      "age": 19,
+      "stats": {
+        "overall": 78,
+        "attack": 52,
+        "defense": 84,
+        "stamina": 80,
+        "pace": 80,
+        "pass": 84,
+        "shoot": 40
+      },
+      "squad2026": true
+    },
+    {
+      "id": "esp_simon",
+      "name": "우나이 시몬",
+      "nameEn": "Unai Simon",
+      "num": 23,
+      "pos": "GK",
+      "detail": "GK",
+      "club": "아틀레틱 빌바오",
+      "age": 29,
+      "stats": {
+        "overall": 81,
+        "attack": 22,
+        "defense": 84,
+        "stamina": 74,
+        "pace": 60,
+        "pass": 80,
+        "shoot": 18
+      },
+      "squad2026": true
+    },
+    {
+      "id": "esp_cucurella",
+      "name": "마르크 쿠쿠렐라",
+      "nameEn": "Marc Cucurella",
+      "num": 24,
+      "pos": "DF",
+      "detail": "LB",
+      "club": "첼시",
+      "age": 28,
+      "stats": {
+        "overall": 80,
+        "attack": 74,
+        "defense": 80,
+        "stamina": 88,
+        "pace": 82,
+        "pass": 78,
+        "shoot": 54
+      },
+      "squad2026": true
+    },
+    {
+      "id": "esp_munoz",
+      "name": "빅토르 무뇨스",
+      "nameEn": "Victor Munoz",
+      "num": 25,
+      "pos": "FW",
+      "detail": "ST",
+      "club": "오사수나",
+      "age": 23,
+      "stats": {
+        "overall": 73,
+        "attack": 72,
+        "defense": 42,
+        "stamina": 78,
+        "pace": 80,
+        "pass": 68,
+        "shoot": 74
+      },
+      "squad2026": true
+    },
+    {
+      "id": "esp_iglesias",
+      "name": "보르하 이글레시아스",
+      "nameEn": "Borja Iglesias",
+      "num": 26,
+      "pos": "FW",
+      "detail": "ST",
+      "club": "셀타 비고",
+      "age": 33,
+      "stats": {
+        "overall": 72,
+        "attack": 74,
+        "defense": 44,
+        "stamina": 76,
+        "pace": 68,
+        "pass": 66,
+        "shoot": 78
+      },
+      "squad2026": true
+    }
+  ]
+}

@@ -2,8 +2,10 @@ import './lineup.css';
 import { el } from '../../shared/index.js';
 import { state, setState } from '../../app/public.js';
 import { findById } from '../../roster/index.js';
+import { getNextOpponent } from '../../tournament/index.js';
 import { autoLineup, createStartingLineup, setCaptain } from '../domain/lineup.js';
 import { createLineupEditor } from './lineupEditor.js';
+import { createOpponentScouting } from './opponentScouting.js';
 import { resolveFormationId } from '../formations.js';
 
 /**
@@ -41,6 +43,17 @@ export default function lineupScreen(root, ctx) {
     },
   });
 
+  // 상대 스카우팅. 상대 데이터는 tournament의 공개 API에서만 가져온다.
+  // 고른 상대가 다음 화면(전술·경기)이 쓰는 상대가 된다.
+  let opponent = state.currentOpponent ?? getNextOpponent(state.tournamentBracket ?? null);
+  const scouting = createOpponentScouting({
+    stage: opponent.stage,
+    onSelect: (team) => {
+      opponent = getNextOpponent(team.stage);
+      setState({ currentOpponent: opponent });
+    },
+  });
+
   const nextBtn = el('button', {
     class: 'primary',
     text: '전술 설정 →',
@@ -56,6 +69,8 @@ export default function lineupScreen(root, ctx) {
       formation: lineup.formationId,
       startingLineup: lineup,
       lineupPositions: editor.getPositionMemory(),
+      // 전술·경기 화면이 이 라운드의 상대를 그대로 이어받게 한다.
+      currentOpponent: opponent,
     });
   }
 
@@ -112,6 +127,7 @@ export default function lineupScreen(root, ctx) {
           editor.subsNode,
         ]),
       ]),
+      scouting.node,
     ])
   );
 

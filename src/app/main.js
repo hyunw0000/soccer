@@ -3,13 +3,13 @@ import './layout/app-layout.css';
 import { createRouter } from './router.js';
 import managerScreen from './screens/managerName.js';
 import {
-  lineupPlaceholder,
   notFoundScreen,
   simulationPlaceholder,
   tournamentPlaceholder,
 } from './screens/placeholders.js';
 import { withAppLayout } from './layout/AppLayout.js';
 import { state } from './public.js';
+import { lineupScreen } from '../lineup/index.js';
 import { rosterScreen } from '../roster/index.js';
 import { tacticsScreen } from '../tactics/index.js';
 import { matchScreen } from '../match/index.js';
@@ -26,7 +26,7 @@ export function startApp(root = document.getElementById('app')) {
     setup: managerScreen,
     roster: withAppLayout(rosterScreen, '/roster'),
     tournament: withAppLayout(tournamentPlaceholder, '/tournament'),
-    lineup: withAppLayout(lineupPlaceholder, '/lineup'),
+    lineup: withAppLayout(lineupScreen, '/lineup'),
     tactics: withAppLayout(tacticsScreen, '/tactics'),
     simulation: withAppLayout(simulationPlaceholder, '/simulation'),
     match: withAppLayout(matchScreen, '/match'),

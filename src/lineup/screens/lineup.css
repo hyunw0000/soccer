@@ -353,3 +353,214 @@
 .lineup-errors[hidden] {
   display: none;
 }
+
+/* ---------- 상대 스카우팅 ---------- */
+
+/*
+ * 다음 상대가 어떤 모양으로 서는지 보여 주는 패널.
+ * 왼쪽은 포메이션 구상도, 오른쪽은 26인 명단이다.
+ * 공용 base.css에 이미 `.scout`(경기 중 한 줄 정보)이 있어 루트는 `.scouting`으로 둔다.
+ */
+
+.scouting { margin-top: 18px; }
+
+.scout-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.scout-title { margin: 4px 0 0; color: var(--fg); font-size: 15px; }
+
+.scout-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.scout-chips .chip { font-size: 11.5px; }
+
+/* 왼쪽 구상도는 넓게, 오른쪽 명단은 좁고 작게 둔다. */
+.scout-grid { grid-template-columns: 1.15fr 1fr; align-items: start; }
+
+.scout-panel { padding: 14px 16px; }
+
+/* ---------- 상대 팀 머리글 ---------- */
+
+.scout-team {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.scout-code {
+  flex: none;
+  padding: 5px 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: var(--accent);
+}
+
+.scout-team-main { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.scout-name { font-size: 15px; }
+.scout-sub { font-size: 11.5px; color: var(--dim); }
+
+.scout-strength { flex: none; display: grid; justify-items: end; gap: 1px; }
+.scout-strength i { font-size: 10px; letter-spacing: 1px; color: var(--dim); font-style: normal; }
+.scout-strength b { font-size: 19px; color: var(--accent); line-height: 1; }
+
+/* ---------- 상대 포메이션 구상도 ---------- */
+
+/*
+ * 상대 진영이 위, 우리 골문이 아래다. 감독이 보는 우리 보드와 마주 보게 그린다.
+ * 점 위치는 포메이션 정의의 좌표를 그대로 옮긴 값이며 화면에서 계산하지 않는다.
+ */
+.scout-pitch {
+  position: relative;
+  /* 넓은 화면에서 잔디만 커지면 이름표 사이가 벌어져 배치가 읽히지 않는다. */
+  max-width: 380px;
+  margin: 12px auto 10px;
+  aspect-ratio: 68 / 92;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 4px;
+  background:
+    repeating-linear-gradient(180deg, rgba(29, 106, 66, 0.32) 0 8.33%, rgba(33, 118, 74, 0.32) 8.33% 16.66%),
+    rgba(255, 255, 255, 0.02);
+}
+
+.scout-lines { position: absolute; inset: 0; }
+.scout-lines span { position: absolute; border: 1px solid rgba(255, 255, 255, 0.14); }
+
+.scout-half { left: 0; right: 0; top: 50%; border-width: 1px 0 0; }
+
+.scout-circle {
+  left: 50%;
+  top: 50%;
+  width: 24%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.scout-box { left: 22%; right: 22%; height: 14%; }
+.scout-box.top { top: 0; border-top: 0; }
+.scout-box.bottom { bottom: 0; border-bottom: 0; }
+
+.scout-goal { left: 39%; right: 39%; height: 5%; }
+.scout-goal.top { top: 0; border-top: 0; }
+.scout-goal.bottom { bottom: 0; border-bottom: 0; }
+
+.scout-dots { position: absolute; inset: 0; }
+
+.scout-dot {
+  position: absolute;
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  transform: translate(-50%, -50%);
+}
+
+.scout-dot-num {
+  display: grid;
+  place-items: center;
+  width: 23px;
+  height: 23px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  background: rgba(3, 15, 22, 0.86);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.scout-dot-name {
+  font-style: normal;
+  font-size: 10px;
+  white-space: nowrap;
+  color: var(--fg);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+}
+
+/* 라인별 색은 명단 뱃지(.pos)와 같은 계열을 쓴다 — 두 곳이 다른 뜻으로 보이지 않게 한다. */
+.scout-dot.GK .scout-dot-num { border-color: #e3b341; color: #e3b341; }
+.scout-dot.DF .scout-dot-num { border-color: #79c0ff; color: #79c0ff; }
+.scout-dot.MF .scout-dot-num { border-color: #56d364; color: #56d364; }
+.scout-dot.FW .scout-dot-num { border-color: #ff7b72; color: #ff7b72; }
+.scout-dot.cap .scout-dot-num { box-shadow: 0 0 0 2px rgba(36, 204, 232, 0.55); }
+
+.scout-style { margin: 0; }
+
+/* ---------- 상대 26인 명단 ---------- */
+
+.scout-squad { display: grid; gap: 2px; }
+
+.scout-squad-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 8px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+}
+
+.scout-legend { font-size: 10.5px; color: var(--dim); }
+
+.scout-group {
+  margin-top: 8px;
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: var(--dim);
+}
+
+.scout-row {
+  display: grid;
+  grid-template-columns: 22px 1fr auto 24px;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 4px;
+  border-radius: 5px;
+  font-size: 11.5px;
+  color: var(--dim);
+}
+
+/* 선발로 서는 11명만 또렷하게 둔다. 나머지는 교체 자원으로 읽힌다. */
+.scout-row.on { color: var(--fg); background: rgba(36, 204, 232, 0.07); }
+.scout-row.on .scout-num { color: var(--accent); }
+.scout-row.on .scout-num::before { content: '●'; font-size: 7px; margin-right: 2px; vertical-align: middle; }
+
+.scout-num { font-style: normal; text-align: right; font-variant-numeric: tabular-nums; }
+
+.scout-player { min-width: 0; display: flex; align-items: baseline; gap: 6px; }
+.scout-player b { font-weight: 600; white-space: nowrap; }
+
+.scout-club {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+  color: var(--dim);
+  opacity: 0.75;
+}
+
+/* 포지션 뱃지는 공용 .pos 색을 그대로 쓰고, 한 줄짜리 목록에 맞게 크기만 줄인다. */
+.scout-row .pos.scout-pos {
+  grid-row: auto;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-style: normal;
+  font-size: 9.5px;
+  letter-spacing: 0.5px;
+}
+
+.scout-ovr { text-align: right; font-variant-numeric: tabular-nums; }
+
+@media (max-width: 900px) {
+  .scout-grid { grid-template-columns: 1fr; }
+}
