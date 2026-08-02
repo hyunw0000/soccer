@@ -71,7 +71,9 @@ export default function matchScreen(root, ctx) {
   let matchPhase = 'kickoffBriefing';
   let paused = true;
   let concedeChoicePending = false; // 실점 직후 "되돌릴지/진행할지" 명시적으로 물어보는 중인지
+  let koreaGoalPending = false; // 득점 축하 후 상대 킥오프를 사용자가 직접 재개하기 전인지
   let lastNotifiedConcedeTick = null; // 같은 실점에 배너를 두 번 띄우지 않으려는 표시
+  let lastNotifiedKoreaGoalTick = null;
   let rewindsLeft = REWIND_LIMIT;
   let acc = 0;
   let last = performance.now();
@@ -84,6 +86,9 @@ export default function matchScreen(root, ctx) {
   let lastPhase = sim.phase;
   let speed = 1; // 1 | 2 | 3 — 재생 배속(UI 상태). Sim/RewindBuffer에는 저장하지 않는다.
   let matchResult = null; // fulltime 결과 기록. null인 동안만 경기 루프와 되감기를 허용한다.
+  let championRevealTimer = 0;
+  let championEffectTimer = 0;
+  let championAnimationFrame = 0;
 
   // 렌더러는 stage가 DOM에 붙은 뒤에 만든다.
   // 붙기 전에 만들면 clientWidth/Height가 0이라 캔버스가 0x0으로 생성돼 화면이 검게 남는다.
@@ -103,6 +108,8 @@ export default function matchScreen(root, ctx) {
   function setPaused(v) {
     // 하프타임/풀타임 중에는 '후반 시작' 버튼 없이 일반 재개로 넘어갈 수 없다
     if (!v && (sim.phase !== "playing" || matchPhase !== 'playing')) return;
+    // 대한민국 득점 뒤에는 일반 재개가 아니라 전용 "킥오프 재개" 버튼으로만 다시 시작한다.
+    if (!v && koreaGoalPending) return;
     paused = v;
     pauseBtn.textContent = paused ? "▶ 재개" : "⏸ 일시정지";
     pauseBtn.classList.toggle("on", paused);
@@ -116,10 +123,11 @@ export default function matchScreen(root, ctx) {
     updateBanners();
   }
 
-  // 일시정지/실점 선택 배너는 동시에 뜨지 않는다. 경기 결과는 별도 모달로 표시한다.
+  // 득점/실점 선택/일시정지 배너는 동시에 뜨지 않는다. 경기 결과는 별도 모달로 표시한다.
   function updateBanners() {
     const finished = matchResult !== null;
-    banner.classList.toggle("show", !finished && paused && sim.phase === "playing" && !concedeChoicePending);
+    banner.classList.toggle("show", !finished && paused && sim.phase === "playing" && !concedeChoicePending && !koreaGoalPending);
+    koreaGoalBanner.classList.toggle("show", !finished && koreaGoalPending);
     concedeBanner.classList.toggle("show", !finished && concedeChoicePending);
     updateSpeedButtons();
   }
@@ -133,6 +141,14 @@ export default function matchScreen(root, ctx) {
     concedeRewindBtn.textContent = `⏪ 운명 되돌리기 · ${rewindsLeft}회 남음`;
     concedeRewindBtn.disabled = rewindsLeft <= 0 || !sim.canRewind();
     setPaused(true); // setPaused가 updateBanners()를 호출해 concedeBanner도 같이 뜬다
+  }
+
+  function showKoreaGoal(ev) {
+    koreaGoalPending = true;
+    koreaGoalClock.textContent = formatEventClock(ev);
+    koreaGoalScorer.textContent = ev.text || "대한민국 득점";
+    koreaGoalScore.textContent = `${homeCode} ${sim.score.home} : ${sim.score.away} ${awayCode}`;
+    setPaused(true);
   }
 
   function setSpeed(v) {
@@ -166,6 +182,8 @@ export default function matchScreen(root, ctx) {
       ? recordKoreaMatch({ matchId: runStep.matchId, koreaScore, opponentScore })
       : null;
     matchResult = { koreaScore, opponentScore, outcome, progress };
+    const isKoreaChampion =
+      runStep?.matchId === 104 && outcome === "win" && progress?.status === "champion";
 
     resultDialog.dataset.outcome = outcome;
     resultTitle.textContent =
@@ -196,6 +214,11 @@ export default function matchScreen(root, ctx) {
 
     setPaused(true);
     updateBanners();
+    if (isKoreaChampion) {
+      championshipScore.textContent = `${koreaScore} : ${opponentScore}`;
+      championRevealTimer = window.setTimeout(openChampionshipCelebration, 500);
+      return;
+    }
     if (!resultDialog.isConnected) document.body.append(resultDialog);
     if (!resultDialog.open) resultDialog.showModal();
     (canAdvance ? advanceBtn : canRetry ? retryBtn : tournamentBtn).focus();
@@ -242,6 +265,8 @@ export default function matchScreen(root, ctx) {
     const snap = rewind.findNearestTick(targetTick);
     if (!snap) return;
     concedeChoicePending = false; // R키로 바로 되감아도 실점 선택 배너는 닫아야 한다
+    koreaGoalPending = false;
+    lastNotifiedKoreaGoalTick = null;
     sim.restore(snap);
     sim.markRewindUsed();
     rewindsLeft--;
@@ -322,6 +347,32 @@ export default function matchScreen(root, ctx) {
   const banner = el("div", { class: "banner pause-banner" }, [
     el("b", { text: "일시정지 — 지금 지시를 바꿀 수 있습니다" }),
     el("span", { text: "되감은 시점부터 새 전술로 경기가 다시 흘러갑니다." }),
+  ]);
+
+  // 대한민국 득점 순간에는 자동 정지한다. Sim은 이미 상대팀 킥오프 위치로 리셋된 상태이며,
+  // 감독이 아래 버튼을 눌러야 다음 틱부터 경기가 다시 흐른다.
+  const koreaGoalClock = el("span", { class: "korea-goal__clock", text: "" });
+  const koreaGoalScorer = el("strong", { class: "korea-goal__scorer", text: "" });
+  const koreaGoalScore = el("b", { class: "korea-goal__score", text: "" });
+  const koreaGoalBanner = el("div", { class: "banner korea-goal-banner" }, [
+    el("p", { class: "korea-goal__eyebrow" }, [
+      CountryFlag({ teamId: "KOR", size: "small" }),
+      el("span", { text: "KOREA REPUBLIC · GOAL" }),
+    ]),
+    el("h2", { text: "대한민국 GOAL!" }),
+    koreaGoalScorer,
+    koreaGoalScore,
+    koreaGoalClock,
+    el("button", {
+      class: "primary korea-goal__resume",
+      type: "button",
+      text: "상대팀 킥오프로 재개 →",
+      onclick: () => {
+        koreaGoalPending = false;
+        view?.sync(0);
+        setPaused(false);
+      },
+    }),
   ]);
 
   // 실점 순간 "되돌릴지/진행할지" 명시적으로 묻는 배너 — 조용히 지나가지 않는다
@@ -424,6 +475,164 @@ export default function matchScreen(root, ctx) {
     ]),
   ]);
   resultDialog.addEventListener("cancel", (event) => event.preventDefault());
+
+  // Match 104 우승 전용 축하 화면. 경기 결과와 진행 상태는 finishMatch()가 확정하고,
+  // 이 레이어는 그 결과를 표현만 한다.
+  const championshipOpponentId = runStep?.opponentTeamId ?? matchSetup.awayTeam.id;
+  const championshipScore = el("strong", { class: "championship-score", text: "" });
+  const championshipConfetti = el("div", {
+    class: "championship-confetti",
+    "aria-hidden": "true",
+  });
+  const championshipFireworks = el("div", {
+    class: "championship-fireworks",
+    "aria-hidden": "true",
+  });
+  const championshipRecordBtn = el("button", {
+    class: "championship-button championship-button--primary",
+    type: "button",
+    text: "우승 기록 보기 →",
+    onclick: () => ctx.navigate("tournament"),
+  });
+  const championshipReplayBtn = el("button", {
+    class: "championship-button",
+    type: "button",
+    text: "축하 연출 다시 보기",
+    onclick: replayChampionshipEffects,
+  });
+  const managerCelebration = state.managerName
+    ? el("p", {
+        class: "championship-manager",
+        text: `${state.managerName} 감독이 대한민국의 새로운 역사를 완성했습니다.`,
+      })
+    : null;
+  const championshipDialog = el("dialog", {
+    class: "championship-dialog",
+    role: "dialog",
+    "aria-modal": "true",
+    "aria-labelledby": "championship-title",
+  }, [
+    championshipFireworks,
+    championshipConfetti,
+    el("section", { class: "championship-card" }, [
+      el("header", { class: "championship-header" }, [
+        el("p", { class: "championship-eyebrow", text: "FINAL · MATCH 104" }),
+        el("b", { class: "championship-world", text: "WORLD CHAMPIONS" }),
+      ]),
+      el("div", { class: "championship-trophy", "aria-hidden": "true" }, [
+        el("span", { class: "championship-trophy__cup" }),
+        el("span", { class: "championship-trophy__stem" }),
+        el("span", { class: "championship-trophy__base" }),
+      ]),
+      el("h2", { id: "championship-title", text: "역사를 다시 썼습니다" }),
+      el("div", { class: "championship-winner" }, [
+        CountryFlag({ teamId: "KOR", size: "large" }),
+        el("div", {}, [
+          el("strong", { text: "대한민국" }),
+          el("span", { text: "2026 월드 챔피언" }),
+        ]),
+      ]),
+      el("div", { class: "championship-scoreboard" }, [
+        el("div", { class: "championship-team" }, [
+          CountryFlag({ teamId: "KOR", size: "medium" }),
+          el("span", { text: "대한민국" }),
+        ]),
+        championshipScore,
+        el("div", { class: "championship-team" }, [
+          CountryFlag({ teamId: championshipOpponentId, size: "medium" }),
+          el("span", { text: teamName(championshipOpponentId) }),
+        ]),
+      ]),
+      el("p", { class: "championship-copy" }, [
+        el("span", { text: "조별리그 탈락의 운명을 되돌리고" }),
+        el("strong", { text: "대한민국이 세계 정상에 올랐습니다." }),
+      ]),
+      managerCelebration,
+      el("div", { class: "championship-actions" }, [
+        championshipRecordBtn,
+        championshipReplayBtn,
+      ]),
+    ]),
+  ]);
+
+  const confettiPalette = ["#f7d774", "#ef3345", "#1877c9", "#fff1c1"];
+  function createChampionshipConfetti() {
+    return Array.from({ length: 52 }, (_, index) => {
+      const left = (index * 37 + 7) % 100;
+      const delay = ((index * 17) % 90) / 100;
+      const duration = 3.2 + ((index * 13) % 22) / 10;
+      const drift = ((index % 9) - 4) * 13;
+      const size = 5 + (index % 5) * 2;
+      return el("i", {
+        class: "championship-confetti__piece",
+        style: `--confetti-x:${left}%;--confetti-delay:${delay}s;--confetti-duration:${duration}s;--confetti-drift:${drift}px;--confetti-size:${size}px;--confetti-color:${confettiPalette[index % confettiPalette.length]}`,
+      });
+    });
+  }
+
+  function createChampionshipFireworks() {
+    const bursts = [
+      ["12%", "14%", "0s", "#f7d774"],
+      ["86%", "18%", ".3s", "#ef3345"],
+      ["50%", "5%", ".55s", "#fff1ad"],
+      ["6%", "48%", ".8s", "#1877c9"],
+      ["94%", "45%", "1.05s", "#f7d774"],
+    ];
+    return bursts.map(([left, top, delay, color]) =>
+      el("i", {
+        class: "championship-firework",
+        style: `--firework-x:${left};--firework-y:${top};--firework-delay:${delay};--firework-color:${color}`,
+      }),
+    );
+  }
+
+  function clearChampionshipEffects() {
+    window.clearTimeout(championEffectTimer);
+    window.cancelAnimationFrame(championAnimationFrame);
+    championEffectTimer = 0;
+    championAnimationFrame = 0;
+    championshipConfetti.replaceChildren();
+    championshipFireworks.replaceChildren();
+    championshipDialog.classList.remove("is-celebrating");
+  }
+
+  function replayChampionshipEffects() {
+    clearChampionshipEffects();
+    championshipConfetti.replaceChildren(...createChampionshipConfetti());
+    championshipFireworks.replaceChildren(...createChampionshipFireworks());
+    championAnimationFrame = window.requestAnimationFrame(() => {
+      championshipDialog.classList.add("is-celebrating");
+    });
+    championEffectTimer = window.setTimeout(clearChampionshipEffects, 6000);
+  }
+
+  function openChampionshipCelebration() {
+    championRevealTimer = 0;
+    if (!championshipDialog.isConnected) document.body.append(championshipDialog);
+    if (!championshipDialog.open) championshipDialog.showModal();
+    championshipDialog.classList.add("is-visible");
+    replayChampionshipEffects();
+    championshipRecordBtn.focus();
+  }
+
+  const trapChampionshipFocus = (event) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      return;
+    }
+    if (event.key !== "Tab") return;
+    const first = championshipRecordBtn;
+    const last = championshipReplayBtn;
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  };
+  championshipDialog.addEventListener("cancel", (event) => event.preventDefault());
+  championshipDialog.addEventListener("keydown", trapChampionshipFocus);
 
   // 경기 중 실시간 전술 변경 — 슬라이더는 네 값을 직접 미는 즉석 조정이다.
   // 감독이 짠 전술(수비 스타일·깊이·빌드업 …)을 통째로 바꾸는 건 아래 전술 패널이 한다.
@@ -640,10 +849,15 @@ export default function matchScreen(root, ctx) {
       else updateBanners();
     }
 
-    // 실점 감지 — 방금 돈 틱들 사이에 우리 팀 실점이 새로 생겼으면 자동 정지하고 선택을 받는다.
-    // 그냥 지나가면 되감기 기능이 있는 의미가 없다.
-    const newEvents = sim.events.filter((ev) => ev.id > lastRenderedEventId);
-    for (const ev of newEvents) {
+    // 득점/실점 감지 — 대한민국 득점은 상대 킥오프 전 축하 화면에서 멈추고,
+    // 실점은 되돌릴지 선택할 수 있도록 멈춘다.
+    for (let i = renderedEvents; i < sim.events.length; i++) {
+      const ev = sim.events[i];
+      if (ev.type === "goal" && ev.team === "home" && ev.tick !== lastNotifiedKoreaGoalTick) {
+        lastNotifiedKoreaGoalTick = ev.tick;
+        showKoreaGoal(ev);
+        break;
+      }
       if (ev.type === "goal" && ev.team === "away" && ev.tick !== lastNotifiedConcedeTick) {
         lastNotifiedConcedeTick = ev.tick;
         showConcedeChoice(ev);
@@ -903,6 +1117,7 @@ export default function matchScreen(root, ctx) {
     el("div", { class: "screen match", "data-match-tag": runStep?.eyebrow ?? "FRIENDLY MATCH" }, [
       stage,
       banner,
+      koreaGoalBanner,
       concedeBanner,
       el("div", { class: "hud" }, [
         scoreEl,
@@ -964,13 +1179,18 @@ export default function matchScreen(root, ctx) {
   // 화면을 떠날 때 반드시 루프와 WebGL 컨텍스트를 정리한다
   const cleanup = () => {
     cancelAnimationFrame(raf);
+    window.clearTimeout(championRevealTimer);
+    clearChampionshipEffects();
     window.removeEventListener("keydown", onKey);
     window.removeEventListener("pointerdown", onWindowPointerDown);
     window.removeEventListener("pointermove", onWindowPointerMove);
     window.removeEventListener("pointerup", onWindowPointerUp);
     kickoffDialog.removeEventListener('keydown',trapKickoffFocus);
+    championshipDialog.removeEventListener("keydown", trapChampionshipFocus);
+    championshipDialog.classList.remove("is-visible");
     kickoffDialog.remove();
     resultDialog.remove();
+    championshipDialog.remove();
     view?.dispose();
   };
 

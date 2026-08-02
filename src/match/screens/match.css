@@ -224,6 +224,61 @@
 @media (max-width:720px) {
   .screen.match::after { display:none; }
 }
+
+/* 대한민국 득점 — 축하를 확인한 뒤 상대팀 킥오프로 직접 재개한다. */
+.korea-goal-banner {
+  z-index:8;
+  width:min(620px,calc(100vw - 32px));
+  gap:8px;
+  border:2px solid #62e6b0;
+  padding:30px clamp(20px,4vw,42px);
+  background:
+    radial-gradient(circle at 50% 0,rgba(85,226,177,.24),transparent 45%),
+    linear-gradient(120deg,rgba(29,128,185,.17),rgba(5,20,29,.96) 44%,rgba(214,43,63,.16));
+  box-shadow:inset 4px 0 #168bc2,inset -4px 0 #ef3345,0 0 0 9999px rgba(0,0,0,.46),0 20px 70px rgba(36,218,156,.24);
+  animation:korea-goal-impact .42s cubic-bezier(.18,.88,.25,1.18) both;
+}
+.korea-goal-banner::before {
+  content:"GOAL";
+  position:absolute;
+  inset:auto 0 0;
+  overflow:hidden;
+  color:rgba(255,255,255,.035);
+  font-size:112px;
+  font-weight:950;
+  line-height:.72;
+  letter-spacing:.06em;
+  pointer-events:none;
+}
+.korea-goal__eyebrow { display:flex; align-items:center; justify-content:center; gap:8px; margin:0; }
+.korea-goal-banner .korea-goal__eyebrow span { color:#72e9bd; font-size:10px; font-weight:950; letter-spacing:.2em; }
+.korea-goal-banner h2 {
+  margin:2px 0 0;
+  color:#fff;
+  font-size:clamp(34px,6vw,54px);
+  font-weight:950;
+  letter-spacing:-.06em;
+  text-shadow:3px 3px #c92642,0 0 24px rgba(92,230,180,.34);
+}
+.korea-goal__scorer { color:#dcebf0; font-size:clamp(16px,2.5vw,21px); }
+.korea-goal__score { color:#fff4bd; font-size:clamp(24px,4vw,34px); letter-spacing:.04em; }
+.korea-goal-banner .korea-goal__clock { color:#8ca4af; font-size:11px; font-weight:850; letter-spacing:.12em; }
+.korea-goal__resume { position:relative; width:min(100%,430px); min-height:54px; margin-top:10px; font-size:15px; }
+
+@keyframes korea-goal-impact {
+  0% { opacity:0; transform:translate(-50%,-50%) scale(.72); }
+  70% { opacity:1; transform:translate(-50%,-50%) scale(1.035); }
+  100% { opacity:1; transform:translate(-50%,-50%) scale(1); }
+}
+
+@media (max-width:560px) {
+  .korea-goal-banner { padding:24px 16px 20px; }
+  .korea-goal-banner::before { font-size:72px; }
+}
+@media (prefers-reduced-motion:reduce) {
+  .korea-goal-banner { animation:none; }
+}
+
 /* 실점 순간의 선택 — 화면에서 가장 강한 경고와 되돌리기 액션으로 표현한다. */
 .concede-banner {
   z-index:8;
@@ -384,6 +439,219 @@
   .match-result-dialog__scoreboard { gap:10px; margin-block:22px 16px; }
   .match-result-dialog__team { gap:7px; font-size:14px; }
   .result-score { font-size:clamp(42px,14vw,60px); }
+}
+
+/* Match 104 우승 전용 축하 레이어 */
+.championship-dialog {
+  width:100vw;
+  max-width:none;
+  height:100vh;
+  max-height:none;
+  margin:0;
+  overflow:auto;
+  border:0;
+  padding:clamp(18px,4vh,42px) 16px;
+  color:#fff;
+  background:
+    radial-gradient(circle at 50% 32%,rgba(255,205,80,.2),transparent 38%),
+    rgba(0,5,10,.62);
+}
+.championship-dialog::backdrop {
+  background:rgba(0,4,8,.76);
+  backdrop-filter:blur(3px) saturate(.75);
+}
+.championship-card {
+  position:relative;
+  z-index:3;
+  width:min(720px,calc(100vw - 32px));
+  margin:auto;
+  overflow:hidden;
+  border:1px solid #e8bd50;
+  padding:clamp(22px,4vw,38px);
+  background:
+    radial-gradient(circle at 50% 0,rgba(255,221,115,.13),transparent 37%),
+    linear-gradient(rgba(224,181,72,.04) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(224,181,72,.04) 1px,transparent 1px),
+    #07131b;
+  background-size:auto,22px 22px,22px 22px,auto;
+  clip-path:polygon(16px 0,calc(100% - 16px) 0,100% 16px,100% calc(100% - 16px),calc(100% - 16px) 100%,16px 100%,0 calc(100% - 16px),0 16px);
+  box-shadow:inset 4px 0 rgba(239,51,69,.62),inset -4px 0 rgba(34,139,210,.62),0 0 0 1px rgba(255,238,171,.15),0 24px 80px rgba(0,0,0,.7),0 0 55px rgba(224,177,62,.2);
+  text-align:center;
+  opacity:0;
+  transform:translateY(24px) scale(.92);
+}
+.championship-dialog.is-visible .championship-card {
+  animation:championship-card-in .65s .15s cubic-bezier(.16,.84,.28,1.08) forwards;
+}
+.championship-card::before {
+  content:"";
+  position:absolute;
+  inset:0 14%;
+  border-top:3px solid transparent;
+  border-image:linear-gradient(90deg,transparent,#fff0a7,#b77a10,#fff0a7,transparent) 1;
+  pointer-events:none;
+}
+.championship-header { display:grid; justify-items:center; gap:4px; }
+.championship-eyebrow { margin:0; color:#9cb0b8; font-size:10px; font-weight:900; letter-spacing:.24em; }
+.championship-world {
+  background:linear-gradient(135deg,#8a5a08 0%,#f7d774 28%,#fff1ad 50%,#d39a24 72%,#8c5808 100%);
+  background-clip:text;
+  -webkit-background-clip:text;
+  color:transparent;
+  font-size:clamp(15px,2.6vw,21px);
+  font-weight:950;
+  letter-spacing:.2em;
+}
+.championship-trophy {
+  position:relative;
+  width:82px;
+  height:90px;
+  margin:18px auto 8px;
+  filter:drop-shadow(0 0 15px rgba(247,215,116,.58));
+  opacity:0;
+  transform:translateY(18px) scale(.72);
+}
+.championship-dialog.is-visible .championship-trophy {
+  animation:championship-trophy-rise .75s .35s cubic-bezier(.18,.9,.28,1.15) forwards;
+}
+.championship-trophy__cup {
+  position:absolute;
+  top:0;
+  left:17px;
+  width:48px;
+  height:48px;
+  border:4px solid #f7d774;
+  border-top:0;
+  border-radius:0 0 22px 22px;
+  background:linear-gradient(135deg,#8a5a08,#fff1ad 46%,#c88a18 75%,#6f4205);
+}
+.championship-trophy__cup::before,.championship-trophy__cup::after {
+  content:"";
+  position:absolute;
+  top:5px;
+  width:18px;
+  height:24px;
+  border:4px solid #d9a53b;
+}
+.championship-trophy__cup::before { right:100%; border-right:0; border-radius:13px 0 0 13px; }
+.championship-trophy__cup::after { left:100%; border-left:0; border-radius:0 13px 13px 0; }
+.championship-trophy__stem { position:absolute; top:46px; left:36px; width:10px; height:23px; background:linear-gradient(90deg,#8a5a08,#fff1ad,#9d680d); }
+.championship-trophy__base { position:absolute; bottom:8px; left:21px; width:40px; height:12px; border-top:3px solid #fff1ad; background:linear-gradient(90deg,#7b4b05,#f7d774,#7b4b05); clip-path:polygon(8px 0,calc(100% - 8px) 0,100% 100%,0 100%); }
+.championship-card h2 {
+  margin:4px 0 14px;
+  color:#fff5cf;
+  font-size:clamp(30px,5vw,48px);
+  font-weight:950;
+  letter-spacing:-.06em;
+  text-shadow:0 4px 22px rgba(225,175,51,.28);
+}
+.championship-winner {
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:14px;
+  margin-bottom:18px;
+}
+.championship-winner>div { display:grid; justify-items:start; gap:2px; text-align:left; }
+.championship-winner strong { font-size:22px; }
+.championship-winner span { color:#e7c568; font-size:10px; font-weight:900; letter-spacing:.16em; }
+.championship-scoreboard {
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);
+  align-items:center;
+  gap:18px;
+  border-block:1px solid rgba(224,184,80,.26);
+  padding:16px 0;
+}
+.championship-team { display:flex; align-items:center; justify-content:center; gap:9px; min-width:0; font-size:14px; font-weight:850; }
+.championship-score { color:#fff1ad; font-size:clamp(32px,6vw,52px); font-weight:950; line-height:1; white-space:nowrap; }
+.championship-copy { display:grid; gap:3px; margin:18px 0 0; color:#b8c4c8; font-size:14px; line-height:1.55; }
+.championship-copy strong { color:#fff; font-size:16px; }
+.championship-manager { margin:9px 0 0; color:#d8bc71; font-size:12px; }
+.championship-actions { display:flex; justify-content:center; gap:10px; margin-top:22px; }
+.championship-button {
+  min-width:180px;
+  min-height:50px;
+  border:1px solid rgba(221,183,79,.62);
+  border-radius:0;
+  padding:10px 18px;
+  color:#eee3c2;
+  background:#101b20;
+  clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);
+  font-size:13px;
+  font-weight:900;
+}
+.championship-button--primary { border-color:#fff0a7; color:#241600; background:linear-gradient(135deg,#a66c08,#f7d774 42%,#fff1ad 58%,#c58412); }
+.championship-button:hover { filter:brightness(1.12); }
+.championship-button:focus-visible { outline:2px solid #fff; outline-offset:3px; }
+
+.championship-confetti,.championship-fireworks { position:fixed; inset:0; z-index:2; overflow:hidden; pointer-events:none; }
+.championship-confetti__piece {
+  position:absolute;
+  top:-24px;
+  left:var(--confetti-x);
+  width:var(--confetti-size);
+  height:calc(var(--confetti-size) * 1.7);
+  background:var(--confetti-color);
+  opacity:0;
+}
+.championship-dialog.is-celebrating .championship-confetti__piece {
+  animation:championship-confetti-fall var(--confetti-duration) var(--confetti-delay) cubic-bezier(.25,.65,.45,1) forwards;
+}
+.championship-firework {
+  position:absolute;
+  left:var(--firework-x);
+  top:var(--firework-y);
+  width:150px;
+  height:150px;
+  border-radius:50%;
+  background:repeating-conic-gradient(from 4deg,var(--firework-color) 0 2deg,transparent 2deg 18deg);
+  -webkit-mask:radial-gradient(circle,transparent 0 19%,#000 20% 22%,transparent 23% 42%,#000 43% 47%,transparent 48%);
+  mask:radial-gradient(circle,transparent 0 19%,#000 20% 22%,transparent 23% 42%,#000 43% 47%,transparent 48%);
+  opacity:0;
+  transform:translate(-50%,-50%) scale(.1) rotate(0);
+}
+.championship-dialog.is-celebrating .championship-firework { animation:championship-firework-burst 1.2s var(--firework-delay) ease-out 2; }
+
+@keyframes championship-card-in { to { opacity:1; transform:translateY(0) scale(1); } }
+@keyframes championship-trophy-rise { to { opacity:1; transform:translateY(0) scale(1); } }
+@keyframes championship-confetti-fall {
+  0% { opacity:0; transform:translate3d(0,-20px,0) rotate(0); }
+  10% { opacity:1; }
+  100% { opacity:.85; transform:translate3d(var(--confetti-drift),105vh,0) rotate(760deg); }
+}
+@keyframes championship-firework-burst {
+  0% { opacity:0; transform:translate(-50%,-50%) scale(.08) rotate(0); }
+  20% { opacity:1; }
+  75% { opacity:.8; }
+  100% { opacity:0; transform:translate(-50%,-50%) scale(1.15) rotate(14deg); }
+}
+
+@media (max-width:560px) {
+  .championship-dialog { padding:16px; }
+  .championship-card { width:100%; padding:21px 16px; }
+  .championship-trophy { width:70px; height:78px; margin-top:13px; transform:translateY(12px) scale(.72); }
+  .championship-trophy__cup { left:14px; width:42px; height:42px; }
+  .championship-trophy__stem { top:40px; left:30px; }
+  .championship-trophy__base { left:17px; bottom:4px; width:36px; }
+  .championship-card h2 { margin-bottom:10px; }
+  .championship-winner { margin-bottom:12px; }
+  .championship-scoreboard { gap:8px; padding:12px 0; }
+  .championship-team { display:grid; justify-items:center; gap:5px; font-size:11px; }
+  .championship-copy { margin-top:13px; font-size:12px; }
+  .championship-copy strong { font-size:14px; }
+  .championship-actions { display:grid; gap:8px; margin-top:16px; }
+  .championship-button { width:100%; min-height:46px; }
+  .championship-firework { width:105px; height:105px; }
+  .championship-confetti__piece:nth-child(n+33) { display:none; }
+}
+
+@media (prefers-reduced-motion:reduce) {
+  .championship-card { opacity:1; transform:none; }
+  .championship-dialog.is-visible .championship-card { animation:none; }
+  .championship-trophy { opacity:1; transform:none; }
+  .championship-dialog.is-visible .championship-trophy { animation:none; }
+  .championship-confetti,.championship-fireworks { display:none; }
 }
 
 /* 경로 지시 상태 문구 — 공용 .hint(bottom 78px)와 같은 자리에 겹치지 않도록 한 줄 더 띄운다 */
