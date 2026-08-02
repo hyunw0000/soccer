@@ -2,46 +2,94 @@ import { PARAMS, FIELD, HALF, GOAL_W } from './params.js';
 import { vlen, clamp } from './math.js';
 import { Rng } from './rng.js';
 import { Player, Ball } from './entities.js';
-import { slotPosition } from './coordinates.js';
+import { assignmentSlot, INSTRUCTION_FALLBACK } from './coordinates.js';
 import { arrive, pursuit, separation, closest } from './steering.js';
 
-const AWAY_NAMES = ['GK', 'RB', 'RCB', 'LCB', 'LB', 'RCM', 'CM', 'LCM', 'RW', 'ST', 'LW'];
 const SIM_TACTIC_FALLBACK = { lineHeight: 0.5, pressing: 0.5, tempo: 0.5, width: 0.5 };
+const TACTIC_KEYS = Object.keys(SIM_TACTIC_FALLBACK);
+const INSTRUCTION_KEYS = Object.keys(INSTRUCTION_FALLBACK);
+const SETUP_VERSION = 1;
+const SQUAD_SIZE = 11;
+const COORD_LIMIT = 0.5;
+// 침투 지시가 공격 방향으로 자리를 미는 폭(m). 감독이 짠 대형이 무너지지 않을 만큼만 움직인다.
+const RUN_PUSH = 14;
 // 스냅샷 1인당 저장 항목 수: x, z, vx, vz, heading, energy, kc
 const SNAP_STRIDE = 7;
+
+const inCoordRange = (n) => Number.isFinite(n) && n >= -COORD_LIMIT && n <= COORD_LIMIT;
+
+/**
+ * MatchSetup을 simulation 입장에서 검증한다.
+ * roster/lineup/tactics를 import하지 않으므로 누락된 정보를 조회해 채우지 않고,
+ * 경기를 시작할 수 없으면 명시적으로 오류를 낸다.
+ *
+ * @returns {{ok: boolean, errors: string[]}}
+ */
+export function validateMatchSetupForSim(matchSetup) {
+  const errors = [];
+  if (!matchSetup || typeof matchSetup !== 'object') return { ok: false, errors: ['MatchSetup이 없습니다.'] };
+  if (matchSetup.version !== SETUP_VERSION) errors.push(`지원하지 않는 MatchSetup 버전: ${matchSetup.version}`);
+
+  for (const side of ['homeTeam', 'awayTeam']) {
+    const team = matchSetup[side];
+    if (!team) {
+      errors.push(`${side}가 없습니다.`);
+      continue;
+    }
+    const assignments = team.lineup?.assignments ?? [];
+    if (assignments.length !== SQUAD_SIZE) {
+      errors.push(`${side} 배치가 ${SQUAD_SIZE}명이 아닙니다: ${assignments.length}명`);
+    }
+    const meta = new Map((team.players ?? []).map((p) => [p.id, p]));
+    for (const a of assignments) {
+      if (!inCoordRange(a?.x) || !inCoordRange(a?.z)) {
+        errors.push(`${side} 좌표가 범위를 벗어났습니다: ${a?.playerId}`);
+      }
+      if (!a?.playerId || !meta.has(a.playerId)) {
+        errors.push(`${side} 배치 선수의 메타가 없습니다: ${a?.playerId}`);
+      }
+      // 선수별 지시는 선택 항목이다 (없으면 0.5). 실려 왔다면 계약대로 0..1이어야 한다.
+      if (a?.instruction != null) {
+        for (const key of INSTRUCTION_KEYS) {
+          const v = a.instruction[key];
+          if (v !== undefined && (!Number.isFinite(v) || v < 0 || v > 1)) {
+            errors.push(`${side} 선수별 지시 ${key}가 0..1이 아닙니다: ${a.playerId}`);
+          }
+        }
+      }
+    }
+    for (const key of TACTIC_KEYS) {
+      const v = team.tactics?.[key];
+      if (!Number.isFinite(v) || v < 0 || v > 1) errors.push(`${side} 전술 ${key}가 0..1이 아닙니다.`);
+    }
+  }
+  return { ok: errors.length === 0, errors };
+}
 
 /**
  * 경기 시뮬레이션. Three.js를 전혀 import 하지 않는 순수 모듈이다.
  * - 렌더러는 sim.homeP / sim.awayP / sim.ball 을 읽기만 한다
  * - 모든 상태가 평범한 숫자라서 snapshot()/restore() 로 되감기가 가능하다
+ *
+ * 입력은 plain JSON `MatchSetup` 하나뿐이다. 포메이션 정의를 해석하지 않고
+ * assignment에 실려 온 정규화 좌표만 월드 좌표로 바꿔 쓴다.
  */
 export class Sim {
-  /**
-   * @param {object} cfg
-   * @param {Array}  cfg.lineup   홈 11인 [{num,name,pace,stamina}]
-   * @param {string} cfg.formation 포메이션 키
-   * @param {Array}  cfg.formationSlots 홈 포메이션 정규화 슬롯
-   * @param {object} cfg.tactics  전술 슬라이더 값
-   * @param {string} cfg.oppFormation 상대 포메이션
-   * @param {Array}  cfg.oppFormationSlots 상대 포메이션 정규화 슬롯
-   * @param {number} cfg.seed
-   */
-  constructor({
-    lineup,
-    formation,
-    formationSlots,
-    tactics = SIM_TACTIC_FALLBACK,
-    oppFormation = '4-4-2',
-    oppFormationSlots,
-    seed = 2026,
-  }) {
-    this.formation = formation;
-    this.formationSlots = formationSlots;
-    this.oppFormation = oppFormation;
-    this.oppFormationSlots = oppFormationSlots;
-    this.tactics = { ...SIM_TACTIC_FALLBACK, ...tactics };
-    this.seed = seed;
-    this.lineup = lineup;
+  /** @param {object} matchSetup MatchSetup version 1 */
+  constructor(matchSetup) {
+    const check = validateMatchSetupForSim(matchSetup);
+    if (!check.ok) throw new Error(`잘못된 MatchSetup: ${check.errors.join(' / ')}`);
+
+    this.setup = matchSetup;
+    this.matchId = matchSetup.matchId;
+    this.seed = Number.isFinite(matchSetup.seed) ? matchSetup.seed : 2026;
+    // formationId는 표시·기록용으로만 보관한다. 좌표 조회에는 쓰지 않는다.
+    this.formation = matchSetup.homeTeam.lineup.formationId;
+    this.oppFormation = matchSetup.awayTeam.lineup.formationId;
+    this.tactics = { ...SIM_TACTIC_FALLBACK, ...matchSetup.homeTeam.tactics };
+    this.oppTactics = { ...SIM_TACTIC_FALLBACK, ...matchSetup.awayTeam.tactics };
+    this.homeLineup = matchSetup.homeTeam.lineup;
+    this.awayLineup = matchSetup.awayTeam.lineup;
     this.build();
   }
 
@@ -54,46 +102,55 @@ export class Sim {
     this.phase = 'playing'; // 'playing' | 'halftime' | 'fulltime'
     this.kickoffLock = null; // { team, active } — 킥오프 제한 구역 규칙
 
-    this.homeP = this.lineup.map(
-      (meta, i) =>
-        new Player({
-          team: 'home',
-          idx: i,
-          meta,
-          slot: slotPosition(this.formationSlots, i, 'home', this.tactics.width),
-        })
-    );
-    this.awayP = AWAY_NAMES.map(
-      (name, i) =>
-        new Player({
-          team: 'away',
-          idx: i,
-          meta: { num: i + 1, name, pace: 78, stamina: 78 },
-          slot: slotPosition(this.oppFormationSlots, i, 'away', 0.5),
-        })
-    );
+    this.homeP = this.buildSide('home', this.homeLineup, this.setup.homeTeam.players, this.tactics.width);
+    this.awayP = this.buildSide('away', this.awayLineup, this.setup.awayTeam.players, this.oppTactics.width);
     this.all = [...this.homeP, ...this.awayP];
     this.ball = new Ball();
   }
 
-  /** 라인업/포메이션/전술을 경기 도중에 갈아끼운다 (교체·전술 변경용) */
+  buildSide(team, lineup, players, width) {
+    const meta = new Map(players.map((p) => [p.id, p]));
+    return lineup.assignments.map(
+      (a, i) =>
+        new Player({
+          team,
+          idx: i,
+          meta: meta.get(a.playerId),
+          slot: assignmentSlot(a, team, width),
+        })
+    );
+  }
+
+  /** 전술만 갈아끼운다 (경기 중 실시간 지시). 배치는 현재 assignment를 그대로 쓴다. */
   applyTactics(tactics) {
     this.tactics = { ...this.tactics, ...tactics };
     this.refreshHomeSlots();
   }
 
-  setFormation(key, slots = this.formationSlots) {
-    this.formation = key;
-    this.formationSlots = slots;
+  /**
+   * 경기 중 라인업·전술 교체.
+   * 포메이션 변경도 새 assignments 전체를 받아서 처리한다 — 여기서 포메이션을 해석하지 않는다.
+   * @param {{lineup?: object, tactics?: object}} plan
+   */
+  applyMatchPlan({ lineup, tactics } = {}) {
+    if (tactics) this.tactics = { ...this.tactics, ...tactics };
+    if (lineup?.assignments?.length === SQUAD_SIZE) {
+      this.homeLineup = lineup;
+      this.formation = lineup.formationId ?? this.formation;
+    }
     this.refreshHomeSlots();
   }
 
   refreshHomeSlots() {
     this.homeP.forEach((p, i) => {
-      const s = slotPosition(this.formationSlots, i, 'home', this.tactics.width);
+      const a = this.homeLineup.assignments[i];
+      if (!a) return;
+      const s = assignmentSlot(a, 'home', this.tactics.width);
       p.home.x = s.x;
       p.home.z = s.z;
       p.role = s.role;
+      // 경기 중 지시 변경도 여기로 들어온다. 다음 스텝부터 바로 반영된다.
+      p.ins = s.instruction;
     });
   }
 
@@ -190,8 +247,11 @@ export class Sim {
       const mine = p.team === 'home';
       const restricted = !!lock && p.team !== lock.team;
       // 전술은 홈팀에만 적용한다 (감독은 우리 팀만 지시한다)
-      const press = mine ? t.pressing : 0.5;
+      // 개인 지시는 팀 값을 덮어쓰지 않고 ±0.3까지 밀거나 당긴다 — 팀 전술이 여전히 뼈대다.
+      const press = mine ? clamp(t.pressing + (p.ins.pressing - 0.5) * 0.6, 0, 1) : 0.5;
       const line = mine ? t.lineHeight : 0.5;
+      // 마지막으로 공을 찬 쪽을 그 팀의 소유로 본다. 침투는 이때만 의미가 있다.
+      const holding = this.ball.ownerKey ? this.ball.ownerKey.startsWith(p.team) : false;
 
       // 체력 → 최고 속도는 스티어링보다 먼저 확정한다.
       // 뒤에서 갱신하면 한 스텝 늦은 값이 힘 계산에 섞여 되감기 재현성이 깨진다.
@@ -207,15 +267,14 @@ export class Sim {
       } else if (p === chaser) {
         [fx, fz] = pursuit(p, this.ball);
       } else {
-        // 공 위치를 따라 블록 전체가 밀린다. lineHeight가 전진 폭을 키운다.
-        // 볼 x좌표 쪽으로 라인이 쏠린다 — 팀 무관하게 같은 방향(절대좌표 기준)이어야 한다.
-        // mine 부호를 곱하면 원정팀 수비 라인이 자기 골대 쪽 위험 상황에서 오히려 골대 반대편으로
-        // 벌어지는 버그가 생긴다(공격수 전진은 맞지만 수비 압축 방향이 뒤집힘).
-        const shift = (this.ball.x / FIELD.L) * (14 + line * 22);
-        let tx = p.home.x + shift;
-        let tz = p.home.z + (this.ball.z - p.home.z) * (0.08 + press * 0.14);
+        // 고정 위치를 따라 블록 전체가 밀린다. lineHeight가 전진 폭을 늘린다
+        const shift = (this.ball.x / FIELD.L) * (14 + line * 22) * (mine ? 1 : -1);
+        // 우리팀이 공을 갖고 있을 때만 개인차 있는 침투런을 반영한다
+        const run = holding ? (p.ins.runs - 0.5) * RUN_PUSH * (mine ? 1 : -1) : 0;
+        let tx = p.home.x + shift + run;
+        let tz = p.home.z + (this.ball.z - p.home.z) * (0.08 + press * 0.14) * (0.5 + p.ins.roaming);
         if (restricted) {
-          // 킥오프 규정: 상대팀은 볼이 움직이기 전까지 센터서클 밖에 있어야 한다
+          // 킥오프 규정: 상대팀 선수는 볼이 움직이기 전까지 센터서클 밖에 있어야 한다
           const d = vlen(tx, tz);
           if (d < PARAMS.centerCircleRadius) {
             if (d < 1e-6) {
@@ -228,7 +287,8 @@ export class Sim {
             }
           }
         }
-        if (vlen(tx - p.x, tz - p.z) > PARAMS.comfortZone) [fx, fz] = arrive(p, tx, tz);
+        const comfort = PARAMS.comfortZone * (0.6 + p.ins.coverage * 0.8);
+        if (vlen(tx - p.x, tz - p.z) > comfort) [fx, fz] = arrive(p, tx, tz);
       }
 
       const [sxx, szz] = separation(p, mates);
@@ -273,9 +333,12 @@ export class Sim {
     const gdz = 0 - p.z;
     const gd = vlen(gdx, gdz);
     const tempo = p.team === 'home' ? this.tactics.tempo : 0.5;
+    // 개인 지시는 홈팀 선수에게만 있다 (원정은 전부 0.5로 들어온다).
+    const risk = p.ins.risk;
+    const long = p.ins.passLength;
 
-    // 골문에 가까우면 슛. 템포가 높을수록 과감하게 때린다.
-    if (gd < 30 && this.rng.next() < 0.25 + tempo * 0.3) {
+    // 골문에 가까우면 슛. 템포가 높을수록, 모험적인 선수일수록 과감하게 때린다.
+    if (gd < 30 && this.rng.next() < 0.25 + tempo * 0.3 + (risk - 0.5) * 0.3) {
       this.ball.kick(gdx, gdz + (this.rng.next() - 0.5) * 6, PARAMS.shootForce);
       return;
     }
@@ -288,8 +351,9 @@ export class Sim {
       const d = vlen(m.x - p.x, m.z - p.z);
       if (d < PARAMS.minPass || d > PARAMS.maxPass) continue;
       const fwd = (m.x - p.x) * (p.team === 'home' ? 1 : -1);
-      // 템포가 높으면 전진 패스 가중치가 커진다 (점유 → 직선)
-      const sc = fwd * (0.7 + tempo * 0.8) - d * 0.15;
+      // 템포가 높으면 전진 패스 가중치가 커진다 (점유 → 직선).
+      // 리스크는 전진 패스를 더 노리게 하고, 패스 길이는 먼 동료의 감점을 줄인다.
+      const sc = fwd * (0.7 + tempo * 0.8 + (risk - 0.5) * 0.6) - d * (0.26 - long * 0.22);
       if (sc > bs) {
         bs = sc;
         best = m;

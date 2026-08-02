@@ -1,25 +1,8 @@
 import raw from './players_korea.json';
 
-const MAX_NUM = 99;
-
 export const META = raw.meta;
-/** 원본 JSON은 등번호가 없으므로 로드 시점에 안정적인 번호를 부여한다. */
-export const PLAYERS = assignNumbers(raw.players);
-
-/**
- * 선수마다 1~99 사이의 겹치지 않는 등번호를 준다.
- * 후보가 꽉 찼을 때 무한 루프에 빠지지 않도록 탐색 횟수를 번호 개수로 제한한다.
- * (선수 55명 < 99 이므로 빈 번호는 반드시 존재한다)
- */
-function assignNumbers(players) {
-  const used = new Set();
-  return players.map((p, i) => {
-    let n = p.pos === 'GK' ? 1 : ((i * 7) % 30) + 2;
-    for (let step = 0; step < MAX_NUM && used.has(n); step++) n = (n % MAX_NUM) + 1;
-    used.add(n);
-    return { ...p, num: n };
-  });
-}
+/** 등번호(num)는 JSON에 실제 대표팀 번호로 들어 있다. 여기서 생성하지 않는다. */
+export const PLAYERS = raw.players;
 
 export const byPos = (pos) => PLAYERS.filter((p) => p.pos === pos);
 export const findById = (id) => PLAYERS.find((p) => p.id === id) ?? null;

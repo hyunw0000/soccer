@@ -2,8 +2,8 @@
   "meta": {
     "team": "대한민국",
     "teamCode": "KOR",
-    "source": "2026 FIFA 월드컵 최종 26인(웹 검증) + 홍명보호 최근 소집/발탁 후보 + 주요 K리그/해외파/유망주 (공개 자료 참고)",
-    "note": "이름/포지션은 실제 참고. squad2026=true 26인의 소속팀은 웹 검증(2026 기준). squad2026=false 후보의 소속팀은 2024~25 기준 대략값(이적으로 바뀔 수 있음). 능력치(stats)는 전부 밸런싱용 더미값이며 대회 규칙에 따라 자유 조정 가능.",
+    "source": "2026 FIFA 북중미 월드컵 최종 26인(공식 등번호) + 홍명보호 최근 소집/발탁 후보 + 주요 K리그/해외파/유망주",
+    "note": "이름/포지션은 실제 참고. squad2026=true 26인은 공식 발표 등번호(1~26)를 그대로 쓴다. squad2026=false 후보는 대회 명단 밖이라 공식 번호가 없어 27번부터 임의 배정했다. 소속팀은 26인만 2026 기준 검증, 후보는 2024~25 기준 대략값. 능력치(stats)는 전부 밸런싱용 더미값이며 대회 규칙에 따라 자유 조정 가능.",
     "count": 55,
     "positions": [
       "GK",
@@ -61,12 +61,12 @@
       "id": "kor_son",
       "name": "손흥민",
       "nameEn": "Son Heung-min",
+      "num": 7,
       "pos": "FW",
       "detail": "LW",
       "club": "LAFC",
       "age": 34,
       "captain": true,
-      "squad2026": true,
       "stats": {
         "overall": 85,
         "attack": 90,
@@ -75,17 +75,18 @@
         "pace": 86,
         "pass": 82,
         "shoot": 90
-      }
+      },
+      "squad2026": true
     },
     {
       "id": "kor_leekangin",
       "name": "이강인",
       "nameEn": "Lee Kang-in",
+      "num": 19,
       "pos": "MF",
       "detail": "AM",
-      "club": "아틀레티코 마드리드",
+      "club": "파리 생제르맹",
       "age": 25,
-      "squad2026": true,
       "stats": {
         "overall": 79,
         "attack": 83,
@@ -94,17 +95,18 @@
         "pace": 78,
         "pass": 87,
         "shoot": 80
-      }
+      },
+      "squad2026": true
     },
     {
       "id": "kor_kimminjae",
       "name": "김민재",
       "nameEn": "Kim Min-jae",
+      "num": 4,
       "pos": "DF",
       "detail": "CB",
       "club": "바이에른 뮌헨",
       "age": 29,
-      "squad2026": true,
       "stats": {
         "overall": 79,
         "attack": 45,
@@ -113,17 +115,18 @@
         "pace": 80,
         "pass": 74,
         "shoot": 45
-      }
+      },
+      "squad2026": true
     },
     {
       "id": "kor_hwanghc",
       "name": "황희찬",
       "nameEn": "Hwang Hee-chan",
-      "pos": "FW",
-      "detail": "FW",
-      "club": "울버햄튼",
+      "num": 11,
+      "pos": "MF",
+      "detail": "LW",
+      "club": "울버햄턴",
       "age": 30,
-      "squad2026": true,
       "stats": {
         "overall": 80,
         "attack": 82,
@@ -132,17 +135,18 @@
         "pace": 88,
         "pass": 74,
         "shoot": 80
-      }
+      },
+      "squad2026": true
     },
     {
       "id": "kor_hwangib",
       "name": "황인범",
       "nameEn": "Hwang In-beom",
+      "num": 6,
       "pos": "MF",
       "detail": "DM",
-      "club": "포르투",
+      "club": "페예노르트",
       "age": 29,
-      "squad2026": true,
       "stats": {
         "overall": 78,
         "attack": 68,
@@ -151,17 +155,18 @@
         "pace": 72,
         "pass": 85,
         "shoot": 72
-      }
+      },
+      "squad2026": true
     },
     {
       "id": "kor_leejaesung",
       "name": "이재성",
       "nameEn": "Lee Jae-sung",
+      "num": 10,
       "pos": "MF",
       "detail": "AM",
       "club": "마인츠",
       "age": 33,
-      "squad2026": true,
       "stats": {
         "overall": 77,
         "attack": 76,
@@ -170,17 +175,18 @@
         "pace": 74,
         "pass": 82,
         "shoot": 76
-      }
+      },
+      "squad2026": true
     },
     {
       "id": "kor_paiksh",
       "name": "백승호",
       "nameEn": "Paik Seung-ho",
+      "num": 8,
       "pos": "MF",
       "detail": "CM",
       "club": "버밍엄 시티",
       "age": 29,
-      "squad2026": true,
       "stats": {
         "overall": 75,
         "attack": 66,
@@ -189,17 +195,18 @@
         "pace": 70,
         "pass": 80,
         "shoot": 72
-      }
+      },
+      "squad2026": true
     },
     {
       "id": "kor_baejunho",
       "name": "배준호",
       "nameEn": "Bae Jun-ho",
+      "num": 17,
       "pos": "MF",
       "detail": "AM",
       "club": "스토크 시티",
       "age": 22,
-      "squad2026": true,
       "stats": {
         "overall": 75,
         "attack": 78,
@@ -208,17 +215,18 @@
         "pace": 82,
         "pass": 78,
         "shoot": 74
-      }
+      },
+      "squad2026": true
     },
     {
       "id": "kor_ohhg",
       "name": "오현규",
       "nameEn": "Oh Hyeon-gyu",
+      "num": 18,
       "pos": "FW",
       "detail": "ST",
-      "club": "베식타스",
+      "club": "베식타시",
       "age": 25,
-      "squad2026": true,
       "stats": {
         "overall": 78,
         "attack": 80,
@@ -227,17 +235,18 @@
         "pace": 84,
         "pass": 68,
         "shoot": 79
-      }
+      },
+      "squad2026": true
     },
     {
       "id": "kor_chogs",
       "name": "조규성",
       "nameEn": "Cho Gue-sung",
+      "num": 9,
       "pos": "FW",
       "detail": "ST",
       "club": "미트윌란",
       "age": 28,
-      "squad2026": true,
       "stats": {
         "overall": 75,
         "attack": 79,
@@ -246,17 +255,18 @@
         "pace": 74,
         "pass": 66,
         "shoot": 80
-      }
+      },
+      "squad2026": true
     },
     {
       "id": "kor_yanghj",
       "name": "양현준",
       "nameEn": "Yang Hyun-jun",
-      "pos": "FW",
+      "num": 20,
+      "pos": "MF",
       "detail": "RW",
       "club": "셀틱",
       "age": 24,
-      "squad2026": true,
       "stats": {
         "overall": 76,
         "attack": 77,
@@ -265,17 +275,18 @@
         "pace": 87,
         "pass": 72,
         "shoot": 72
-      }
+      },
+      "squad2026": true
     },
     {
       "id": "kor_eomjs",
       "name": "엄지성",
       "nameEn": "Eom Ji-sung",
-      "pos": "FW",
+      "num": 25,
+      "pos": "MF",
       "detail": "LW",
       "club": "스완지 시티",
       "age": 24,
-      "squad2026": true,
       "stats": {
         "overall": 74,
         "attack": 75,
@@ -284,17 +295,18 @@
         "pace": 85,
         "pass": 71,
         "shoot": 70
-      }
+      },
+      "squad2026": true
     },
     {
       "id": "kor_seolyw",
       "name": "설영우",
       "nameEn": "Seol Young-woo",
+      "num": 22,
       "pos": "DF",
       "detail": "RB",
       "club": "레드스타 베오그라드",
       "age": 27,
-      "squad2026": true,
       "stats": {
         "overall": 77,
         "attack": 68,
@@ -303,17 +315,18 @@
         "pace": 82,
         "pass": 76,
         "shoot": 60
-      }
+      },
+      "squad2026": true
     },
     {
       "id": "kor_leetaeseok",
       "name": "이태석",
       "nameEn": "Lee Tae-seok",
+      "num": 13,
       "pos": "DF",
       "detail": "LB",
-      "club": "오스트리아 빈",
+      "club": "아우스트리아 빈",
       "age": 23,
-      "squad2026": true,
       "stats": {
         "overall": 73,
         "attack": 62,
@@ -322,17 +335,18 @@
         "pace": 80,
         "pass": 72,
         "shoot": 55
-      }
+      },
+      "squad2026": true
     },
     {
       "id": "kor_kimmoonhwan",
       "name": "김문환",
       "nameEn": "Kim Moon-hwan",
+      "num": 15,
       "pos": "DF",
       "detail": "RB",
       "club": "대전 하나 시티즌",
       "age": 30,
-      "squad2026": true,
       "stats": {
         "overall": 73,
         "attack": 64,
@@ -341,17 +355,18 @@
         "pace": 81,
         "pass": 70,
         "shoot": 56
-      }
+      },
+      "squad2026": true
     },
     {
       "id": "kor_leehanbeom",
       "name": "이한범",
       "nameEn": "Lee Han-beom",
+      "num": 2,
       "pos": "DF",
       "detail": "CB",
       "club": "미트윌란",
       "age": 24,
-      "squad2026": true,
       "stats": {
         "overall": 71,
         "attack": 42,
@@ -360,17 +375,18 @@
         "pace": 74,
         "pass": 70,
         "shoot": 42
-      }
+      },
+      "squad2026": true
     },
     {
       "id": "kor_kimtaehyeon",
       "name": "김태현",
       "nameEn": "Kim Tae-hyeon",
+      "num": 5,
       "pos": "DF",
       "detail": "CB",
       "club": "가시마 앤틀러스",
       "age": 25,
-      "squad2026": true,
       "stats": {
         "overall": 70,
         "attack": 42,
@@ -379,17 +395,18 @@
         "pace": 73,
         "pass": 68,
         "shoot": 40
-      }
+      },
+      "squad2026": true
     },
     {
       "id": "kor_leegihyuk",
       "name": "이기혁",
       "nameEn": "Lee Gi-hyuk",
-      "pos": "DF",
-      "detail": "CB",
+      "num": 3,
+      "pos": "MF",
+      "detail": "DM",
       "club": "강원 FC",
       "age": 26,
-      "squad2026": true,
       "stats": {
         "overall": 71,
         "attack": 44,
@@ -398,17 +415,18 @@
         "pace": 72,
         "pass": 70,
         "shoot": 44
-      }
+      },
+      "squad2026": true
     },
     {
       "id": "kor_chowije",
       "name": "조위제",
       "nameEn": "Cho Wi-je",
+      "num": 14,
       "pos": "DF",
       "detail": "CB",
       "club": "전북 현대",
       "age": 24,
-      "squad2026": true,
       "stats": {
         "overall": 70,
         "attack": 44,
@@ -417,17 +435,18 @@
         "pace": 74,
         "pass": 68,
         "shoot": 42
-      }
+      },
+      "squad2026": true
     },
     {
       "id": "kor_parkjinseob",
       "name": "박진섭",
       "nameEn": "Park Jin-seob",
+      "num": 16,
       "pos": "DF",
       "detail": "CB/DM",
       "club": "저장 FC",
       "age": 30,
-      "squad2026": true,
       "stats": {
         "overall": 75,
         "attack": 56,
@@ -436,17 +455,18 @@
         "pace": 74,
         "pass": 74,
         "shoot": 55
-      }
+      },
+      "squad2026": true
     },
     {
       "id": "kor_kimjingyu",
       "name": "김진규",
       "nameEn": "Kim Jin-gyu",
+      "num": 24,
       "pos": "MF",
       "detail": "CM",
       "club": "전북 현대",
       "age": 29,
-      "squad2026": true,
       "stats": {
         "overall": 73,
         "attack": 66,
@@ -455,17 +475,18 @@
         "pace": 72,
         "pass": 76,
         "shoot": 66
-      }
+      },
+      "squad2026": true
     },
     {
       "id": "kor_castrop",
       "name": "옌스 카스트로프",
       "nameEn": "Jens Castrop",
-      "pos": "MF",
-      "detail": "CM",
+      "num": 23,
+      "pos": "DF",
+      "detail": "DM",
       "club": "묀헨글라트바흐",
       "age": 22,
-      "squad2026": true,
       "stats": {
         "overall": 74,
         "attack": 64,
@@ -474,17 +495,18 @@
         "pace": 76,
         "pass": 77,
         "shoot": 64
-      }
+      },
+      "squad2026": true
     },
     {
       "id": "kor_kimseunggyu",
       "name": "김승규",
       "nameEn": "Kim Seung-gyu",
+      "num": 1,
       "pos": "GK",
       "detail": "GK",
       "club": "FC 도쿄",
       "age": 35,
-      "squad2026": true,
       "stats": {
         "overall": 78,
         "attack": 20,
@@ -493,17 +515,18 @@
         "pace": 60,
         "pass": 66,
         "shoot": 20
-      }
+      },
+      "squad2026": true
     },
     {
       "id": "kor_johyeonwoo",
       "name": "조현우",
       "nameEn": "Jo Hyeon-woo",
+      "num": 21,
       "pos": "GK",
       "detail": "GK",
       "club": "울산 HD",
       "age": 34,
-      "squad2026": true,
       "stats": {
         "overall": 79,
         "attack": 20,
@@ -512,17 +535,18 @@
         "pace": 62,
         "pass": 68,
         "shoot": 20
-      }
+      },
+      "squad2026": true
     },
     {
       "id": "kor_songbk",
       "name": "송범근",
       "nameEn": "Song Bum-keun",
+      "num": 12,
       "pos": "GK",
       "detail": "GK",
       "club": "전북 현대",
       "age": 28,
-      "squad2026": true,
       "stats": {
         "overall": 75,
         "attack": 20,
@@ -531,17 +555,18 @@
         "pace": 60,
         "pass": 66,
         "shoot": 20
-      }
+      },
+      "squad2026": true
     },
     {
       "id": "kor_honghs",
       "name": "홍현석",
       "nameEn": "Hong Hyun-seok",
+      "num": 27,
       "pos": "MF",
       "detail": "CM",
       "club": "헨트",
       "age": 27,
-      "squad2026": false,
       "stats": {
         "overall": 74,
         "attack": 70,
@@ -550,17 +575,18 @@
         "pace": 74,
         "pass": 78,
         "shoot": 70
-      }
+      },
+      "squad2026": false
     },
     {
       "id": "kor_kimjs",
       "name": "김주성",
       "nameEn": "Kim Ju-sung",
+      "num": 28,
       "pos": "DF",
       "detail": "CB",
       "club": "산프레체 히로시마",
       "age": 24,
-      "squad2026": false,
       "stats": {
         "overall": 72,
         "attack": 48,
@@ -569,17 +595,18 @@
         "pace": 78,
         "pass": 70,
         "shoot": 46
-      }
+      },
+      "squad2026": false
     },
     {
       "id": "kor_choyumin",
       "name": "조유민",
       "nameEn": "Cho Yu-min",
+      "num": 29,
       "pos": "DF",
       "detail": "CB",
       "club": "샤르자",
       "age": 29,
-      "squad2026": false,
       "stats": {
         "overall": 70,
         "attack": 46,
@@ -588,17 +615,18 @@
         "pace": 72,
         "pass": 66,
         "shoot": 44
-      }
+      },
+      "squad2026": false
     },
     {
       "id": "kor_jungwy",
       "name": "정우영",
       "nameEn": "Jung Woo-young",
+      "num": 30,
       "pos": "MF",
       "detail": "AM",
       "club": "알사드",
       "age": 27,
-      "squad2026": false,
       "stats": {
         "overall": 72,
         "attack": 74,
@@ -607,17 +635,18 @@
         "pace": 80,
         "pass": 74,
         "shoot": 72
-      }
+      },
+      "squad2026": false
     },
     {
       "id": "kor_ohsehun",
       "name": "오세훈",
       "nameEn": "Oh Se-hun",
+      "num": 31,
       "pos": "FW",
       "detail": "ST",
       "club": "마치다 젤비아",
       "age": 26,
-      "squad2026": false,
       "stats": {
         "overall": 72,
         "attack": 76,
@@ -626,17 +655,18 @@
         "pace": 70,
         "pass": 64,
         "shoot": 76
-      }
+      },
+      "squad2026": false
     },
     {
       "id": "kor_yangmh",
       "name": "양민혁",
       "nameEn": "Yang Min-hyeok",
+      "num": 32,
       "pos": "FW",
       "detail": "RW",
       "club": "토트넘 홋스퍼",
       "age": 19,
-      "squad2026": false,
       "stats": {
         "overall": 75,
         "attack": 75,
@@ -645,17 +675,18 @@
         "pace": 86,
         "pass": 72,
         "shoot": 72
-      }
+      },
+      "squad2026": false
     },
     {
       "id": "kor_kwonhk",
       "name": "권혁규",
       "nameEn": "Kwon Hyeok-kyu",
+      "num": 33,
       "pos": "MF",
       "detail": "DM",
       "club": "하이버니언",
       "age": 24,
-      "squad2026": false,
       "stats": {
         "overall": 71,
         "attack": 58,
@@ -664,17 +695,18 @@
         "pace": 72,
         "pass": 74,
         "shoot": 58
-      }
+      },
+      "squad2026": false
     },
     {
       "id": "kor_leedg",
       "name": "이동경",
       "nameEn": "Lee Dong-gyeong",
+      "num": 26,
       "pos": "MF",
       "detail": "AM",
       "club": "울산 HD",
       "age": 28,
-      "squad2026": false,
       "stats": {
         "overall": 74,
         "attack": 76,
@@ -683,17 +715,18 @@
         "pace": 76,
         "pass": 78,
         "shoot": 74
-      }
+      },
+      "squad2026": true
     },
     {
       "id": "kor_leemyungjae",
       "name": "이명재",
       "nameEn": "Lee Myung-jae",
+      "num": 34,
       "pos": "DF",
       "detail": "LB",
       "club": "대전 하나 시티즌",
       "age": 32,
-      "squad2026": false,
       "stats": {
         "overall": 72,
         "attack": 62,
@@ -702,17 +735,18 @@
         "pace": 74,
         "pass": 74,
         "shoot": 54
-      }
+      },
+      "squad2026": false
     },
     {
       "id": "kor_wondj",
       "name": "원두재",
       "nameEn": "Won Doo-jae",
+      "num": 35,
       "pos": "MF",
       "detail": "DM",
       "club": "코르파칸",
       "age": 28,
-      "squad2026": false,
       "stats": {
         "overall": 69,
         "attack": 54,
@@ -721,17 +755,18 @@
         "pace": 70,
         "pass": 72,
         "shoot": 54
-      }
+      },
+      "squad2026": false
     },
     {
       "id": "kor_kimyounggwon",
       "name": "김영권",
       "nameEn": "Kim Young-gwon",
+      "num": 36,
       "pos": "DF",
       "detail": "CB",
       "club": "울산 HD",
       "age": 36,
-      "squad2026": false,
       "stats": {
         "overall": 71,
         "attack": 44,
@@ -740,17 +775,18 @@
         "pace": 66,
         "pass": 74,
         "shoot": 44
-      }
+      },
+      "squad2026": false
     },
     {
       "id": "kor_jungsh",
       "name": "정승현",
       "nameEn": "Jung Seung-hyun",
+      "num": 37,
       "pos": "DF",
       "detail": "CB",
       "club": "알와슬",
       "age": 31,
-      "squad2026": false,
       "stats": {
         "overall": 70,
         "attack": 44,
@@ -759,17 +795,18 @@
         "pace": 70,
         "pass": 70,
         "shoot": 42
-      }
+      },
+      "squad2026": false
     },
     {
       "id": "kor_kwonkw",
       "name": "권경원",
       "nameEn": "Kwon Kyung-won",
+      "num": 38,
       "pos": "DF",
       "detail": "CB",
       "club": "수원 FC",
       "age": 34,
-      "squad2026": false,
       "stats": {
         "overall": 68,
         "attack": 42,
@@ -778,17 +815,18 @@
         "pace": 66,
         "pass": 68,
         "shoot": 42
-      }
+      },
+      "squad2026": false
     },
     {
       "id": "kor_kimjisoo",
       "name": "김지수",
       "nameEn": "Kim Ji-soo",
+      "num": 39,
       "pos": "DF",
       "detail": "CB",
       "club": "브렌트포드",
       "age": 21,
-      "squad2026": false,
       "stats": {
         "overall": 71,
         "attack": 44,
@@ -797,17 +835,18 @@
         "pace": 78,
         "pass": 70,
         "shoot": 42
-      }
+      },
+      "squad2026": false
     },
     {
       "id": "kor_kimtaehwan",
       "name": "김태환",
       "nameEn": "Kim Tae-hwan",
+      "num": 40,
       "pos": "DF",
       "detail": "RB",
       "club": "울산 HD",
       "age": 36,
-      "squad2026": false,
       "stats": {
         "overall": 72,
         "attack": 66,
@@ -816,17 +855,18 @@
         "pace": 76,
         "pass": 72,
         "shoot": 54
-      }
+      },
+      "squad2026": false
     },
     {
       "id": "kor_choijun",
       "name": "최준",
       "nameEn": "Choi Jun",
+      "num": 41,
       "pos": "DF",
       "detail": "RB",
       "club": "포항 스틸러스",
       "age": 27,
-      "squad2026": false,
       "stats": {
         "overall": 74,
         "attack": 66,
@@ -835,17 +875,18 @@
         "pace": 82,
         "pass": 72,
         "shoot": 56
-      }
+      },
+      "squad2026": false
     },
     {
       "id": "kor_hwangjaewon",
       "name": "황재원",
       "nameEn": "Hwang Jae-won",
+      "num": 42,
       "pos": "DF",
       "detail": "RB",
       "club": "대구 FC",
       "age": 24,
-      "squad2026": false,
       "stats": {
         "overall": 72,
         "attack": 62,
@@ -854,17 +895,18 @@
         "pace": 80,
         "pass": 70,
         "shoot": 54
-      }
+      },
+      "squad2026": false
     },
     {
       "id": "kor_parkyongwoo",
       "name": "박용우",
       "nameEn": "Park Yong-woo",
+      "num": 43,
       "pos": "MF",
       "detail": "DM",
       "club": "알아인",
       "age": 32,
-      "squad2026": false,
       "stats": {
         "overall": 71,
         "attack": 56,
@@ -873,17 +915,18 @@
         "pace": 68,
         "pass": 76,
         "shoot": 56
-      }
+      },
+      "squad2026": false
     },
     {
       "id": "kor_jeonghy",
       "name": "정호연",
       "nameEn": "Jeong Ho-yeon",
+      "num": 44,
       "pos": "MF",
       "detail": "CM",
       "club": "광주 FC",
       "age": 26,
-      "squad2026": false,
       "stats": {
         "overall": 72,
         "attack": 64,
@@ -892,17 +935,18 @@
         "pace": 74,
         "pass": 74,
         "shoot": 62
-      }
+      },
+      "squad2026": false
     },
     {
       "id": "kor_leeseungwoo",
       "name": "이승우",
       "nameEn": "Lee Seung-woo",
+      "num": 45,
       "pos": "MF",
       "detail": "AM",
       "club": "수원 FC",
       "age": 28,
-      "squad2026": false,
       "stats": {
         "overall": 73,
         "attack": 78,
@@ -911,17 +955,18 @@
         "pace": 82,
         "pass": 76,
         "shoot": 74
-      }
+      },
+      "squad2026": false
     },
     {
       "id": "kor_koyoungjun",
       "name": "고영준",
       "nameEn": "Ko Young-jun",
+      "num": 46,
       "pos": "MF",
       "detail": "AM",
       "club": "포항 스틸러스",
       "age": 24,
-      "squad2026": false,
       "stats": {
         "overall": 72,
         "attack": 72,
@@ -930,17 +975,18 @@
         "pace": 80,
         "pass": 74,
         "shoot": 68
-      }
+      },
+      "squad2026": false
     },
     {
       "id": "kor_joominkyu",
       "name": "주민규",
       "nameEn": "Joo Min-kyu",
+      "num": 47,
       "pos": "FW",
       "detail": "ST",
       "club": "대전 하나 시티즌",
       "age": 35,
-      "squad2026": false,
       "stats": {
         "overall": 73,
         "attack": 78,
@@ -949,17 +995,18 @@
         "pace": 68,
         "pass": 66,
         "shoot": 80
-      }
+      },
+      "squad2026": false
     },
     {
       "id": "kor_nasangho",
       "name": "나상호",
       "nameEn": "Na Sang-ho",
+      "num": 48,
       "pos": "FW",
       "detail": "RW",
       "club": "FC 서울",
       "age": 29,
-      "squad2026": false,
       "stats": {
         "overall": 75,
         "attack": 76,
@@ -968,17 +1015,18 @@
         "pace": 84,
         "pass": 72,
         "shoot": 72
-      }
+      },
+      "squad2026": false
     },
     {
       "id": "kor_umwonsang",
       "name": "엄원상",
       "nameEn": "Um Won-sang",
+      "num": 49,
       "pos": "FW",
       "detail": "LW",
       "club": "울산 HD",
       "age": 27,
-      "squad2026": false,
       "stats": {
         "overall": 75,
         "attack": 76,
@@ -987,17 +1035,18 @@
         "pace": 88,
         "pass": 72,
         "shoot": 70
-      }
+      },
+      "squad2026": false
     },
     {
       "id": "kor_choyoungwook",
       "name": "조영욱",
       "nameEn": "Cho Young-wook",
+      "num": 50,
       "pos": "FW",
       "detail": "FW",
       "club": "FC 서울",
       "age": 27,
-      "squad2026": false,
       "stats": {
         "overall": 73,
         "attack": 74,
@@ -1006,17 +1055,18 @@
         "pace": 78,
         "pass": 70,
         "shoot": 72
-      }
+      },
+      "squad2026": false
     },
     {
       "id": "kor_jungsangbin",
       "name": "정상빈",
       "nameEn": "Jung Sang-bin",
+      "num": 51,
       "pos": "FW",
       "detail": "RW",
       "club": "미네소타 유나이티드",
       "age": 24,
-      "squad2026": false,
       "stats": {
         "overall": 74,
         "attack": 74,
@@ -1025,17 +1075,18 @@
         "pace": 85,
         "pass": 70,
         "shoot": 70
-      }
+      },
+      "squad2026": false
     },
     {
       "id": "kor_leeyoungjun",
       "name": "이영준",
       "nameEn": "Lee Young-jun",
+      "num": 52,
       "pos": "FW",
       "detail": "ST",
       "club": "김천 상무",
       "age": 23,
-      "squad2026": false,
       "stats": {
         "overall": 72,
         "attack": 73,
@@ -1044,17 +1095,18 @@
         "pace": 80,
         "pass": 64,
         "shoot": 72
-      }
+      },
+      "squad2026": false
     },
     {
       "id": "kor_hongyunsang",
       "name": "홍윤상",
       "nameEn": "Hong Yun-sang",
+      "num": 53,
       "pos": "FW",
       "detail": "FW",
       "club": "포항 스틸러스",
       "age": 23,
-      "squad2026": false,
       "stats": {
         "overall": 72,
         "attack": 73,
@@ -1063,17 +1115,18 @@
         "pace": 80,
         "pass": 70,
         "shoot": 70
-      }
+      },
+      "squad2026": false
     },
     {
       "id": "kor_leechanggeun",
       "name": "이창근",
       "nameEn": "Lee Chang-geun",
+      "num": 54,
       "pos": "GK",
       "detail": "GK",
       "club": "대전 하나 시티즌",
       "age": 32,
-      "squad2026": false,
       "stats": {
         "overall": 74,
         "attack": 20,
@@ -1082,17 +1135,18 @@
         "pace": 60,
         "pass": 66,
         "shoot": 20
-      }
+      },
+      "squad2026": false
     },
     {
       "id": "kor_kimdongheon",
       "name": "김동헌",
       "nameEn": "Kim Dong-heon",
+      "num": 55,
       "pos": "GK",
       "detail": "GK",
       "club": "인천 유나이티드",
       "age": 27,
-      "squad2026": false,
       "stats": {
         "overall": 73,
         "attack": 20,
@@ -1101,7 +1155,8 @@
         "pace": 62,
         "pass": 64,
         "shoot": 20
-      }
+      },
+      "squad2026": false
     }
   ]
 }

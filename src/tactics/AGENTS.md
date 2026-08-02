@@ -16,10 +16,16 @@
 ## 3. 공개 API와 계약
 
 - 외부는 `src/tactics/index.js`만 사용한다.
-- 현재 export: `TACTIC_DEFAULT`, `tacticsScreen`.
-- 목표 추가 API인 `validateTactics`, `createMatchSetup`은 아직 구현되지 않았다. Contracts v1 합의 없이 가짜 API를 노출하지 않는다.
+- 전술: `TACTIC_DEFAULT`(freeze), `createDefaultTactics`, `TACTIC_KEYS`, `TACTIC_META`, `normalizeTactics`, `validateTactics`.
+- MatchSetup: `MATCH_SETUP_VERSION`, `createMatchSetup`(유효하지 않으면 `MatchSetupError` throw), `validateMatchSetupInput`, `validateMatchSetup`, `toSimulationPlayer`, `MatchSetupError`.
+- 화면: `tacticsScreen`.
+- `createMatchSetup`은 `opponent`가 없으면 실패한다. 대진표(담당자 2)가 붙기 전까지 화면은 MatchSetup을 만들지 않고 기존 경기 진입 경로를 쓴다.
+- 위 목록을 바꾸려면 공개 계약을 먼저 협의한다.
 - 입력은 `src/roster/index.js`, `src/lineup/index.js`, 향후 `src/tournament/index.js`의 공개 값만 사용한다.
 - MatchSetup version 1에는 양 팀 SimulationPlayer, assignment의 `playerId`·`slotId`·`role`·`x`·`z`, tactics와 tournament 참조를 포함한다.
+- assignment의 `instruction`(자리별 전술 8축, 0..1)은 **선택 항목**이다. 감독이 지시를 준 홈팀 자리에만 실리고, 없으면 simulation이 0.5로 읽으므로 version은 1 그대로다. 축 이름은 `INSTRUCTION_KEYS`가 단일 출처이며, 감독이 만지는 1..5 단계 값은 `toPlayerInstruction()`으로만 0..1로 번역한다.
+- 개인 전술은 **자리(slotId)** 에 붙는다. 저장은 `state.slotTactics`이고 조회는 `slotTacticsOf(book, assignment)` 하나뿐이다. 선수를 바꿔 세워도 그 자리의 지시로 뛰고, 선수는 지시를 들고 다니지 않는다.
+- 개인 전술 화면은 8축을 다 보여 주지 않는다. `playerTacticGroup(role, z)`가 그 자리(골키퍼·센터백·풀백·중앙 미드·측면·중앙 공격수)에서 쓸 항목과 이름을 정하고, 화면에 없는 축은 그 자리의 기본값에 머문다. 계약은 늘 8축 그대로다.
 - 화면 이동은 `ctx.navigate()`를 사용하고 route params에 영속 상태를 저장하지 않는다.
 
 ## 4. 절대 금지
