@@ -107,14 +107,11 @@ export default function matchScreen(root, ctx) {
     updateBanners();
   }
 
-  // 배너 네 개(일시정지/전후반/실점 선택/경기 결과)는 동시에 뜨지 않는다 —
-  // 경기 결과가 가장 우선이고, 그 다음이 실점 선택이다.
+  // 일시정지/실점 선택 배너는 동시에 뜨지 않는다. 경기 결과는 별도 모달로 표시한다.
   function updateBanners() {
     const finished = matchResult !== null;
     banner.classList.toggle("show", !finished && paused && sim.phase === "playing" && !concedeChoicePending);
-    phaseBanner.classList.toggle("show", !finished && sim.phase === "fulltime" && !concedeChoicePending);
     concedeBanner.classList.toggle("show", !finished && concedeChoicePending);
-    resultBanner.classList.toggle("show", finished);
     updateSpeedButtons();
   }
 
@@ -143,14 +140,6 @@ export default function matchScreen(root, ctx) {
     });
   }
 
-  function renderPhaseBanner() {
-    if (sim.phase === "fulltime") {
-      phaseTitle.textContent = "경기 종료";
-      phaseSub.textContent = `최종 스코어 KOR ${sim.score.home} : ${sim.score.away} WLD`;
-      phaseBanner.replaceChildren(phaseTitle, phaseSub);
-    }
-  }
-
   const teamName = (teamId) => countries[teamId]?.nameKo ?? teamId;
 
   /**
@@ -169,10 +158,10 @@ export default function matchScreen(root, ctx) {
       : null;
     matchResult = { koreaScore, opponentScore, outcome, progress };
 
-    resultBanner.dataset.outcome = outcome;
+    resultDialog.dataset.outcome = outcome;
     resultTitle.textContent =
       outcome === "win" ? "승리" : outcome === "draw" ? "무승부" : "패배";
-    resultScore.textContent = `${homeCode} ${koreaScore} : ${opponentScore} ${awayCode}`;
+    resultScore.textContent = `${koreaScore} : ${opponentScore}`;
 
     const nextStep = progress?.nextStep ?? null;
     if (!runStep) {
@@ -195,6 +184,9 @@ export default function matchScreen(root, ctx) {
 
     setPaused(true);
     updateBanners();
+    if (!resultDialog.isConnected) document.body.append(resultDialog);
+    if (!resultDialog.open) resultDialog.showModal();
+    (canAdvance ? advanceBtn : canRetry ? retryBtn : tournamentBtn).focus();
   }
 
   // tick을 "68:22"(분:초) 형태로 — 1 clockSecond = 게임 1분 스케일이다
@@ -249,7 +241,7 @@ export default function matchScreen(root, ctx) {
     syncTacticSliders();
     if (sim.phase !== lastPhase) {
       lastPhase = sim.phase;
-      renderPhaseBanner();
+      updateBanners();
     }
     view.sync(0);
     setPaused(true);
@@ -315,14 +307,6 @@ export default function matchScreen(root, ctx) {
     el("span", { text: "되감은 시점부터 새 전술로 경기가 다시 흘러갑니다." }),
   ]);
 
-  // 경기 종료 안내 배너. 전반 종료는 별도 배너 없이 후반 안내 팝업으로 바로 전환한다.
-  const phaseTitle = el("b", { text: "" });
-  const phaseSub = el("span", { text: "" });
-  const phaseBanner = el("div", { class: "banner phase-banner" }, [
-    phaseTitle,
-    phaseSub,
-  ]);
-
   // 실점 순간 "되돌릴지/진행할지" 명시적으로 묻는 배너 — 조용히 지나가지 않는다
   const concedeTitle = el("b", { text: "" });
   const concedeSub = el("span", { text: "" });
@@ -353,7 +337,7 @@ export default function matchScreen(root, ctx) {
     updateBanners();
   }
 
-  // 경기 종료 결과 화면 — 승/무/패와 그 결과가 대회에서 뜻하는 바를 함께 보여 준다
+  // 경기 종료 결과 화면 — 시작/후반 안내와 같은 모달 문법으로 팀과 큰 스코어를 보여 준다.
   const resultTitle = el("b", { class: "result-title", text: "" });
   const resultScore = el("strong", { class: "result-score", text: "" });
   const resultSub = el("span", { class: "result-sub", text: "" });
@@ -375,21 +359,44 @@ export default function matchScreen(root, ctx) {
     hidden: true,
     onclick: () => ctx.navigate("lineup"),
   });
-  const resultBanner = el("div", { class: "banner result-banner" }, [
-    resultTitle,
-    resultScore,
-    resultSub,
-    el("div", { class: "result-actions" }, [
+  const tournamentBtn = el("button", {
+    class: "ctl",
+    type: "button",
+    text: "대회 화면으로",
+    onclick: () => ctx.navigate("tournament"),
+  });
+  const resultDialog = el("dialog", {
+    class: "kickoff-dialog match-result-dialog",
+    role: "dialog",
+    "aria-modal": "true",
+    "aria-labelledby": "match-result-title",
+  }, [
+    el("div", { class: "kickoff-dialog__inner" }, [
+      el("header", { class: "kickoff-dialog__header" }, [
+        el("p", { class: "kickoff-dialog__eyebrow", text: runStep?.eyebrow ?? "FINAL SCORE" }),
+        el("h2", { id: "match-result-title", text: "경기 종료" }),
+        resultTitle,
+      ]),
+      el("div", { class: "match-result-dialog__scoreboard" }, [
+        el("div", { class: "match-result-dialog__team" }, [
+          CountryFlag({ teamId: matchSetup.homeTeam.id, size: "large" }),
+          el("strong", { text: teamName(matchSetup.homeTeam.id) }),
+        ]),
+        resultScore,
+        el("div", { class: "match-result-dialog__team" }, [
+          CountryFlag({ teamId: matchSetup.awayTeam.id, size: "large" }),
+          el("strong", { text: teamName(matchSetup.awayTeam.id) }),
+        ]),
+      ]),
+      resultSub,
+      el("div", { class: "result-actions" }, [
       retryBtn,
       advanceBtn,
-      el("button", {
-        class: "ctl",
-        type: "button",
-        text: "대회 화면으로",
-        onclick: () => ctx.navigate("tournament"),
-      }),
+        tournamentBtn,
+      ]),
     ]),
   ]);
+  resultDialog.addEventListener("cancel", (event) => event.preventDefault());
 
   // 경기 중 실시간 전술 변경 — 슬라이더는 네 값을 직접 미는 즉석 조정이다.
   // 감독이 짠 전술(수비 스타일·깊이·빌드업 …)을 통째로 바꾸는 건 아래 전술 패널이 한다.
@@ -522,11 +529,11 @@ export default function matchScreen(root, ctx) {
 
     if (sim.phase !== lastPhase) {
       lastPhase = sim.phase;
-      renderPhaseBanner();
       if (sim.phase === "halftime") {
         setPaused(true);
         openKickoffBriefing('secondHalf');
       }
+      else if (sim.phase === "fulltime") finishMatch();
       else updateBanners();
     }
 
@@ -668,7 +675,7 @@ export default function matchScreen(root, ctx) {
     if (briefingConfirming) return;
     briefingConfirming = true;
     if (briefingKind === 'secondHalf') {
-      sim.startSecondHalf();
+      sim.startSecondHalf({ swapEnds:true });
       view.sync(0);
     }
     matchPhase = 'playing';
@@ -683,9 +690,7 @@ export default function matchScreen(root, ctx) {
     el("div", { class: "screen match", "data-match-tag": runStep?.eyebrow ?? "FRIENDLY MATCH" }, [
       stage,
       banner,
-      phaseBanner,
       concedeBanner,
-      resultBanner,
       el("div", { class: "hud" }, [
         scoreEl,
         el("div", { class: "row" }, [
@@ -755,6 +760,7 @@ export default function matchScreen(root, ctx) {
     window.removeEventListener("pointerup", onWindowPointerUp);
     kickoffDialog.removeEventListener('keydown',trapKickoffFocus);
     kickoffDialog.remove();
+    resultDialog.remove();
     view.dispose();
   };
 }

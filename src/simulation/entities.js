@@ -40,6 +40,7 @@ export class Player {
     this.vx = 0;
     this.vz = 0;
     this.kc = 0; // kick cooldown
+    this.attackDirection = team === 'home' ? 1 : -1;
     this.heading = team === 'home' ? 0 : Math.PI;
     // 되감기 후 드래그로 내리는 경로 지시. { waypoints: [{x,z},...], index } | null.
     // 있으면 기본 AI(추격/포메이션 유지) 대신 이 경로를 arrive()로 따라간다.
@@ -48,7 +49,7 @@ export class Player {
 
   /** 공격 방향 골라인의 x좌표 */
   get atkX() {
-    return this.team === 'home' ? HALF.L : -HALF.L;
+    return this.attackDirection * HALF.L;
   }
 
   get speed() {
