@@ -15,6 +15,10 @@ const COORD_LIMIT = 0.5;
 const RUN_PUSH = 14;
 // 스냅샷 1인당 저장 항목 수: x, z, vx, vz, heading, energy, kc
 const SNAP_STRIDE = 7;
+// 실점 이벤트로부터 몇 초(clockSeconds 단위) 전을 되감기 목표로 삼을지
+const EVENT_REWIND_LOOKBACK_SECONDS = 3;
+// 아직 실점이 없을 때의 대체 되감기 폭 — match.js의 기존 "8초 되감기"와 같은 단위
+const FALLBACK_REWIND_SECONDS = 8;
 
 const inCoordRange = (n) => Number.isFinite(n) && n >= -COORD_LIMIT && n <= COORD_LIMIT;
 
@@ -101,6 +105,7 @@ export class Sim {
     this.half = 1;
     this.phase = 'playing'; // 'playing' | 'halftime' | 'fulltime'
     this.kickoffLock = null; // { team, active } — 킥오프 제한 구역 규칙
+    this.lastRewindTick = null; // 되감기를 실제로 사용한 시점(쿨다운 판정용) — restore()가 아니라 markRewindUsed()가 갱신한다
 
     this.homeP = this.buildSide('home', this.homeLineup, this.setup.homeTeam.players, this.tactics.width);
     this.awayP = this.buildSide('away', this.awayLineup, this.setup.awayTeam.players, this.oppTactics.width);
@@ -119,6 +124,25 @@ export class Sim {
           slot: assignmentSlot(a, team, width),
         })
     );
+  }
+
+  /**
+   * 선수 한 명에게 좌표 경로를 지시한다(되감기 후 드래그로 그린 길).
+   * @param {string} playerKey `${team}:${idx}` — playerByKey()와 같은 형식
+   * @param {{x:number,z:number}[]} waypoints 월드 좌표 경유점(현재 위치 제외)
+   * @returns {boolean} 실제로 지시했는지
+   */
+  setCommand(playerKey, waypoints) {
+    const p = this.playerByKey(playerKey);
+    if (!p || !Array.isArray(waypoints) || waypoints.length === 0) return false;
+    p.command = { waypoints: waypoints.map((w) => ({ x: w.x, z: w.z })), index: 0 };
+    return true;
+  }
+
+  /** 진행 중인 경로 지시를 취소하고 기본 AI로 되돌린다. */
+  clearCommand(playerKey) {
+    const p = this.playerByKey(playerKey);
+    if (p) p.command = null;
   }
 
   /** 전술만 갈아끼운다 (경기 중 실시간 지시). 배치는 현재 assignment를 그대로 쓴다. */
@@ -260,7 +284,15 @@ export class Sim {
       let fx = 0;
       let fz = 0;
 
-      if (p.role === 'GK') {
+      if (p.command) {
+        // 감독이 되감기 후 드래그로 내린 경로 지시 — 기본 AI보다 우선한다.
+        const wp = p.command.waypoints[p.command.index];
+        [fx, fz] = arrive(p, wp.x, wp.z);
+        if (vlen(wp.x - p.x, wp.z - p.z) < PARAMS.comfortZone) {
+          p.command.index++;
+          if (p.command.index >= p.command.waypoints.length) p.command = null; // 다 왔으면 기본 AI로 복귀
+        }
+      } else if (p.role === 'GK') {
         const gx = (mine ? -HALF.L : HALF.L) + (mine ? 2 : -2);
         const gz = clamp(this.ball.z * 0.5, -GOAL_W / 2, GOAL_W / 2);
         [fx, fz] = arrive(p, gx, gz);
@@ -268,7 +300,7 @@ export class Sim {
         [fx, fz] = pursuit(p, this.ball);
       } else {
         // 고정 위치를 따라 블록 전체가 밀린다. lineHeight가 전진 폭을 늘린다
-        const shift = (this.ball.x / FIELD.L) * (14 + line * 22) * (mine ? 1 : -1);
+        const shift = (this.ball.x / FIELD.L) * (14 + line * 22);
         // 우리팀이 공을 갖고 있을 때만 개인차 있는 침투런을 반영한다
         const run = holding ? (p.ins.runs - 0.5) * RUN_PUSH * (mine ? 1 : -1) : 0;
         let tx = p.home.x + shift + run;
@@ -324,9 +356,97 @@ export class Sim {
     this.updatePhase();
   }
 
+  /** p를 압박 중인 가장 가까운 상대와의 거리를 오차 배수로 바꾼다. 상대가 없거나 멀면 1(가산 없음). */
+  pressureFactor(p) {
+    const opps = p.team === 'home' ? this.awayP : this.homeP;
+    let nearest = Infinity;
+    for (const o of opps) {
+      const d = vlen(o.x - p.x, o.z - p.z);
+      if (d < nearest) nearest = d;
+    }
+    return clamp(1 + (PARAMS.pressureRadius - nearest) / PARAMS.pressureRadius, 1, PARAMS.pressureMax);
+  }
+
+  /**
+   * 실수를 성공/실패 판정이 아니라 "방향 오차(도)"로 만든다.
+   * 오차 = 기본값 × (스탯 낮을수록↑) × (압박받을수록↑) × (체력 없을수록↑) × (거리 멀수록↑).
+   * 삼각분포(두 난수의 합)로 뽑아서 작은 오차는 흔하고 큰 오차는 드물게 나오게 한다 —
+   * 그래서 2도 정도는 그냥 정상 패스로, 8도는 삑사리로, 20도는 터치라인 아웃으로 저절로 이어진다.
+   */
+  errorDegrees(p, { statValue, distance, baseDeg }) {
+    const statFactor = clamp((100 - statValue) / 50, 0.2, 1.6);
+    const staminaFactor = clamp(1 + (0.75 - p.energy) * 2, 1, PARAMS.staminaErrorMax);
+    const distanceFactor = clamp(distance / PARAMS.distanceErrorRef, 0.5, 2.5);
+    const magnitude = Math.min(
+      baseDeg * statFactor * this.pressureFactor(p) * staminaFactor * distanceFactor,
+      PARAMS.maxErrorDeg
+    );
+    return (this.rng.next() + this.rng.next() - 1) * magnitude;
+  }
+
+  /** (dx, dz)를 deg도만큼 돌린다 — 오차각을 실제 킥 방향에 반영할 때 쓴다. */
+  rotateXZ(dx, dz, deg) {
+    const rad = (deg * Math.PI) / 180;
+    const c = Math.cos(rad);
+    const s = Math.sin(rad);
+    return [dx * c - dz * s, dx * s + dz * c];
+  }
+
   tryKick(p) {
     if (p.kc > 0 || vlen(p.x - this.ball.x, p.z - this.ball.z) > PARAMS.kickDist) return;
+
+    // 이 틱에 실제로 볼을 다루는 건 볼에 가장 가까운 딱 한 명이다. p가 그 사람이 아니면(더
+    // 가까운 다른 선수가 있으면) 아무 것도 하지 않는다 — this.all이 항상 홈을 먼저 훑기 때문에,
+    // 이 체크가 없으면 볼 근처에 둘 다 있을 때 홈이 항상 먼저 "내가 다룬다"고 우겨버린다.
+    let closer = null;
+    let bd = vlen(p.x - this.ball.x, p.z - this.ball.z);
+    for (const other of this.all) {
+      if (other === p || other.kc > 0) continue;
+      const d = vlen(other.x - this.ball.x, other.z - this.ball.z);
+      if (d < bd) {
+        bd = d;
+        closer = other;
+      }
+    }
+    if (closer) return; // 더 가까운 선수의 차례에 처리된다
+
     p.kc = PARAMS.kickCooldownTicks;
+
+    // 상대가 같은 순간 볼에 붙어 있으면 태클/인터셉트 다툼 — 수비스탯(체력승수 포함) vs
+    // 드리블스탯. 이겨야 원래 하려던 패스/슛/드리블이 그대로 나간다. 지면 상대가 그 자리에서
+    // 걷어낸다(그 클리어링도 킥이라 같은 오차 모델을 그대로 쓴다 — 별도 성공/실패 판정 없음).
+    const opps = p.team === 'home' ? this.awayP : this.homeP;
+    let challenger = null;
+    let cbd = PARAMS.kickDist;
+    for (const o of opps) {
+      if (o.kc > 0) continue;
+      const d = vlen(o.x - this.ball.x, o.z - this.ball.z);
+      if (d <= cbd) {
+        cbd = d;
+        challenger = o;
+      }
+    }
+    if (challenger) {
+      challenger.kc = PARAMS.kickCooldownTicks; // 승패 무관 — 이번 틱엔 둘 다 다시 못 다툰다
+      const staminaMult = 0.55 + 0.45 * challenger.energy;
+      const def = challenger.defenseSkill * staminaMult;
+      const winProb = clamp(def / (def + p.dribbleSkill), PARAMS.tackleWinMin, PARAMS.tackleWinMax);
+      if (this.rng.next() < winProb) {
+        this.ball.ownerKey = `${challenger.team}:${challenger.idx}`;
+        const cdx = challenger.atkX - challenger.x;
+        const cdz = 0 - challenger.z;
+        const errDeg = this.errorDegrees(challenger, {
+          statValue: challenger.passSkill,
+          distance: PARAMS.distanceErrorRef,
+          baseDeg: PARAMS.passBaseErrorDeg,
+        });
+        const [edx, edz] = this.rotateXZ(cdx, cdz, errDeg);
+        this.ball.kick(edx, edz, PARAMS.clearForce);
+        this.pushEvent('tackle', challenger.team, `${challenger.name} 볼 탈취`);
+        return;
+      }
+    }
+
     this.ball.ownerKey = `${p.team}:${p.idx}`;
 
     const gdx = p.atkX - p.x;
@@ -339,28 +459,59 @@ export class Sim {
 
     // 골문에 가까우면 슛. 템포가 높을수록, 모험적인 선수일수록 과감하게 때린다.
     if (gd < 30 && this.rng.next() < 0.25 + tempo * 0.3 + (risk - 0.5) * 0.3) {
-      this.ball.kick(gdx, gdz + (this.rng.next() - 0.5) * 6, PARAMS.shootForce);
+      const errDeg = this.errorDegrees(p, { statValue: p.shootSkill, distance: gd, baseDeg: PARAMS.shotBaseErrorDeg });
+      const [edx, edz] = this.rotateXZ(gdx, gdz, errDeg);
+      this.ball.kick(edx, edz, PARAMS.shootForce);
       return;
     }
 
     let best = null;
     let bs = -Infinity;
+    const candidates = [];
     const mates = p.team === 'home' ? this.homeP : this.awayP;
     for (const m of mates) {
       if (m === p || m.role === 'GK') continue;
       const d = vlen(m.x - p.x, m.z - p.z);
       if (d < PARAMS.minPass || d > PARAMS.maxPass) continue;
+      // 인지 필터: 시야가 나쁘면 좋은 동료가 후보 목록에 아예 안 잡힌다(성공/실패가 아니라
+      // "못 봄"). 시야 60 이상이면 절대 안 놓친다.
+      const missChance = clamp((PARAMS.visionRefStat - p.visionSkill) / 100, 0, PARAMS.visionMaxMissChance);
+      if (this.rng.next() < missChance) continue;
       const fwd = (m.x - p.x) * (p.team === 'home' ? 1 : -1);
       // 템포가 높으면 전진 패스 가중치가 커진다 (점유 → 직선).
       // 리스크는 전진 패스를 더 노리게 하고, 패스 길이는 먼 동료의 감점을 줄인다.
       const sc = fwd * (0.7 + tempo * 0.8 + (risk - 0.5) * 0.6) - d * (0.26 - long * 0.22);
+      candidates.push({ m, sc, fwd });
       if (sc > bs) {
         bs = sc;
         best = m;
       }
     }
+    // 선택 개성: "자아"는 무작위 선택이 아니라 1등을 매번 고르지는 않는 것이다.
+    // boldness가 중립(0.5)이면 항상 점수 1등. 과감할수록 가끔 후보 중 가장 전진적인 대안을,
+    // 신중할수록 가끔 가장 안전한(덜 전진적인) 대안을 대신 고른다 — 그 "가끔"의 빈도가 성격이다.
+    if (best && candidates.length > 1) {
+      const bold = p.boldness - 0.5;
+      const deviateProb = Math.abs(bold) * 2 * PARAMS.personalityDeviateMax;
+      if (this.rng.next() < deviateProb) {
+        const ranked = [...candidates].sort((a, b) => b.sc - a.sc).slice(0, PARAMS.personalityTopN);
+        if (bold > 0) {
+          // 과감: 1등이 아닌 아무 대안이나 — 점수 1등이 곧 "제일 전진적인 패스"인 경우가
+          // 많은 이 공식 특성상, 2등 이하로 새는 것 자체가 이미 "무리한 선택"으로 읽힌다.
+          const alts = ranked.slice(1);
+          if (alts.length) best = alts[Math.floor(this.rng.next() * alts.length)].m;
+        } else {
+          // 신중: 후보 중 가장 안전한(덜 전진적인) 쪽으로 확실히 문다.
+          best = ranked.reduce((a, b) => (b.fwd < a.fwd ? b : a)).m;
+        }
+      }
+    }
     if (best) {
-      this.ball.kick(best.x - p.x, best.z - p.z, PARAMS.passForce);
+      const dx = best.x - p.x;
+      const dz = best.z - p.z;
+      const errDeg = this.errorDegrees(p, { statValue: p.passSkill, distance: vlen(dx, dz), baseDeg: PARAMS.passBaseErrorDeg });
+      const [edx, edz] = this.rotateXZ(dx, dz, errDeg);
+      this.ball.kick(edx, edz, PARAMS.passForce);
       return;
     }
     this.ball.kick(gdx, gdz, PARAMS.dribbleForce);
@@ -383,6 +534,48 @@ export class Sim {
   pushEvent(type, team, text) {
     this.events.push({ tick: this.tick, minute: this.matchMinute, type, team, text });
     if (this.events.length > 50) this.events.shift();
+  }
+
+  /** 우리 팀(home)이 가장 최근 실점한 골 이벤트. 없으면 null. */
+  getLastConcedeEvent() {
+    for (let i = this.events.length - 1; i >= 0; i--) {
+      const ev = this.events[i];
+      if (ev.type === 'goal' && ev.team === 'away') return ev;
+    }
+    return null;
+  }
+
+  /**
+   * 되감기 목표 tick.
+   * 실점 이벤트가 있으면 그 직전(EVENT_REWIND_LOOKBACK_SECONDS만큼 앞)을,
+   * 없으면 지금으로부터 FALLBACK_REWIND_SECONDS만큼 앞을 목표로 한다.
+   */
+  getRewindTargetTick() {
+    const concede = this.getLastConcedeEvent();
+    if (concede) {
+      return Math.max(0, concede.tick - EVENT_REWIND_LOOKBACK_SECONDS / PARAMS.dt);
+    }
+    return Math.max(0, this.tick - FALLBACK_REWIND_SECONDS / PARAMS.dt);
+  }
+
+  /** 되감기를 지금 실행해도 되는지 — 후반 막판 잠금과 쿨다운을 검사한다. */
+  canRewind() {
+    if (this.half === 2 && this.matchMinute >= 85) return false; // 마지막 5분은 확정 — 되감기 불가
+    if (
+      this.lastRewindTick !== null &&
+      (this.tick - this.lastRewindTick) * PARAMS.dt < PARAMS.rewindCooldownSeconds
+    ) {
+      return false; // 쿨다운 중
+    }
+    return true;
+  }
+
+  /**
+   * 되감기가 "지금 일어났다"는 기록. restore()가 과거로 시계를 돌리는 것과 별개로,
+   * 이 시점(=restore 이후의 this.tick)을 쿨다운 기준으로 남긴다.
+   */
+  markRewindUsed() {
+    this.lastRewindTick = this.tick;
   }
 
   /** 되감기용 스냅샷. 숫자만 담아 GC 압박과 복사 비용을 낮춘다. */
@@ -412,6 +605,13 @@ export class Sim {
       half: this.half,
       phase: this.phase,
       kickoffLock: this.kickoffLock ? { ...this.kickoffLock } : null,
+      lastRewindTick: this.lastRewindTick,
+      // 경로 지시는 좌표 배열이라 SNAP_STRIDE 숫자 배열에 안 들어간다 — 선수 순서(this.all)와
+      // 나란한 별도 배열로 얕은 구조 복제한다. 되감기 후 안 바꾸면 그대로 재현돼야 하므로
+      // 진행 중인 지시도 반드시 여기 담는다(안 담으면 되감기 넘어서 지시가 사라지는 버그가 난다).
+      commands: this.all.map((p) =>
+        p.command ? { waypoints: p.command.waypoints.map((w) => ({ x: w.x, z: w.z })), index: p.command.index } : null
+      ),
     };
   }
 
@@ -438,9 +638,17 @@ export class Sim {
       // 되감은 뒤에도 변경 후 width가 스티어링 목표에 남아 재현성이 깨진다.
       this.refreshHomeSlots();
     }
-    // 옛 스냅샷 호환: half/phase/kickoffLock이 없으면 현재 값 유지
+    // 옛 스냅샷 호환: half/phase/kickoffLock/lastRewindTick이 없으면 현재 값 유지
     if (s.half !== undefined) this.half = s.half;
     if (s.phase !== undefined) this.phase = s.phase;
     if ('kickoffLock' in s) this.kickoffLock = s.kickoffLock ? { ...s.kickoffLock } : null;
+    if ('lastRewindTick' in s) this.lastRewindTick = s.lastRewindTick;
+    // 옛 스냅샷 호환: commands가 없으면 현재 지시 상태를 그대로 둔다(건드리지 않음).
+    if (s.commands) {
+      this.all.forEach((p, i) => {
+        const c = s.commands[i];
+        p.command = c ? { waypoints: c.waypoints.map((w) => ({ ...w })), index: c.index } : null;
+      });
+    }
   }
 }

@@ -20,3 +20,13 @@
   min-height: 0;
   background-color: #03080c;
 }
+/* 경로 지시 상태 문구 — 공용 .hint(bottom 78px)와 같은 자리에 겹치지 않도록 한 줄 더 띄운다 */
+.path-status {
+  position: absolute;
+  bottom: 96px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 11px;
+  color: var(--accent, #ffd60a);
+  text-shadow: 0 2px 4px #000;
+}

@@ -52,6 +52,7 @@ export default function matchScreen(root, ctx) {
   const fpsEl = el("b", { text: "-" });
   const rewindEl = el("b", { text: `${REWIND_LIMIT}회` });
   const feed = el("ul", { class: "feed" });
+  const pathStatusEl = el("span", { class: "path-status" });
 
   let paused = false;
   let rewindsLeft = REWIND_LIMIT;
@@ -62,7 +63,7 @@ export default function matchScreen(root, ctx) {
   let raf = 0;
   let renderedEvents = 0;
   let lastPhase = sim.phase;
-  let speed = 1; // 1 | 2 | 4 — 재생 배속(UI 상태). Sim/RewindBuffer에는 저장하지 않는다.
+  let speed = 1; // 1 | 2 | 3 — 재생 배속(UI 상태). Sim/RewindBuffer에는 저장하지 않는다.
 
   // 렌더러는 stage가 DOM에 붙은 뒤에 만든다.
   // 붙기 전에 만들면 clientWidth/Height가 0이라 캔버스가 0x0으로 생성돼 화면이 검게 남는다.
@@ -75,7 +76,7 @@ export default function matchScreen(root, ctx) {
   });
   const rewindBtn = el("button", {
     class: "ctl warn",
-    text: `↶ ${REWIND_SECONDS}초 되감기`,
+    text: `↶ ${REWIND_SECONDS}분 되감기`,
     onclick: doRewind,
   });
 
@@ -85,6 +86,11 @@ export default function matchScreen(root, ctx) {
     paused = v;
     pauseBtn.textContent = paused ? "▶ 재개" : "⏸ 일시정지";
     pauseBtn.classList.toggle("on", paused);
+    if (!paused) {
+      // 재개하면 경로 지시 UI 흔적을 정리한다 — 이미 내려진 지시(sim.command) 자체는 그대로 진행된다
+      pathStatusEl.textContent = "";
+      view?.setPathPoints(null);
+    }
     updateBanners();
   }
 
@@ -122,14 +128,41 @@ export default function matchScreen(root, ctx) {
     }
   }
 
+  // 실점 이벤트 시각을 "68:22" 형태로 — ev.minute(분)에 clockSeconds 소수부(초)를 붙인다
+  function formatEventClock(ev) {
+    const clockSeconds = ev.tick * PARAMS.dt;
+    const sec = Math.floor((clockSeconds - ev.minute) * 60);
+    return `${ev.minute}:${String(sec).padStart(2, "0")}`;
+  }
+
+  // 쿨다운으로 막혀 있을 때 남은 대기 시간(경기 시간 분 단위, 올림). 쿨다운이 아니면 0.
+  function cooldownRemainingMinutes() {
+    if (sim.lastRewindTick === null) return 0;
+    const remaining = PARAMS.rewindCooldownSeconds - (sim.tick - sim.lastRewindTick) * PARAMS.dt;
+    return remaining > 0 ? Math.ceil(remaining) : 0;
+  }
+
+  // 되감기 버튼의 라벨/활성 상태를 sim 상태에 맞춘다 — 매 프레임 loop()에서도 호출된다
+  function updateRewindButton() {
+    const concede = sim.getLastConcedeEvent();
+    const baseLabel = concede
+      ? `⏪ ${formatEventClock(concede)} 실점 직전으로`
+      : `↶ ${REWIND_SECONDS}분 되감기`;
+    const cooldownMinutes = cooldownRemainingMinutes();
+    rewindBtn.textContent = cooldownMinutes > 0 ? `⏳ ${cooldownMinutes}분 후 되감기 가능` : baseLabel;
+    rewindBtn.disabled = rewindsLeft <= 0 || !sim.canRewind();
+  }
+
   function doRewind() {
     if (rewindsLeft <= 0) return;
-    const snap = rewind.rewind(REWIND_SECONDS);
+    if (!sim.canRewind()) return;
+    const targetTick = sim.getRewindTargetTick();
+    const snap = rewind.findNearestTick(targetTick);
     if (!snap) return;
     sim.restore(snap);
+    sim.markRewindUsed();
     rewindsLeft--;
     rewindEl.textContent = `${rewindsLeft}회`;
-    rewindBtn.disabled = rewindsLeft <= 0;
     renderedEvents = Math.min(renderedEvents, sim.events.length);
     feed.replaceChildren(...[...sim.events].map(eventNode));
     liveTactics.forEach(({ key, input }) => {
@@ -141,6 +174,57 @@ export default function matchScreen(root, ctx) {
     }
     view.sync(0);
     setPaused(true);
+    updateRewindButton();
+  }
+
+  // 되감기 후 드래그로 경로 지시 — 일시정지 + 탑뷰에서만 켠다. 그 외 화면(진행 중, 방송캠/공추적)에서는
+  // 탑뷰 OrbitControls의 "드래그=회전"이나 자동 추적 카메라와 겹쳐서 오히려 헷갈린다.
+  let pathPlayer = null; // 지금 경로를 그리고 있는 대상(Sim의 Player 객체)
+  let pathPoints = []; // 드래그로 누적한 필드 좌표들(첫 점 = 선수의 현재 위치)
+  let isDrawingPath = false;
+
+  function canDrawPath() {
+    return paused && view && view.camMode === "top";
+  }
+
+  function onWindowPointerDown(e) {
+    if (!canDrawPath()) return;
+    // hud/sidepanel/controls가 stage와 형제 요소로 겹쳐 있어서, 화면 위치에 따라 클릭이
+    // stage가 아니라 그 오버레이 쪽으로 먼저 잡힐 수 있다(형제라 버블링이 stage로 안 온다) —
+    // 그래서 stage가 아니라 window에서 좌표만 보고 판단한다.
+    const picked = view.pickPlayer(e.clientX, e.clientY);
+    if (!picked || picked.team !== "home") return; // 우리 팀 선수만 지시할 수 있다
+    pathPlayer = picked;
+    pathPoints = [{ x: picked.x, z: picked.z }];
+    isDrawingPath = true;
+    view.setOrbitEnabled(false); // 드래그가 카메라 회전으로 새지 않게
+    pathStatusEl.textContent = `#${picked.num} ${picked.name} 경로 지시 중 — 놓으면 확정됩니다`;
+    e.preventDefault();
+  }
+
+  function onWindowPointerMove(e) {
+    if (!isDrawingPath) return;
+    const pt = view.screenToField(e.clientX, e.clientY);
+    if (!pt) return;
+    const lastPt = pathPoints[pathPoints.length - 1];
+    // 너무 촘촘하게 찍으면 계산 낭비라 1.5m 간격으로 솎아낸다
+    if (Math.hypot(pt.x - lastPt.x, pt.z - lastPt.z) > 1.5) {
+      pathPoints.push(pt);
+      view.setPathPoints(pathPoints);
+    }
+  }
+
+  function onWindowPointerUp() {
+    if (!isDrawingPath) return;
+    isDrawingPath = false;
+    view.setOrbitEnabled(true);
+    if (pathPoints.length > 1 && pathPlayer) {
+      sim.setCommand(`${pathPlayer.team}:${pathPlayer.idx}`, pathPoints.slice(1)); // 시작점(현재 위치) 제외
+      pathStatusEl.textContent = `#${pathPlayer.num} ${pathPlayer.name}에게 경로를 지시했습니다`;
+    } else {
+      pathStatusEl.textContent = "";
+    }
+    pathPlayer = null;
   }
 
   const banner = el("div", { class: "banner" }, [
@@ -191,7 +275,7 @@ export default function matchScreen(root, ctx) {
   );
 
   // 재생 배속 — 시뮬레이션 계산 내용은 그대로, 실제 시간 대비 소비 속도만 바뀐다
-  const speedButtons = [1, 2, 4].map((v) => {
+  const speedButtons = [1, 2, 3].map((v) => {
     const btn = el("button", {
       class: `ctl${v === speed ? " on" : ""}`,
       text: `${v}x`,
@@ -230,7 +314,7 @@ export default function matchScreen(root, ctx) {
     if (!paused && sim.phase !== "fulltime") {
       acc += Math.min(real, 0.1) * speed;
       let stepsThisFrame = 0;
-      const MAX_STEPS_PER_FRAME = 8; // 브라우저가 못 따라갈 때 안전장치
+      const MAX_STEPS_PER_FRAME = 6; // 브라우저가 못 따라갈 때 안전장치 (최대 배속 3x 기준)
       while (acc >= PARAMS.dt && stepsThisFrame < MAX_STEPS_PER_FRAME) {
         sim.step();
         rewind.maybeRecord(sim);
@@ -250,6 +334,7 @@ export default function matchScreen(root, ctx) {
 
     scoreEl.textContent = `${homeCode} ${sim.score.home} : ${sim.score.away} ${awayCode}`;
     clockEl.textContent = `${sim.matchMinute}'`;
+    updateRewindButton();
     const o = sim.playerByKey(sim.ball.ownerKey);
     possEl.textContent = o
       ? `${o.team === "home" ? homeCode : awayCode} #${o.num} ${o.name}`
@@ -275,6 +360,9 @@ export default function matchScreen(root, ctx) {
     if (e.key.toLowerCase() === "r") doRewind();
   };
   window.addEventListener("keydown", onKey);
+  window.addEventListener("pointerdown", onWindowPointerDown);
+  window.addEventListener("pointermove", onWindowPointerMove);
+  window.addEventListener("pointerup", onWindowPointerUp);
 
   root.append(
     el("div", { class: "screen match" }, [
@@ -331,9 +419,10 @@ export default function matchScreen(root, ctx) {
       ]),
       el("p", { class: "hint" }, [
         el("span", {
-          text: "탑뷰에서 드래그=회전 / 휠=줌 · Space=일시정지 · R=되감기",
+          text: "탑뷰에서 드래그=회전 / 휠=줌 · Space=일시정지 · R=되감기 · 일시정지+탑뷰에서 우리 선수 드래그=경로 지시",
         }),
       ]),
+      pathStatusEl,
     ]),
   );
 
@@ -346,6 +435,9 @@ export default function matchScreen(root, ctx) {
   return () => {
     cancelAnimationFrame(raf);
     window.removeEventListener("keydown", onKey);
+    window.removeEventListener("pointerdown", onWindowPointerDown);
+    window.removeEventListener("pointermove", onWindowPointerMove);
+    window.removeEventListener("pointerup", onWindowPointerUp);
     view.dispose();
   };
 }
