@@ -53,7 +53,6 @@ export function createOpponentScouting({ stage = null } = {}) {
   ]);
   const dots = el('div', { class: 'scout-dots' });
   shape.append(dots);
-  const styleNote = el('p', { class: 'lead small scout-style' });
   const squad = el('div', { class: 'scout-squad' });
 
   function drawTeam() {
@@ -68,7 +67,6 @@ export function createOpponentScouting({ stage = null } = {}) {
         el('b', { text: String(current.strength) }),
       ])
     );
-    styleNote.textContent = current.style;
   }
 
   /** 상대 포메이션 구상도. 슬롯 좌표에 선수를 얹는다. */
@@ -141,11 +139,10 @@ export function createOpponentScouting({ stage = null } = {}) {
     el('header', { class: 'scout-head' }, [
       el('div', {}, [
         el('p', { class: 'eyebrow', text: `${current.stageLabel} · 이번 상대` }),
-        el('h3', { class: 'h3 scout-title', text: `${current.name}는 이렇게 선다` }),
       ]),
     ]),
     el('div', { class: 'tactics-grid scout-grid' }, [
-      el('section', { class: 'panel scout-panel' }, [teamLine, shape, styleNote]),
+      el('section', { class: 'panel scout-panel' }, [teamLine, shape]),
       el('section', { class: 'panel scout-panel' }, [squad]),
     ]),
   ]);

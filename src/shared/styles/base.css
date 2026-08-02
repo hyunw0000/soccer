@@ -586,7 +586,7 @@ button { font: inherit; cursor: pointer; }
   grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
 }
 .pcard {
-  position: relative; display: grid; align-items: center; gap: 2px 10px;
+  position: relative; display: grid; align-items: center; align-content: center; gap: 2px 10px;
   grid-template-columns: 42px 1fr auto;
   background: #10151b; border: 1px solid var(--line); border-radius: 10px;
   padding: 10px 12px; text-align: left; color: var(--fg);
@@ -598,19 +598,26 @@ button { font: inherit; cursor: pointer; }
   grid-row: span 2; display: grid; place-items: center; font-size: 11px; font-weight: 700;
   border-radius: 7px; padding: 6px 0; background: #21262d; color: var(--dim);
 }
+/* 자동 배치에 맡기면 OVR이 세 번째 줄을 만들어 카드 안 글씨가 위로 쏠린다 — 자리를 못박는다 */
+.pcard .pos { grid-column: 1; grid-row: 1 / span 2; }
+.pcard .pname { grid-column: 2; grid-row: 1; }
+.pcard .pclub { grid-column: 2; grid-row: 2; }
+.pcard .povr { grid-column: 3; grid-row: 1 / span 2; }
 .pos.GK { background: #3d2f12; color: #e3b341; }
 .pos.DF { background: #123 ; color: #79c0ff; }
 .pos.MF { background: #12301c; color: #56d364; }
 .pos.FW { background: #3a1418; color: #ff7b72; }
-.pname { font-size: 14px; font-weight: 600; }
-.pclub { grid-column: 2; font-size: 11px; color: var(--dim); }
+/* 이름·소속팀은 카드 폭을 넘기지 않고 말줄임으로 끊는다 */
+.pname { grid-column: 2; min-width: 0; font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pclub { grid-column: 2; display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 11px; color: var(--dim); }
+.pclub-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .povr { grid-row: span 2; font-size: 17px; font-weight: 700; color: var(--dim); }
 .pcard.on .povr { color: var(--fg); }
 .tag {
-  position: absolute; top: -7px; left: 34px; font-size: 9px; font-weight: 700;
-  background: var(--accent); color: #fff; border-radius: 4px; padding: 1px 4px;
+  flex: none; font-size: 9px; font-weight: 700; line-height: 1.6;
+  background: var(--accent); color: #fff; border-radius: 4px; padding: 0 5px;
 }
-.cap-btn { position: absolute; top: 6px; right: 8px; font-size: 13px; color: #f2c744; }
+.cap-btn { position: absolute; top: 4px; right: 8px; font-size: 13px; line-height: 1.2; color: #f2c744; }
 
 /* ---------- 전술 화면 ---------- */
 .scout {
