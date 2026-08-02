@@ -1,3 +1,8 @@
+// 배럴(`lineup/index.js`)이 아니라 formations.js를 직접 집는다 — 배럴은 화면 모듈까지
+// re-export하고 그 화면이 app/public.js를 되짚어서 순환이 된다. 이 파일은 `load()`를
+// 모듈 평가 시점에 실행하므로(아래 `state` 초기화) 순환이 생기면 시작하자마자 TDZ로 죽는다.
+// formations.js → domain/roles.js는 순수 데이터·함수 체인이라 되짚는 곳이 없다.
+import { resolveFormationId } from '../lineup/formations.js';
 import { defaultPool, findById } from '../roster/index.js';
 import { TACTIC_DEFAULT } from '../tactics/index.js';
 import {
@@ -169,7 +174,11 @@ function load() {
       if (ids.length >= 11) out.poolIds = ids.slice(0, 26);
     }
     if (typeof v.captainId === 'string' && findById(v.captainId)) out.captainId = v.captainId;
-    if (typeof v.formation === 'string') out.formation = v.formation;
+    // 포메이션도 "실제로 있는 것"인지까지 본다 — 화면들이 resolveFormationId로 한 번 더
+    // 막아 주긴 하지만, 저장값을 거르는 건 이 자리의 일이다(위 captainId·poolIds와 같은 규칙).
+    if (typeof v.formation === 'string' && resolveFormationId(v.formation) === v.formation) {
+      out.formation = v.formation;
+    }
     // 배치는 lineup의 createStartingLineup이 읽을 때 정규화하므로 형태만 확인한다.
     if (v.startingLineup && Array.isArray(v.startingLineup.assignments)) {
       out.startingLineup = v.startingLineup;
