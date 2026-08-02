@@ -312,9 +312,17 @@ export default function matchScreen(root, ctx) {
     resultDialog.dataset.outcome = outcome;
     resultTitle.textContent =
       outcome === "win" ? "승리" : outcome === "draw" ? "무승부" : "패배";
-    resultScore.textContent = shootout
-      ? `${koreaScore} : ${opponentScore} (승부차기 ${shootout.home} : ${shootout.away})`
-      : `${koreaScore} : ${opponentScore}`;
+    // 승부차기 점수는 부기 정보다 — 진짜 경기 스코어(연장 종료 시점)와 같은 크기로
+    // 나란히 찍으면 승부를 가른 숫자보다 더 커 보여서 눈이 먼저 그쪽으로 간다.
+    // 따로 작은 글자로 붙여 "이게 승패를 갈랐다"는 부연으로 읽히게 한다.
+    resultScore.replaceChildren(
+      ...[
+        `${koreaScore} : ${opponentScore}`,
+        shootout
+          ? el("span", { class: "result-score__shootout", text: `(승부차기 ${shootout.home} : ${shootout.away})` })
+          : null,
+      ].filter(Boolean)
+    );
 
     // 어떻게 끝났는지를 결과 문구 앞에 붙인다 — 90분/연장/승부차기는 감독에게 다른 사건이다.
     const endedBy = shootout ? "승부차기 끝에 " : extraTime ? "연장 접전 끝에 " : "";
@@ -482,6 +490,17 @@ export default function matchScreen(root, ctx) {
       pathStatusEl.textContent = "";
     }
     pathPlayer = null;
+  }
+
+  /**
+   * 드래그가 pointerup 없이 끝나는 경우 — 브라우저가 제스처를 가져가거나(터치 스크롤/줌),
+   * 창 밖에서 버튼을 떼거나, 탭이 백그라운드로 넘어갈 때 pointercancel만 오고 pointerup은
+   * 영영 안 온다. 그러면 isDrawingPath가 true로 굳고 OrbitControls도 꺼진 채로 남아서,
+   * 그 뒤로는 탑뷰가 안 돌고 "경로 지시 중" 문구도 안 사라진다.
+   * 지금까지 찍은 점이 있으면 놓은 것과 똑같이 확정한다 — 그리던 지시를 버리지 않는다.
+   */
+  function onWindowPointerCancel() {
+    onWindowPointerUp();
   }
 
   // 탑뷰 + 드래그로 경로를 지시할 때 그라운드를 가리지 않도록 화면 상단에 붙인다(.pause-banner)
@@ -1112,7 +1131,16 @@ export default function matchScreen(root, ctx) {
     }
     view.render();
 
-    if (sim.phase !== lastPhase) {
+    // 골이 하프 경계 바로 앞에서 터지면(특히 연장전처럼 하프가 짧을 때) 세리머니가 아직
+    // 안 끝났는데 같은 프레임에서 하프도 함께 끝나는 경우가 생긴다. 그 상태에서 안내
+    // 모달을 먼저 띄워 버리면, 사용자가 모달을 넘겨 다음 하프가 시작된 뒤에야 뒤늦게
+    // 세리머니가 끝나 실점/득점 배너가 튀어나온다 — 그 배너의 재개 버튼은 그 시점의
+    // sim.phase가 이미 'playing'이 아니라서(다음 하프로 넘어갔으므로) setPaused(false)가
+    // 조용히 막히고, 그 배너가 화면을 가린 채로 아무 것도 안 눌린다. 사용자에게는
+    // "연장후반 들어가서 잠깐 뛰다가 갑자기 멈췄다"로 보인다 — 골 처리(세리머니 +
+    // 득점/실점 배너)를 항상 먼저 끝내고 나서 하프/경기 종료 안내를 띄운다.
+    const goalPending = celebration || koreaGoalPending || concedeChoicePending;
+    if (sim.phase !== lastPhase && !goalPending) {
       lastPhase = sim.phase;
       // 'playing'이 아닌 상태는 전부 "볼이 멈췄고 감독에게 다음 단계를 알려야 한다"는 뜻이다.
       const breakKind = PERIOD_BREAKS[sim.phase];
@@ -1169,6 +1197,7 @@ export default function matchScreen(root, ctx) {
   window.addEventListener("pointerdown", onWindowPointerDown);
   window.addEventListener("pointermove", onWindowPointerMove);
   window.addEventListener("pointerup", onWindowPointerUp);
+  window.addEventListener("pointercancel", onWindowPointerCancel);
 
   const teamCard = (side,isKorea) => {
     const country = countries[side.teamId];
@@ -1451,6 +1480,7 @@ export default function matchScreen(root, ctx) {
     window.removeEventListener("pointerdown", onWindowPointerDown);
     window.removeEventListener("pointermove", onWindowPointerMove);
     window.removeEventListener("pointerup", onWindowPointerUp);
+    window.removeEventListener("pointercancel", onWindowPointerCancel);
     kickoffDialog.removeEventListener('keydown',trapKickoffFocus);
     championshipDialog.removeEventListener("keydown", trapChampionshipFocus);
     championshipDialog.classList.remove("is-visible");

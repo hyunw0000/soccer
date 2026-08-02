@@ -333,18 +333,70 @@ export class Sim {
     return Math.floor(this.clockSeconds);
   }
 
+  /**
+   * 킥오프 규정 ① — 휘슬 전에는 양 팀 모두 자기 진영 안에 있어야 한다. 공격 대형의 기준
+   * 위치(전방 포지션 줄)는 하프라인을 넘어가 있을 수 있어(공격 중 전진하는 모양이라 원래
+   * 그렇게 설계됐다), 킥오프 순간에만 자기 진영 안쪽으로 당겨 세운다.
+   */
+  confineToOwnHalf(p) {
+    const limit = -p.attackDirection * PARAMS.restartInset;
+    if (p.attackDirection > 0 ? p.x > limit : p.x < limit) p.x = limit;
+  }
+
+  /**
+   * 킥오프 규정 ② — 센터서클(9.15m) 밖으로 물러세운다. 자기 진영 안이라는 ①도 같이
+   * 만족해야 하므로, 하프라인을 넘는 성분을 먼저 자른 뒤 그 방향으로 반지름까지 밀어낸다.
+   *
+   * 정확히 센터마크 정면에 서 있던 선수(중앙 원톱처럼 z=0인 자리)는 밀어낼 방향이 없다.
+   * 그 경우는 자기 골문 쪽으로 곧게 물러선다.
+   */
+  pushOutsideCenterCircle(p) {
+    const limit = -p.attackDirection * PARAMS.restartInset;
+    let dx = p.attackDirection > 0 ? Math.min(p.x, limit) : Math.max(p.x, limit);
+    let dz = p.z;
+    const radius = PARAMS.centerCircleRadius + PARAMS.restartInset;
+    let d = vlen(dx, dz);
+    if (d >= radius) {
+      p.x = dx; // 이미 규정 거리 밖 — 진영만 맞춰 준다
+      return;
+    }
+    if (d < 1e-6) {
+      dx = limit;
+      dz = 0;
+      d = Math.abs(limit);
+    }
+    const scale = radius / d;
+    p.x = clamp(dx * scale, -HALF.L + PARAMS.playerLineInset, HALF.L - PARAMS.playerLineInset);
+    p.z = clamp(dz * scale, -HALF.W + PARAMS.playerLineInset, HALF.W - PARAMS.playerLineInset);
+  }
+
+  /**
+   * 킥오프 — 실제 축구의 순서를 그대로 따른다.
+   *
+   *   ① 볼을 센터마크에 **정지시켜** 놓는다(여기서는 아직 차지 않는다).
+   *   ② 스물두 명 전원이 자기 진영으로 물러선다.
+   *   ③ 킥오프 팀의 키커·파트너 두 명만 센터서클 안에 남고, 나머지 스무 명은 서클 밖으로
+   *      물러선다(규정은 상대 팀만이지만, 실제 킥오프도 같은 편이 서클 안에 서 있지는 않다).
+   *   ④ kickoffSetupTicks 동안 아무도 움직이지 않는다 — 주심이 자리를 확인하는 시간이다.
+   *   ⑤ 휘슬. launchKickoff()가 키커 → 파트너로 짧게 밀어 주면서 볼이 인플레이가 된다.
+   *
+   * 예전에는 ①③④가 통째로 없어서 배치와 동시에 볼을 차 버렸다. 그래서 중앙 원톱을 쓰는
+   * 포메이션(4-3-3 · 4-2-3-1 · 3-4-3)에서는 상대 공격수의 기준 위치가 ②에 걸려 하프라인
+   * 앞 0.5m, z=0 — 즉 **볼에서 0.5m** 되는 자리로 잘려 서고, 킥오프 다음 틱에 그 선수가
+   * 그대로 볼을 낚아챘다(12경기 실측: 그 세 포메이션은 킥오프 100%가 첫 틱에 상대 볼).
+   * 그러고 나면 센터서클에 양 팀이 겹쳐 선 채로 킥 쿨다운 8틱마다 경합·탈취가 되풀이돼
+   * 볼이 핀볼처럼 튀었다 — 소유권 전환이 경기당 27회에서 63~94회로 뛰었다.
+   */
   kickoff({ kickoffTeam = 'home' } = {}) {
     this.ball.reset();
+    // 직전 장면(코너 등)의 배치 홀드가 남아 있으면 킥오프 대형이 그것에 묶인다.
+    this.setPieceHold = null;
     for (const p of this.all) {
       // 골이 들어가 킥오프로 돌아가도 감독이 옮겨 놓은 대형은 유지된다 — 드래그가
       // "이번 한 번"이 아니라 새 기준이라는 뜻이므로 킥오프 정렬도 그 기준을 따른다.
       p.x = p.home.x + p.homeOffset.x;
       p.z = p.home.z + p.homeOffset.z;
-      // 킥오프 규정: 휘슬 전에는 양 팀 모두 자기 진영 안에 있어야 한다. 공격 대형의 기준
-      // 위치(전방 포지션 줄)는 하프라인을 넘어가 있을 수 있어(공격 중 전진하는 모양이라
-      // 원래 그렇게 설계됐다), 킥오프 순간에만 자기 진영 안쪽으로 당겨 세운다.
-      const ownHalfLimit = -p.attackDirection * PARAMS.restartInset;
-      if (p.attackDirection > 0 ? p.x > ownHalfLimit : p.x < ownHalfLimit) p.x = ownHalfLimit;
+      this.confineToOwnHalf(p);
       p.vx = 0;
       p.vz = 0;
       p.kc = 0;
@@ -357,6 +409,10 @@ export class Sim {
           this.ball
         )
       : null;
+    for (const p of this.all) {
+      if (p === taker || p === partner) continue;
+      this.pushOutsideCenterCircle(p);
+    }
     if (taker) {
       // 실제 킥오프처럼 선수를 공 위치(센터)에 정확히 세운다 — 걸어가서 잡는 게 아니라 바로 서있게 한다
       taker.x = 0;
@@ -366,18 +422,44 @@ export class Sim {
       // 짧은 첫 패스를 받을 파트너를 자기 진영 쪽으로 살짝 물러선 위치(minPass 이상 거리)에 세운다
       partner.x = -taker.attackDirection * (PARAMS.minPass + 1);
       partner.z = 0;
+      // 키커·파트너 모두 볼 쪽(하프라인 쪽)을 본다 — 배치 화면이 멈춰 있는 동안 등을 돌리고
+      // 서 있으면 킥오프처럼 안 보인다. heading은 sin/cos 순서(atan2(vx, vz))를 따른다.
+      partner.heading = Math.atan2(taker.attackDirection, 0);
+      taker.heading = Math.atan2(-taker.attackDirection, 0);
     }
+    this.kickoffLock = {
+      team: kickoffTeam,
+      active: true,
+      // 주심 휘슬 tick. 여기 닿기 전까지 step()은 경기를 한 발짝도 진행하지 않는다.
+      whistleTick: this.tick + PARAMS.kickoffSetupTicks,
+      takerKey: taker ? `${taker.team}:${taker.idx}` : null,
+      partnerKey: partner ? `${partner.team}:${partner.idx}` : null,
+    };
+  }
+
+  /**
+   * 킥오프 휘슬 — 키커가 파트너에게 짧게 밀어 주면서 볼이 인플레이가 된다.
+   *
+   * tryKick()의 일반 패스 점수(전진 편향)에 맡기면 파트너가 아닌 다른 선수에게 갈 수 있어
+   * 킥오프 첫 패스만은 taker → partner로 직접 지정한다(실제 킥오프는 항상 옆·뒤로 짧게 시작한다).
+   */
+  launchKickoff() {
+    const lock = this.kickoffLock;
+    if (!lock) return;
+    lock.whistleTick = null; // 휘슬은 한 번뿐 — 이후 step()은 평소대로 흐른다
+    const taker = this.playerByKey(lock.takerKey);
+    const partner = this.playerByKey(lock.partnerKey);
     if (taker && partner) {
-      // tryKick()의 일반 패스 점수(전진 편향)에 맡기면 파트너가 아닌 다른 선수에게 갈 수 있어
-      // 킥오프 첫 패스만은 taker -> partner로 직접 지정한다 (실제 킥오프는 항상 옆·뒤로 짧게 시작한다)
       taker.kc = PARAMS.kickCooldownTicks;
-      this.ball.kick(partner.x - taker.x, partner.z - taker.z, PARAMS.passForce, `${taker.team}:${taker.idx}`);
+      this.ball.kick(partner.x - taker.x, partner.z - taker.z, PARAMS.passForce, lock.takerKey);
     } else if (taker) {
-      this.ball.ownerKey = `${taker.team}:${taker.idx}`;
-      this.ball.carrierKey = `${taker.team}:${taker.idx}`;
-      this.ball.lastTouchKey = `${taker.team}:${taker.idx}`;
+      this.ball.ownerKey = lock.takerKey;
+      this.ball.carrierKey = lock.takerKey;
+      this.ball.lastTouchKey = lock.takerKey;
+    } else {
+      // 찰 사람이 아무도 없다(전원 퇴장·부상). 제한만 풀어 경기가 굳지 않게 한다.
+      this.kickoffLock = null;
     }
-    this.kickoffLock = { team: kickoffTeam, active: true };
   }
 
   /** 후반 시작 — 관례상 원정팀 킥오프 */
@@ -476,6 +558,20 @@ export class Sim {
     // 승부차기는 경기가 아니다 — 필드 플레이어 판단·대형·체력을 전부 멈추고
     // 키커와 골키퍼만 움직이는 전용 루프로 넘긴다.
     if (this.phase === 'shootout') return this.stepShootout();
+
+    // 킥오프 준비 — 주심 휘슬 전이다. 볼은 센터마크에 멈춰 있고 스물두 명 모두 잡아 놓은
+    // 자리에 선 채로 한 발짝도 움직이지 않는다.
+    //
+    // 시계는 그대로 흐르게 둔다. tick을 멈추면 되감기 링버퍼가 같은 tick 스냅샷을 계속
+    // 덮어써서(maybeRecord는 tick % interval로만 거른다) 되감기 폭이 그만큼 갉아먹힌다.
+    if (this.kickoffLock?.whistleTick != null) {
+      if (this.tick < this.kickoffLock.whistleTick) {
+        this.tick++;
+        this.updatePhase();
+        return;
+      }
+      this.launchKickoff();
+    }
 
     // 매 스텝 시작 시 이전 스텝에서 남은 볼 속도로 킥오프 제한 해제 여부를 판정한다
     if (this.kickoffLock?.active && vlen(this.ball.vx, this.ball.vz) > PARAMS.kickoffUnlockSpeed) {
@@ -1095,6 +1191,12 @@ export class Sim {
    * 되지 않고, 방향 오차도 발보다 훨씬 크다. 항상 자기 공격 방향으로 보내므로 수비의
    * 걷어내기와 공격의 문전 헤딩이 같은 코드에서 자연스럽게 갈린다(골문 앞에서 때리면
    * 그대로 골문으로 간다).
+   *
+   * 각도만은 그 둘을 갈라 준다. 골문 근처(headerShotRange)면 아래로 찍고, 그 밖이면 높이
+   * 걷어낸다 — 어느 쪽이든 볼이 머리 높이대(footControlHeight~headControlHeight)를 곧바로
+   * 벗어난다는 게 핵심이다. 예전처럼 한 각도(9도)로만 때리면 헤딩한 볼이 그 높이대에
+   * 그대로 머물러서, 주위 선수들이 킥 쿨다운 8틱마다 번갈아 다시 헤딩한다(params.js의
+   * headerClearLoftDeg 주석에 실측을 적어 뒀다).
    */
   executeHeader(p) {
     const hdx = p.atkX - p.x;
@@ -1105,8 +1207,21 @@ export class Sim {
       baseDeg: PARAMS.headerBaseErrorDeg,
     });
     const [edx, edz] = this.rotateXZ(hdx, hdz, errDeg);
-    this.ball.kick(edx, edz, PARAMS.headerForce, `${p.team}:${p.idx}`, PARAMS.headerLoftDeg);
-    p.kc = PARAMS.kickCooldownTicks;
+    const loft =
+      vlen(hdx, hdz) <= PARAMS.headerShotRange ? PARAMS.headerShotLoftDeg : PARAMS.headerClearLoftDeg;
+    this.ball.kick(edx, edz, PARAMS.headerForce, `${p.team}:${p.idx}`, loft);
+    // 공중볼 경합은 혼자 하는 게 아니다 — 옆에 붙어 있던 선수들도 같이 뛰어올랐다가 같이
+    // 내려온다. 그래서 헤딩한 사람뿐 아니라 사거리 안의 **전원**이 같은 쿨다운을 받는다.
+    // 느슨한 볼 경합(tryKick)에서 이긴 쪽·진 쪽 모두 kc를 거는 것과 같은 이유다.
+    //
+    // 이게 없으면 각도를 갈라 놔도 연쇄가 남는다. 걷어내는 헤딩(26도)조차 머리 높이대를
+    // 벗어나는 데 0.24초가 걸리는데 킥 쿨다운은 0.13초라, 그 사이에 옆 선수가 1.8m 날아간
+    // 볼을 그대로 다시 헤딩한다 — 실측된 연쇄 간격이 정확히 8틱(=kickCooldownTicks)이었다.
+    for (const o of this.all) {
+      if (o.sentOff || o.injured) continue;
+      if (vlen(o.x - this.ball.x, o.z - this.ball.z) <= PARAMS.kickDist) o.kc = PARAMS.kickCooldownTicks;
+    }
+    p.kc = PARAMS.kickCooldownTicks; // 헤딩한 본인은 사거리 밖으로 밀려나 있어도 반드시 건다
   }
 
   /**
@@ -2072,9 +2187,9 @@ export class Sim {
   canRewind() {
     if (this.phase === 'shootout') return false; // 승부차기는 스냅샷 대상이 아니다 — 찬 킥은 되돌릴 수 없다
     if (!this.getActiveConcedeEvent()) return false; // 되감기는 실점 순간에만 쓸 수 있다
-    // 경기가 끝날 수 있는 기간(후반·연장 후반)의 마지막 5분은 확정 — 되감기 불가.
+    // 경기가 끝날 수 있는 기간(후반·연장 후반)의 마지막 1분은 확정 — 되감기 불가.
     const canEndHere = this.half === 2 || this.half === 4;
-    if (canEndHere && this.matchMinute >= this.periodEndClock() - 5) return false;
+    if (canEndHere && this.matchMinute >= this.periodEndClock() - 1) return false;
     if (
       this.lastRewindTick !== null &&
       (this.tick - this.lastRewindTick) * PARAMS.dt < PARAMS.rewindCooldownSeconds

@@ -721,13 +721,32 @@ input[type="range"] { width: 100%; accent-color: var(--accent); margin: 4px 0; }
 .bottom-bar {
   position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%);
   display: flex; flex-direction: column; align-items: center; gap: 8px;
+  /* 조작 버튼은 무엇에도 가려지지 않는다.
+     실점 선택·득점 축하 배너(z-index 8), 승부차기 보드(7), 경기 중 전술 창(4)은 모두
+     하단 바보다 위에 있었다. 창 크기에 따라 그것들이 버튼 줄에 조금이라도 걸치면 클릭이
+     그쪽으로 먹혀서 재개·되감기가 "눌러도 반응이 없는" 상태가 됐다 — 경기를 다시 시작할
+     방법이 사라지는 실패라 어떤 상황에서도 이 바가 위에 있어야 한다.
+     전·후반 안내와 결과 창은 <dialog showModal()>이라 최상위 레이어에 떠서, 이 값과
+     무관하게 여전히 하단 바를 덮는다(의도한 대로다).
+     대신 바 자체는 클릭을 통과시킨다 — 배경도 없는 빈 상자가 위에 깔린 채로 클릭까지
+     먹으면, 이번엔 반대로 그 밑의 전술 창을 못 누르게 된다. */
+  z-index: 9;
+  pointer-events: none;
 }
+.bottom-bar > * { pointer-events: auto; }
 .bottom-bar > .hint,
-.bottom-bar > .controls,
-.bottom-bar > .path-status {
+.bottom-bar > .controls {
   position: static; transform: none;
 }
-.bottom-bar > .path-status:empty { display: none; }
+/* 안내 문구와 경로 지시 문구는 읽는 글이지 누르는 것이 아니다 — 클릭을 가로채면 안 된다.
+   경로 지시 문구는 아예 흐름에서 빼서 띄운다. 한 줄을 차지하면 문구가 생길 때마다(=선수에게
+   경로를 그릴 때마다) 하단 바의 상자가 위로 자라 다른 UI를 덮는 면적이 넓어진다. */
+.bottom-bar > .hint { pointer-events: none; }
+.bottom-bar > .path-status {
+  position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%);
+  white-space: nowrap;
+  pointer-events: none;
+}
 .banner {
   position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
   display: none; flex-direction: column; align-items: center; gap: 4px;

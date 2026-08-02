@@ -64,7 +64,7 @@ function currentMatchCard(progress,ctx,onRetry) {
         ? `${played?.outcome === 'draw' ? '무승부' : '패배'}로 조별리그에서 탈락했습니다. 다시 시도할 수 있습니다.`
         : `${endedBy}${step.roundLabel}에서 탈락했습니다. 다시 시도할 수 있습니다.`)
     : step.stage === 'group' ? '승리 또는 무승부 시 A조 2위로 32강에 진출합니다. 패배하면 탈락입니다.'
-    : `승리하면 ${step.advanceLabel}에 진출합니다. 90분 무승부면 연장 전·후반(105분·120분)을 치르고, 그래도 동점이면 승부차기입니다.`;
+    : `승리하면 ${step.advanceLabel}에 진출합니다.`;
   const team = (teamId) => el('div',{class:'wc-compact-team'},[
     CountryFlag({teamId,size:'medium'}),
     el('strong',{text:shortName(teamId)}),

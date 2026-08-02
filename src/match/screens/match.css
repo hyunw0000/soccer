@@ -404,6 +404,11 @@
 }
 .match-result-dialog__team strong { overflow-wrap:anywhere; }
 .result-score {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.12em;
   color:#fff;
   font-size:clamp(52px,9vw,88px);
   font-weight:950;
@@ -411,6 +416,14 @@
   letter-spacing:-.06em;
   white-space:nowrap;
   text-shadow:0 5px 20px rgba(0,0,0,.55);
+}
+/* 승부차기 점수는 경기 스코어를 보조하는 정보다 — 승패를 실제로 가른 숫자보다
+   작게, 그리고 그 아래 한 줄로 찍어서 "이게 승패를 갈랐다"는 부연으로 읽히게 한다. */
+.result-score__shootout {
+  font-size: 0.32em;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: #aebac3;
 }
 .match-result-dialog .result-sub {
   display:block;
