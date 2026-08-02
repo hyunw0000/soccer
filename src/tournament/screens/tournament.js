@@ -62,27 +62,29 @@ function matchOutcome(match,teamId) {
 
 function historyMatchRow(match,teamId) {
   const completed = match.status === 'completed';
-  return el('li',{class:`wc-history-match is-${matchOutcome(match,teamId)}`},[
-    el('b',{class:'wc-history-match__id',text:`M${match.matchId}`}),
+  const outcome = matchOutcome(match,teamId);
+  const outcomeLabel = {win:'승',draw:'무',loss:'패',scheduled:'경기 전'}[outcome];
+  return el('li',{class:`wc-history-match is-${outcome}`},[
+    el('div',{class:'wc-history-match__meta'},[
+      el('b',{class:'wc-history-match__id',text:`M${match.matchId}`}),
+      el('span',{class:'wc-history-match__outcome',text:outcomeLabel}),
+    ]),
     el('span',{class:'wc-history-match__team'},[CountryFlag({teamId:match.homeTeamId,size:'small'}),el('span',{text:countries[match.homeTeamId].nameKo})]),
     completed
       ? el('strong',{class:'wc-history-match__score',text:`${match.homeScore}–${match.awayScore}`})
-      : el('strong',{class:'wc-history-match__score is-scheduled',text:'VS'}),
+      : el('strong',{class:'wc-history-match__score is-scheduled',text:'–'}),
     el('span',{class:'wc-history-match__team'},[CountryFlag({teamId:match.awayTeamId,size:'small'}),el('span',{text:countries[match.awayTeamId].nameKo})]),
-    !completed ? el('span',{class:'wc-history-match__state',text:'다음 경기 · 경기 전'}) : null,
+    !completed ? el('span',{class:'wc-history-match__state',text:'경기 전'}) : null,
   ]);
 }
 
 function matchHistoryPanel(teamId,matches,onClose) {
   const country = countries[teamId];
-  if(import.meta.env.DEV&&matches.length===0) console.warn(`[MatchHistory] No matches found for ${teamId}`);
-  return el('section',{
+  return el('div',{
     class:'wc-match-history-panel',
-    role:'region',
-    'aria-label':`${country.nameKo} 경기 내역`,
   },[
     el('header',{},[
-      el('div',{},[CountryFlag({teamId,size:'small'}),el('h3',{text:`${country.nameKo} 경기 내역`})]),
+      el('div',{},[CountryFlag({teamId,size:'medium'}),el('h3',{id:'match-history-dialog-title',text:`${country.nameKo} 경기 내역`})]),
       el('button',{type:'button',class:'wc-match-history__close',text:'×','aria-label':`${country.nameKo} 경기 내역 닫기`,onclick:onClose}),
     ]),
     matches.length
@@ -92,47 +94,45 @@ function matchHistoryPanel(teamId,matches,onClose) {
 }
 
 function groupStageView(groupState) {
+  let expandedTeamId = null;
+  let lastTrigger = null;
+  let previousBodyOverflow = '';
   const triggers = new Map();
-  const detailRows = new Map();
-  let activeTeamId = null;
-  const close = ({restoreFocus=false}={}) => {
-    const teamId=activeTeamId;
-    const trigger=teamId ? triggers.get(teamId) : null;
-    const detailRow=teamId ? detailRows.get(teamId) : null;
-    trigger?.setAttribute('aria-expanded','false');
-    if(trigger) trigger.textContent='경기 내역 보기';
-    if(detailRow) detailRow.hidden=true;
-    trigger?.closest('tr')?.classList.remove('has-open-history');
-    activeTeamId=null;
-    if(restoreFocus) trigger?.focus();
+  const dialog = el('dialog',{
+    id:'match-history-dialog',
+    class:'wc-match-history-dialog',
+    'aria-labelledby':'match-history-dialog-title',
+  });
+  const closeMatchHistory = () => {
+    if (dialog.open) dialog.close();
   };
-  const toggle = (teamId) => {
-    if(activeTeamId===teamId){ close(); return; }
-    close();
-    activeTeamId=teamId;
-    const trigger=triggers.get(teamId);
-    const detailRow=detailRows.get(teamId);
+  const openMatchHistory = (teamId,trigger) => {
+    if (expandedTeamId) triggers.get(expandedTeamId)?.setAttribute('aria-expanded','false');
+    expandedTeamId = teamId;
+    lastTrigger = trigger;
     trigger.setAttribute('aria-expanded','true');
-    trigger.textContent='경기 내역 닫기';
-    trigger.closest('tr')?.classList.add('has-open-history');
-    detailRow.hidden=false;
+    const matches=getMatchesForTeam(groupState.matches,teamId);
+    dialog.replaceChildren(matchHistoryPanel(teamId,matches,closeMatchHistory));
+    previousBodyOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    dialog.showModal();
+    dialog.querySelector('.wc-match-history__close')?.focus();
   };
-  const tableRows = groupState.standings.flatMap((row)=>{
-    const trigger=el('button',{type:'button',class:'wc-match-history-trigger',text:'경기 내역 보기','aria-expanded':'false','aria-controls':`match-history-${row.teamId}`,'data-team-id':row.teamId,onclick:(event)=>{ event.stopPropagation(); toggle(row.teamId); }});
-    triggers.set(row.teamId,trigger);
-    const standingRow=el('tr',{class:`${row.teamId==='KOR'?'is-korea ':''}${['KOR','RSA'].includes(row.teamId)?'is-finalist ':''}${row.position===2?'is-qualification-line':''}`},[
-      el('td',{class:'wc-standing-position',text:row.position}),
-      el('th',{scope:'row'},[groupTeam(row.teamId)]),
-      ...[row.played,row.points,row.won,row.drawn,row.lost,row.goalsFor,row.goalsAgainst].map((value)=>el('td',{text:value})),
-      el('td',{class:`wc-goal-difference${row.goalDifference>0?' is-positive':''}`,text:goalDifference(row.goalDifference)}),
-      el('td',{class:'wc-match-history-cell'},[trigger]),
-    ]);
-    const matches=getMatchesForTeam(groupState.matches,row.teamId);
-    const detailRow=el('tr',{id:`match-history-${row.teamId}`,class:'wc-match-history-detail-row',hidden:true},[
-      el('td',{colspan:'11'},[matchHistoryPanel(row.teamId,matches,()=>close({restoreFocus:true}))]),
-    ]);
-    detailRows.set(row.teamId,detailRow);
-    return [standingRow,detailRow];
+  const toggleMatchHistory = (teamId) => {
+    const trigger=triggers.get(teamId);
+    if (expandedTeamId === teamId && dialog.open) closeMatchHistory();
+    else openMatchHistory(teamId,trigger);
+  };
+  const tableRows = groupState.standings.map((row) => {
+      const trigger=el('button',{type:'button',class:'wc-match-history-trigger',text:'경기 내역 보기','aria-haspopup':'dialog','aria-expanded':'false','aria-controls':'match-history-dialog','data-match-history-trigger':row.teamId,onclick:()=>toggleMatchHistory(row.teamId)});
+      triggers.set(row.teamId,trigger);
+      return el('tr',{class:`${row.teamId==='KOR'?'is-korea ':''}${['KOR','RSA'].includes(row.teamId)?'is-finalist ':''}${row.position===2?'is-qualification-line':''}`},[
+        el('td',{class:'wc-standing-position',text:row.position}),
+        el('th',{scope:'row'},[groupTeam(row.teamId)]),
+        ...[row.played,row.points,row.won,row.drawn,row.lost,row.goalsFor,row.goalsAgainst].map((value)=>el('td',{text:value})),
+        el('td',{class:`wc-goal-difference${row.goalDifference>0?' is-positive':''}`,text:goalDifference(row.goalDifference)}),
+        el('td',{class:'wc-match-history-cell'},[trigger]),
+      ]);
   });
   const standingsTable = el('table',{class:'wc-standings-table'},[
     el('thead',{},[el('tr',{},['순위','국가','경기','승점','승','무','패','득점','실점','득실차','경기 내역'].map((text)=>el('th',{scope:'col',text})))]),
@@ -149,14 +149,23 @@ function groupStageView(groupState) {
     el('section',{class:'wc-group-panel'},[
       el('header',{class:'wc-group-panel__header'},[el('div',{},[el('span',{text:'GROUP A'}),el('h3',{text:'A조 순위'})]),el('b',{text:hasResult?'최종 순위':'최종전 이전'})]),
       el('div',{class:'wc-standings-scroll',tabindex:'0','aria-label':'A조 순위표, 좌우로 스크롤 가능'},[standingsTable]),
-    ]),
+    ]),dialog,
   ]);
 
-  const onPointerDown = (event) => { if(activeTeamId&&!detailRows.get(activeTeamId).contains(event.target)&&!triggers.get(activeTeamId).contains(event.target)) close(); };
-  const onKeyDown = (event) => { if(event.key==='Escape'&&activeTeamId){ event.preventDefault(); close({restoreFocus:true}); } };
-  document.addEventListener('pointerdown',onPointerDown);
-  document.addEventListener('keydown',onKeyDown);
-  return {node,dispose:()=>{ close(); document.removeEventListener('pointerdown',onPointerDown); document.removeEventListener('keydown',onKeyDown); }};
+  dialog.addEventListener('click',(event)=>{ if(event.target===dialog) closeMatchHistory(); });
+  dialog.addEventListener('close',()=>{
+    document.body.style.overflow = previousBodyOverflow;
+    if (expandedTeamId) triggers.get(expandedTeamId)?.setAttribute('aria-expanded','false');
+    expandedTeamId=null;
+    lastTrigger?.focus();
+    lastTrigger=null;
+  });
+
+  return {node,dispose:()=>{
+    if(dialog.open) dialog.close();
+    document.body.style.overflow = previousBodyOverflow;
+    expandedTeamId=null;
+  }};
 }
 
 function sourceLabel(source) {
