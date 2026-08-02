@@ -803,30 +803,38 @@ export class Sim {
    * 반칙 지점이 **반칙한 쪽 자기 페널티 에어리어** 안인가. 여기가 페널티킥과 프리킥을 가른다.
    * 공격 방향(attackDirection)이 아니라 수비하는 골문 기준으로 재야 한다 — 공격 진영
    * 페널티 에어리어(상대 골문 앞)에서 수비수가 반칙한 게 아니면 PK가 아니다.
+   *
+   * 위치를 선수 객체가 아니라 좌표로 받는다. 카드 판정이 퇴장으로 이어지면 sendOff()가
+   * 그 선수를 경기장 밖으로 치워 버리므로, 반칙 지점은 **카드를 굴리기 전에** 따로
+   * 떠 놓아야 한다(아래 commitFoul 참고).
    */
-  foulInOwnBox(defender) {
+  foulInOwnBox(defender, spotX, spotZ) {
     const ownGoalX = -defender.attackDirection * HALF.L;
-    return (
-      Math.abs(defender.x - ownGoalX) <= PENALTY_AREA.depth && Math.abs(defender.z) <= PENALTY_AREA.halfWidth
-    );
+    return Math.abs(spotX - ownGoalX) <= PENALTY_AREA.depth && Math.abs(spotZ) <= PENALTY_AREA.halfWidth;
   }
 
   /** 파울 확정 — 카드 여부를 굴리고, 반칙 위치에 따라 프리킥과 페널티킥으로 갈린다. */
   commitFoul(defender, attacker) {
     this.pushEvent('foul', defender.team, `${defender.name} 파울`);
+    // 반칙 지점을 카드 판정보다 **먼저** 떠 둔다. sendOff()는 퇴장 선수를 터치라인 밖
+    // (z = HALF.W + 8)으로 옮기는데, 그 뒤에 defender.x/z를 읽으면 반칙 자리가 사라진다 —
+    // 박스 안 반칙이 퇴장을 동반하면 페널티킥이 프리킥으로 바뀌고, 그 프리킥마저 실제
+    // 반칙 자리가 아니라 터치라인에서 차는 버그가 났다.
+    const foulX = defender.x;
+    const foulZ = defender.z;
     const roll = seededRandom(this.tick, seededRandomPlayerId(defender.team, defender.idx), ACTION_ID.CARD_CHECK);
     if (roll < PARAMS.straightRedChance) {
       this.sendOff(defender, '거친 파울');
     } else if (roll < PARAMS.straightRedChance + PARAMS.yellowCardChance) {
       this.applyCard(defender);
     }
-    if (this.foulInOwnBox(defender)) {
+    if (this.foulInOwnBox(defender, foulX, foulZ)) {
       // 페널티킥은 반칙 자리가 아니라 언제나 페널티 스폿에서 찬다.
       const spotX = attacker.attackDirection * (HALF.L - PARAMS.penaltySpotDepth);
       this.restart(attacker.team, spotX, 0, 'penalty', `${defender.name} 반칙 · 페널티킥`);
       return;
     }
-    this.restart(attacker.team, defender.x, defender.z, 'free-kick', `${defender.name} 파울 · 프리킥`);
+    this.restart(attacker.team, foulX, foulZ, 'free-kick', `${defender.name} 파울 · 프리킥`);
   }
 
   /** 경고 — 두 번째 경고는 그 자리에서 퇴장(2차 경고 퇴장)으로 이어진다. */
@@ -1353,13 +1361,17 @@ export class Sim {
     this.ball.reset();
     this.ball.x = clamp(x, -HALF.L, HALF.L);
     this.ball.z = clamp(z, -HALF.W, HALF.W);
+    // 재개가 주어졌다는 사실을 **실행보다 먼저** 기록한다. 페널티킥·프리킥은 실행이 곧바로
+    // 슛까지 하면서 자기 이벤트를 남기므로, 나중에 기록하면 행동로그가
+    // "슛 → 페널티킥 부여" 순으로 뒤집혀 읽힌다.
+    this.pushEvent(type, team, text);
     const side = team === 'home' ? this.homeP : this.awayP;
     const taker = this.restartTaker(type, side);
     if (taker) {
       taker.x = this.ball.x;
       taker.z = this.ball.z;
       // 재개 종류마다 실제로 하는 동작이 다르다 — 골킥은 길게 걷어차고, 코너킥은 문전으로
-      // 올리고, 스로인은 손으로 던진다. 전용 실행이 없는 종류(프리킥·오프사이드)만
+      // 올리고, 스로인은 손으로 던진다. 전용 실행이 없는 종류(오프사이드)만
       // 예전처럼 발밑에 붙여 두고 일반 판단 파이프라인에 넘긴다.
       const execute = RESTART_EXECUTORS[type];
       if (execute) {
@@ -1372,7 +1384,6 @@ export class Sim {
         taker.kc = PARAMS.kickCooldownTicks;
       }
     }
-    this.pushEvent(type, team, text);
   }
 
   /**
