@@ -698,3 +698,45 @@
     width: auto;
   }
 }
+
+/* ---------- 골 연출 ---------- */
+/* 골이 들어간 순간 화면 가장자리가 득점 팀 색으로 확 밝아졌다 사라진다.
+   색은 match.js가 --goal-flash-color로 넣어 준다(matchSides의 유니폼 색). */
+.goal-flash {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  opacity: 0;
+  pointer-events: none; /* 배너 버튼을 가리면 안 된다 */
+  background:
+    radial-gradient(ellipse at center, transparent 42%, var(--goal-flash-color, #c8102e) 100%);
+}
+
+.goal-flash.on {
+  animation: goal-flash-burst 900ms ease-out 1;
+}
+
+@keyframes goal-flash-burst {
+  0% { opacity: 0; }
+  12% { opacity: 0.85; }
+  100% { opacity: 0; }
+}
+
+/* 스코어보드 숫자가 톡 튄다 — "점수가 바뀌었다"를 눈으로 잡아 준다. */
+.hud .score.score-pop {
+  animation: score-pop 620ms cubic-bezier(0.2, 1.4, 0.4, 1) 1;
+}
+
+@keyframes score-pop {
+  0% { transform: scale(1); }
+  30% { transform: scale(1.28); }
+  100% { transform: scale(1); }
+}
+
+/* 접근성 — 화면 움직임을 줄이도록 설정한 사용자에게는 번쩍임과 튀는 효과를 끈다. */
+@media (prefers-reduced-motion: reduce) {
+  .goal-flash.on,
+  .hud .score.score-pop {
+    animation: none;
+  }
+}

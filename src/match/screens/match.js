@@ -11,6 +11,9 @@ import { getMatchSides } from "../matchSides.js";
 
 const REWIND_LIMIT = 2; // 감독의 '되감기'는 유한한 자원이다 — 이 서비스의 규칙
 const REWIND_IDLE_LABEL = "↶ 실점 시에만 되감기 가능"; // 겨냥할 실점이 없을 때(대기 상태)
+// 골 세리머니 길이(초). 이 동안 경기는 멈추고 득점 팀이 환호하며, 끝나야 배너(킥오프·되돌리기
+// 버튼)가 뜬다. 길게 잡으면 골마다 흐름이 끊기니 짧게 둔다.
+const GOAL_CELEBRATION_SECONDS = 2.2;
 
 export default function matchScreen(root, ctx) {
   const matchSetup = state.pendingMatchSetup ?? null;
@@ -67,6 +70,8 @@ export default function matchScreen(root, ctx) {
   const rewindEl = el("b", { text: `${REWIND_LIMIT}회` });
   const feed = el("ul", { class: "feed" });
   const pathStatusEl = el("span", { class: "path-status" });
+  // 골 순간 화면 전체에 한 번 번지는 팀 색 글로우. 클릭을 막으면 안 되니 pointer-events는 CSS에서 끈다.
+  const goalFlash = el("div", { class: "goal-flash" });
 
   let matchPhase = 'kickoffBriefing';
   let paused = true;
@@ -105,11 +110,60 @@ export default function matchScreen(root, ctx) {
     onclick: doRewind,
   });
 
+  // 골 세리머니 — 골이 들어가면 먼저 이걸 보여 주고, 끝난 뒤에 배너(킥오프 버튼)를 띄운다.
+  // { team, startedAt, onDone } 또는 null.
+  let celebration = null;
+
+  function startCelebration(team, onDone) {
+    celebration = { team, startedAt: performance.now(), onDone };
+    setPaused(true); // 세리머니 동안 경기는 멈춘다 — 안 그러면 뒤에서 경기가 계속 흘러간다
+    flashGoal(team);
+    popScore();
+    updateBanners();
+  }
+
+  /**
+   * 골 순간 화면 가장자리가 득점 팀 색으로 확 밝아졌다 사라진다.
+   *
+   * 클래스를 뗐다가 강제 리플로우(offsetWidth 읽기) 후 다시 붙인다 — 그냥 다시 붙이면
+   * 브라우저가 "이미 있던 클래스"로 보고 애니메이션을 재생하지 않아서, 연속 득점 때
+   * 두 번째 골에서는 아무 일도 안 일어난다.
+   */
+  function flashGoal(team) {
+    goalFlash.style.setProperty("--goal-flash-color", matchSides[team].uniformColor);
+    goalFlash.classList.remove("on");
+    void goalFlash.offsetWidth;
+    goalFlash.classList.add("on");
+  }
+
+  /** 스코어보드 숫자가 톡 튄다. 위와 같은 이유로 클래스를 재부착한다. */
+  function popScore() {
+    scoreEl.classList.remove("score-pop");
+    void scoreEl.offsetWidth;
+    scoreEl.classList.add("score-pop");
+  }
+
+  /** 매 프레임 호출 — 시간이 다 되면 세리머니를 끝내고 미뤄 둔 배너를 띄운다. */
+  function tickCelebration(now) {
+    if (!celebration) return;
+    const t = (now - celebration.startedAt) / 1000;
+    if (t < GOAL_CELEBRATION_SECONDS) {
+      view?.setCelebration({ team: celebration.team, t });
+      return;
+    }
+    const done = celebration.onDone;
+    celebration = null;
+    view?.setCelebration(null);
+    done?.();
+  }
+
   function setPaused(v) {
     // 하프타임/풀타임 중에는 '후반 시작' 버튼 없이 일반 재개로 넘어갈 수 없다
     if (!v && (sim.phase !== "playing" || matchPhase !== 'playing')) return;
     // 대한민국 득점 뒤에는 일반 재개가 아니라 전용 "킥오프 재개" 버튼으로만 다시 시작한다.
     if (!v && koreaGoalPending) return;
+    // 세리머니 중에는 재개를 막는다 — 배너가 아직 안 떴는데 경기가 흘러가면 안 된다.
+    if (!v && celebration) return;
     paused = v;
     pauseBtn.textContent = paused ? "▶ 재개" : "⏸ 일시정지";
     pauseBtn.classList.toggle("on", paused);
@@ -126,7 +180,11 @@ export default function matchScreen(root, ctx) {
   // 득점/실점 선택/일시정지 배너는 동시에 뜨지 않는다. 경기 결과는 별도 모달로 표시한다.
   function updateBanners() {
     const finished = matchResult !== null;
-    banner.classList.toggle("show", !finished && paused && sim.phase === "playing" && !concedeChoicePending && !koreaGoalPending);
+    // 세리머니 중에는 어떤 배너도 띄우지 않는다 — 환호를 먼저 보여 주고 그 다음이 배너다.
+    banner.classList.toggle(
+      "show",
+      !finished && paused && sim.phase === "playing" && !concedeChoicePending && !koreaGoalPending && !celebration
+    );
     koreaGoalBanner.classList.toggle("show", !finished && koreaGoalPending);
     concedeBanner.classList.toggle("show", !finished && concedeChoicePending);
     updateSpeedButtons();
@@ -827,10 +885,38 @@ export default function matchScreen(root, ctx) {
     ]);
   }
 
+  /**
+   * 득점/실점 감지 — 대한민국 득점은 상대 킥오프 전 축하 화면에서 멈추고, 실점은 되돌릴지
+   * 선택할 수 있도록 멈춘다. 어느 쪽이든 배너보다 세리머니가 먼저다.
+   * sim.events는 50개를 넘으면 앞에서부터 shift되므로 배열 인덱스가 아니라 id로 추적한다.
+   */
+  function detectGoalEvents(newEvents) {
+    for (const ev of newEvents) {
+      if (ev.type === "goal" && ev.team === "home" && ev.tick !== lastNotifiedKoreaGoalTick) {
+        lastNotifiedKoreaGoalTick = ev.tick;
+        startCelebration("home", () => showKoreaGoal(ev));
+        return;
+      }
+      if (ev.type === "goal" && ev.team === "away" && ev.tick !== lastNotifiedConcedeTick) {
+        lastNotifiedConcedeTick = ev.tick;
+        startCelebration("away", () => showConcedeChoice(ev));
+        return;
+      }
+    }
+  }
+
   function loop(now) {
     raf = requestAnimationFrame(loop);
     const real = (now - last) / 1000;
     last = now;
+    // 이번 프레임에 새로 생긴 사건 — 골 감지(세리머니)와 아래 이벤트 피드가 같이 쓴다.
+    let newEvents = [];
+
+    // 세리머니는 경기가 멈춘 상태에서 도는 연출이라, sim.step()과 별개로 매 프레임 진행한다.
+    if (celebration) {
+      tickCelebration(now);
+      view.sync(real);
+    }
 
     if (matchPhase === 'playing' && !paused && sim.phase !== "fulltime") {
       acc += Math.min(real, 0.1) * speed;
@@ -842,7 +928,12 @@ export default function matchScreen(root, ctx) {
         acc -= PARAMS.dt;
         stepsThisFrame++;
       }
-      view.sync(real);
+      newEvents = sim.events.filter((ev) => ev.id > lastRenderedEventId);
+      // 골 감지는 view.sync()보다 **먼저** 한다. sim은 골이 들어간 그 틱에 곧바로 kickoff()으로
+      // 선수를 대형에 되돌리므로, 먼저 sync하면 리그가 그 좌표를 따라가 세리머니가 중앙선에서
+      // 벌어진다. 여기서 세리머니를 켜 두면 리그가 골 순간의 좌표를 유지한다.
+      detectGoalEvents(newEvents);
+      if (!celebration) view.sync(real);
     }
     view.render();
 
@@ -854,23 +945,6 @@ export default function matchScreen(root, ctx) {
       }
       else if (sim.phase === "fulltime") finishMatch();
       else updateBanners();
-    }
-
-    // 득점/실점 감지 — 대한민국 득점은 상대 킥오프 전 축하 화면에서 멈추고,
-    // 실점은 되돌릴지 선택할 수 있도록 멈춘다.
-    // sim.events는 50개를 넘으면 앞에서부터 shift되므로 배열 인덱스가 아니라 id로 추적해야 한다.
-    const newEvents = sim.events.filter((ev) => ev.id > lastRenderedEventId);
-    for (const ev of newEvents) {
-      if (ev.type === "goal" && ev.team === "home" && ev.tick !== lastNotifiedKoreaGoalTick) {
-        lastNotifiedKoreaGoalTick = ev.tick;
-        showKoreaGoal(ev);
-        break;
-      }
-      if (ev.type === "goal" && ev.team === "away" && ev.tick !== lastNotifiedConcedeTick) {
-        lastNotifiedConcedeTick = ev.tick;
-        showConcedeChoice(ev);
-        break;
-      }
     }
 
     updateScoreboard();
@@ -1124,6 +1198,7 @@ export default function matchScreen(root, ctx) {
   root.append(
     el("div", { class: "screen match", "data-match-tag": runStep?.eyebrow ?? "FRIENDLY MATCH" }, [
       stage,
+      goalFlash,
       banner,
       koreaGoalBanner,
       concedeBanner,

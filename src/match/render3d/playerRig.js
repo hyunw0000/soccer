@@ -120,12 +120,61 @@ export function makePlayerRig({ color, skin, num, isCaptain = false }) {
   return g;
 }
 
-/** 선수 상태(pure)를 리그에 반영 + 달리기 애니메이션 */
-export function animateRig(rig, p, dt, camera) {
+/**
+ * 골 세리머니 포즈 — 두 팔을 번쩍 들고 제자리에서 뛴다.
+ *
+ * 시뮬레이션은 골이 들어간 그 틱에 곧바로 kickoff()을 불러 선수를 대형으로 되돌린다.
+ * 그래서 여기서 보이는 건 "골 넣은 자리"가 아니라 킥오프 대형에서의 환호다.
+ *
+ * 넣은 자리에서 세리머니하게 만들려면 리그 좌표를 직전 프레임 값으로 얼려야 하는데,
+ * 실제로 해 보니(골 감지를 view.sync()보다 앞으로 옮기고 위치 갱신을 건너뛰는 방식)
+ * 세리머니 자체가 안 걸리는 상태가 돼서 되돌렸다 — 실측: 점프 높이가 전원 0, 리그 좌표도
+ * 킥오프 대형과 1~2m 이내로 동일. 제대로 하려면 시뮬레이션에 세리머니 구간을 두고
+ * kickoff()을 그만큼 미루는 쪽이 맞다.
+ *
+ * @param {number} t 세리머니 시작 후 흐른 시간(초)
+ */
+function celebratePose(rig, t) {
+  const ud = rig.userData;
+  // 두 팔 번쩍 — 살짝 흔든다
+  const wave = Math.sin(t * 9) * 0.18;
+  ud.armL.rotation.x = -2.5 + wave;
+  ud.armR.rotation.x = -2.5 - wave;
+  // 제자리 점프 — 음수 구간을 잘라서 "땅에 붙었다 뛰는" 리듬을 만든다
+  const hop = Math.max(0, Math.sin(t * 7));
+  rig.position.y = hop * 0.55;
+  // 뛰는 동안 다리를 접는다
+  ud.legL.hip.rotation.x = -hop * 0.5;
+  ud.legR.hip.rotation.x = -hop * 0.5;
+  ud.legL.knee.rotation.x = hop * 1.0;
+  ud.legR.knee.rotation.x = hop * 1.0;
+  ud.torso.rotation.x = -0.12;
+  ud.head.position.z = 0;
+  rig.rotation.z = 0;
+}
+
+/**
+ * 선수 상태(pure)를 리그에 반영 + 달리기 애니메이션.
+ * @param {number|null} celebrateT null이 아니면 달리기 대신 골 세리머니를 그린다(초 단위 경과 시간)
+ */
+export function animateRig(rig, p, dt, camera, celebrateT = null) {
+  const ud = rig.userData;
+
+  if (celebrateT !== null) {
+    // 위치(x/z)·몸 방향은 갱신하지 않는다 — 리그가 들고 있는 직전 프레임 좌표,
+    // 즉 "골이 들어가던 순간의 자리"를 그대로 유지한 채 환호한다.
+    celebratePose(rig, celebrateT);
+    // 체력 바는 세리머니 중에도 그대로 유지한다(아래 공통 처리와 같은 내용).
+    const eC = p.energy;
+    ud.bar.fg.scale.x = Math.max(0.01, eC);
+    ud.bar.fg.position.x = -(1 - eC) * 0.8;
+    ud.bar.fg.material.color.setHex(eC > 0.6 ? 0x3fb950 : eC > 0.35 ? 0xd29922 : 0xf85149);
+    if (camera) ud.bar.group.quaternion.copy(camera.quaternion);
+    return;
+  }
+
   rig.position.set(p.x, 0, p.z);
   rig.rotation.y = p.heading;
-
-  const ud = rig.userData;
   const sp = Math.hypot(p.vx, p.vz);
 
   // 방향 전환 시 몸을 살짝 기울여(뱅킹) 관성으로 버티는 느낌을 준다 — 정지 상태에서는 안 기운다.

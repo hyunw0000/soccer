@@ -282,8 +282,17 @@ export function createMatchView(container, sim, captainNum = null) {
   }
 
   /** 시뮬 상태를 화면에 반영 (dt=0이면 포즈 고정, 되감기 중에도 호출 가능) */
+  // 골 세리머니 — { team, t(초) } 또는 null. match 화면이 매 프레임 갱신해 준다.
+  let celebration = null;
+  /** 득점 팀과 경과 시간을 넘기면 그 팀 선수만 세리머니 포즈로 그린다. null이면 해제. */
+  function setCelebration(next) {
+    celebration = next;
+  }
+
   function sync(dt = 0) {
-    for (const [p, rig] of rigs) animateRig(rig, p, dt, camera);
+    for (const [p, rig] of rigs) {
+      animateRig(rig, p, dt, camera, celebration && celebration.team === p.team ? celebration.t : null);
+    }
     const b = sim.ball;
 
     // 굴림 — 예전엔 rotation.x/z에 속도를 그냥 누적했는데, 무늬가 생기고 나면 그게 눈에 띈다
@@ -349,6 +358,7 @@ export function createMatchView(container, sim, captainNum = null) {
     screenToField,
     setPathPoints,
     clearPaths,
+    setCelebration,
     setOrbitEnabled,
   };
 }
