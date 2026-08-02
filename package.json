@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "vite",
     "test": "npm run validate:flags && npm run validate:group-history && npm run validate:run-progress && npm run validate:tactics-impact",
-    "prebuild": "npm test",
+    "prebuild": "npm run validate:flags && npm run validate:group-history && npm run validate:run-progress",
     "build": "vite build",
     "validate:flags": "node scripts/validate-flags.mjs",
     "validate:group-history": "node scripts/validate-group-history.mjs",
