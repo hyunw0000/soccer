@@ -35,29 +35,6 @@
   color: var(--dim);
 }
 
-.tac-sets {
-  display: flex;
-  border: 1px solid var(--tac-edge);
-  border-radius: 4px;
-  overflow: hidden;
-}
-
-.tac-set {
-  width: 26px;
-  padding: 3px 0;
-  border: 0;
-  background: transparent;
-  color: var(--dim);
-  font: inherit;
-  font-size: 12px;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.tac-set + .tac-set { border-left: 1px solid var(--tac-edge); }
-.tac-set:hover { background: var(--tac-ink); color: var(--fg); }
-.tac-set.on { background: var(--fg); color: #06121a; }
-
 .tac-presets { list-style: none; }
 
 .tac-preset {
