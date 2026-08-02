@@ -49,7 +49,7 @@ function compactFinalMatchCard(groupState,ctx) {
     el('p',{class:'wc-compact-final__rule',text:hasResult
       ? (groupState.qualificationStatus==='qualified'?'대한민국이 A조 2위로 32강에 진출했습니다.':'대한민국의 조별리그 탈락이 확정되었습니다.')
       : '승리 또는 무승부 시 32강 진출'}),
-    !hasResult ? el('button',{type:'button',class:'wc-compact-final__cta',text:'남아공전 준비하기','aria-label':'남아프리카공화국전 전술 준비 화면으로 이동',onclick:()=>ctx.navigate('tactics')}) : null,
+    !hasResult ? el('button',{type:'button',class:'wc-compact-final__cta',text:'남아공전 준비하기','aria-label':'남아프리카공화국전 선수단 준비 화면으로 이동',onclick:()=>ctx.navigate('roster')}) : null,
   ]);
 }
 
