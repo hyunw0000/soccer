@@ -1006,8 +1006,11 @@ export class Sim {
   }
 
   pushEvent(type, team, text) {
+    // 예전엔 50개 넘으면 shift()로 앞을 잘라냈는데, 그러면 배열 인덱스가 통째로 하나씩
+    // 밀려서 match.js의 renderedEvents(순수 카운터)가 실제 인덱스와 어긋난다 — 그 상태에서
+    // 다음 실점 이벤트가 스캔 범위 밖으로 밀려나면 되돌리기 배너가 아예 안 뜨는 버그가 났다.
+    // 경기당 이벤트 수는 많아야 수백 개라 굳이 자르지 않아도 메모리 부담이 없다.
     this.events.push({ tick: this.tick, minute: this.matchMinute, type, team, text });
-    if (this.events.length > 50) this.events.shift();
   }
 
   /** 우리 팀(home)이 가장 최근 실점한 골 이벤트. 없으면 null. */
