@@ -23,6 +23,7 @@
 .top-navigation__inner {
   display: flex;
   align-items: stretch;
+  gap: clamp(4px, 1.5vw, 16px);
   width: min(var(--game-page-max-width, 1540px), 100%);
   min-height: var(--app-navigation-height);
   margin: 0 auto;
@@ -31,9 +32,23 @@
   scrollbar-width: thin;
 }
 
+/* 단계 표시 — 클릭 대상이 아니다. 이동은 각 화면 하단의 다음/이전 버튼으로 한다. */
+.top-navigation__steps {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: stretch;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
 .top-navigation__item {
   position: relative;
+  display: flex;
   flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
   min-width: 88px;
   border: 0;
   background: transparent;
@@ -42,6 +57,15 @@
   font-weight: 800;
   letter-spacing: 0.04em;
   transition: color 150ms ease, background 150ms ease, text-shadow 150ms ease;
+}
+
+/* 이미 지나온 단계 — 현재 단계만큼 밝지는 않지만 "밟았다"는 게 보여야 한다. */
+.top-navigation__item.is-done {
+  color: var(--fg);
+}
+
+.top-navigation__item.is-done::after {
+  background: rgba(83, 158, 185, 0.55);
 }
 
 .top-navigation__item::after {
@@ -53,11 +77,6 @@
   height: 3px;
   background: transparent;
   transition: background 150ms ease, box-shadow 150ms ease;
-}
-
-.top-navigation__item:hover {
-  background: rgba(36, 204, 232, 0.08);
-  color: var(--fg);
 }
 
 .top-navigation__item.is-active {
@@ -81,6 +100,6 @@
 
 @media (max-width: 720px) {
   :root { --app-navigation-height: 54px; }
-  .top-navigation__item { min-width: 76px; font-size: 12px; }
-  .top-navigation__item::after { right: 12px; left: 12px; }
+  .top-navigation__item { min-width: 60px; font-size: 12px; }
+  .top-navigation__item::after { right: 8px; left: 8px; }
 }

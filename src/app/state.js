@@ -1,3 +1,8 @@
+// 배럴(`lineup/index.js`)이 아니라 formations.js를 직접 집는다 — 배럴은 화면 모듈까지
+// re-export하고 그 화면이 app/public.js를 되짚어서 순환이 된다. 이 파일은 `load()`를
+// 모듈 평가 시점에 실행하므로(아래 `state` 초기화) 순환이 생기면 시작하자마자 TDZ로 죽는다.
+// formations.js → domain/roles.js는 순수 데이터·함수 체인이라 되짚는 곳이 없다.
+import { resolveFormationId } from '../lineup/formations.js';
 import { defaultPool, findById } from '../roster/index.js';
 import { TACTIC_DEFAULT } from '../tactics/index.js';
 import {
@@ -37,7 +42,9 @@ const initial = {
   tournamentBracket: null,
   // 남아공전이 끝난 뒤에만 { homeScore, awayScore }를 저장한다. home이 남아공이다.
   groupAFinalResult: null,
-  // 32강부터의 우리 경기 결과 [{ matchId, koreaScore, opponentScore }]. 진행 순서대로만 쌓인다.
+  // 32강부터의 우리 경기 결과. 진행 순서대로만 쌓인다.
+  // [{ matchId, koreaScore, opponentScore, koreaPenaltyScore?, opponentPenaltyScore?, extraTime? }]
+  // — 연장·승부차기는 무승부가 허용되지 않는 32강 이후에만 붙는다.
   knockoutResults: [],
   // 경기를 치를 때마다 오르는 번호. MatchSetup의 seed에 섞어서 같은 라운드를 다시 치러도
   // 지난번과 똑같은 경기가 반복되지 않게 한다.
@@ -78,12 +85,21 @@ export const gameProgress = () =>
 
 /**
  * 방금 끝난 경기 결과를 저장한다. 점수는 항상 우리 팀 관점이다.
+ * 32강부터는 연장·승부차기까지 갈 수 있어 그 결과도 함께 받는다 —
+ * 승부차기 점수는 경기 스코어에 더하지 않고 승자를 가리는 데만 쓴다.
  * @returns {object} 반영된 뒤의 진행 상태
  */
-export function recordKoreaMatch({ matchId, koreaScore, opponentScore }) {
+export function recordKoreaMatch({
+  matchId,
+  koreaScore,
+  opponentScore,
+  koreaPenaltyScore = null,
+  opponentPenaltyScore = null,
+  extraTime = false,
+}) {
   const saved = applyKoreaMatchResult(
     { groupAFinalResult: state.groupAFinalResult, knockoutResults: state.knockoutResults },
-    { matchId, koreaScore, opponentScore }
+    { matchId, koreaScore, opponentScore, koreaPenaltyScore, opponentPenaltyScore, extraTime }
   );
   const progress = createGameProgress(saved);
   setState({
@@ -158,7 +174,11 @@ function load() {
       if (ids.length >= 11) out.poolIds = ids.slice(0, 26);
     }
     if (typeof v.captainId === 'string' && findById(v.captainId)) out.captainId = v.captainId;
-    if (typeof v.formation === 'string') out.formation = v.formation;
+    // 포메이션도 "실제로 있는 것"인지까지 본다 — 화면들이 resolveFormationId로 한 번 더
+    // 막아 주긴 하지만, 저장값을 거르는 건 이 자리의 일이다(위 captainId·poolIds와 같은 규칙).
+    if (typeof v.formation === 'string' && resolveFormationId(v.formation) === v.formation) {
+      out.formation = v.formation;
+    }
     // 배치는 lineup의 createStartingLineup이 읽을 때 정규화하므로 형태만 확인한다.
     if (v.startingLineup && Array.isArray(v.startingLineup.assignments)) {
       out.startingLineup = v.startingLineup;

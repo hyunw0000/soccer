@@ -13,7 +13,9 @@ import { Sim } from './sim.js';
 /**
  * MatchSetup으로 경기를 만든다. 입력이 유효하지 않으면 오류를 던진다.
  * @param {object} matchSetup MatchSetup version 1
+ * @param {object} [rules] 대회 규칙 — `{ extraTime, shootout }`. 32강부터의 토너먼트처럼
+ *   무승부로 끝날 수 없는 경기에서만 켠다. 기본값은 둘 다 false(90분에 무승부로 종료).
  */
-export function createSimulation(matchSetup) {
-  return new Sim(matchSetup);
+export function createSimulation(matchSetup, rules) {
+  return new Sim(matchSetup, rules);
 }
