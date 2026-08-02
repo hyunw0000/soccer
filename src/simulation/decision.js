@@ -93,7 +93,13 @@ export function scorePassCandidates(sim, p) {
     const captainBonus = m.isCaptain ? 0.15 : 0;
 
     const score = wForward * forwardGain + wSafety * successProb + wWidth * widthFit - lengthPenalty + captainBonus;
-    out.push({ type: 'pass', target: m, score, tiebreak: seededRandomPlayerId(m.team, m.idx), meta: { distance: d, successProb } });
+    out.push({
+      type: 'pass',
+      target: m,
+      score,
+      tiebreak: seededRandomPlayerId(m.team, m.idx),
+      meta: { distance: d, successProb, forwardGain },
+    });
   }
   return out;
 }
@@ -184,6 +190,11 @@ export function buildCandidates(sim, p) {
  * 점수 최댓값 후보 하나를 고른다. 동점이면 tiebreak 오름차순(§6.10 체크리스트의
  * "playerId 오름차순" 규칙을 후보 식별자로 확장 — 패스는 대상 선수의 정수 id,
  * 그 외 타입은 고정 상수라 대상이 없는 후보끼리도 항상 같은 순서로 정렬된다).
+ *
+ * 최댓값 선택 뒤에 "선택 개성"(boldness)을 한 번 더 적용한다 — 이건 후보 채점이 아니라
+ * 채점이 끝난 다음 "그중에서 실제로 뭘 고르는 성격이냐"의 문제라 점수함수 목록에는 안 넣고
+ * 여기서 한 단계로 둔다. 패스 대상 사이에서만 의미가 있어(왜 슛 대신 드리블을 택했는지에는
+ * "과감함"이 적용될 자리가 없다) best.type==='pass'일 때만 작동한다.
  */
 export function chooseAction(sim, p) {
   const candidates = buildCandidates(sim, p);
@@ -193,5 +204,29 @@ export function chooseAction(sim, p) {
       best = c;
     }
   }
+  if (best && best.type === 'pass') {
+    best = applyPersonalityDeviation(sim, p, candidates, best);
+  }
   return best;
+}
+
+/**
+ * boldness가 중립(0.5)이면 항상 점수 1등 그대로. 과감할수록 가끔 상위권의 아무 대안을,
+ * 신중할수록 가끔 상위권 중 가장 안전한(전진이득이 가장 낮은) 대안을 대신 고른다.
+ * 판단 단계의 "성격"이라 실행 성공확률과 무관한 sim.rng(스트림) 그대로 쓴다.
+ */
+function applyPersonalityDeviation(sim, p, candidates, best) {
+  const passCandidates = candidates.filter((c) => c.type === 'pass');
+  if (passCandidates.length <= 1) return best;
+  const bold = p.boldness - 0.5;
+  const deviateProb = Math.abs(bold) * 2 * PARAMS.personalityDeviateMax;
+  if (sim.rng.next() >= deviateProb) return best;
+
+  const ranked = [...passCandidates].sort((a, b) => b.score - a.score).slice(0, PARAMS.personalityTopN);
+  if (bold > 0) {
+    const alts = ranked.slice(1);
+    if (!alts.length) return best;
+    return alts[Math.floor(sim.rng.next() * alts.length)];
+  }
+  return ranked.reduce((a, b) => (b.meta.forwardGain < a.meta.forwardGain ? b : a));
 }
