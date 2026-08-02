@@ -49,4 +49,22 @@ export class RewindBuffer {
     this.size -= back;
     return this.buf[idx];
   }
+
+  /**
+   * targetTick 이하이면서 가장 가까운(=가장 큰) 스냅샷을 찾는다.
+   * 저장된 스냅샷이 전부 targetTick보다 미래이거나 버퍼가 비어 있으면
+   * 가장 오래된 스냅샷을 대신 반환한다. rewind()와 달리 버퍼를 소비하지 않는다.
+   * @returns {object|null} 복원할 스냅샷
+   */
+  findNearestTick(targetTick) {
+    if (this.size === 0) return null;
+    for (let i = 0; i < this.size; i++) {
+      // head-1(가장 최근)부터 과거 방향으로 훑는다 — 먼저 걸리는 것이 targetTick에 가장 가깝다
+      const idx = (this.head - 1 - i + this.capacity * 2) % this.capacity;
+      const snap = this.buf[idx];
+      if (snap && snap.tick <= targetTick) return snap;
+    }
+    const oldestIdx = (this.head - this.size + this.capacity * 2) % this.capacity;
+    return this.buf[oldestIdx];
+  }
 }
