@@ -498,20 +498,24 @@ export default function tournamentScreen(root, ctx, params = {}) {
         el('h1', { text: '운명을 다시 쓰는 대회' }),
         el('p', { text: '조별리그 마지막 승부부터 결승까지, 모든 결과가 역사를 바꿉니다.' }),
       ]),
-      compactFinalMatchCard(groupState,ctx),
+      currentMatchCard(progress,ctx,params.onRetry),
   ]);
   root.append(el('main', { class: 'screen tournament-screen' }, [
     hero,
     subTabs,groupPanel,knockoutPanel,
   ]));
 
-  const floatingPrepareButton = groupState.finalMatch.status !== 'completed'
+  const activeStep = progress.activeStep;
+  const activeStepPlayed = activeStep
+    ? progress.played.some((entry)=>entry.matchId===activeStep.matchId)
+    : true;
+  const floatingPrepareButton = activeStep && !activeStepPlayed
     ? el('button',{
       type:'button',
       class:'wc-floating-prepare',
-      text:'남아공전 준비하기 →',
+      text:`${shortName(activeStep.opponentTeamId)}전 준비하기 →`,
       hidden:true,
-      'aria-label':'남아프리카공화국전 선수단 준비 화면으로 이동',
+      'aria-label':`${countries[activeStep.opponentTeamId].nameKo}전 선수단 준비 화면으로 이동`,
       onclick:()=>ctx.navigate('roster'),
     })
     : null;
