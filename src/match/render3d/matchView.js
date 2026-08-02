@@ -290,8 +290,10 @@ export function createMatchView(container, sim, captainNum = null) {
   }
 
   function sync(dt = 0) {
+    // 탑뷰는 카메라가 90m 상공이라 등번호가 작아진다 — 그때만 크게 그린다.
+    const topView = cam.mode === 'top';
     for (const [p, rig] of rigs) {
-      animateRig(rig, p, dt, camera, celebration && celebration.team === p.team ? celebration.t : null);
+      animateRig(rig, p, dt, camera, celebration && celebration.team === p.team ? celebration.t : null, topView);
     }
     const b = sim.ball;
 

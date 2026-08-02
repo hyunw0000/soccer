@@ -1,23 +1,33 @@
 import * as THREE from 'three';
 
+// 등번호 크기. 방송캠·공추적은 예전 그대로(1.6)이고, 탑뷰에서만 키운다.
+//
+// 스프라이트는 카메라에서 멀수록 작아진다(sizeAttenuation 기본값). 방송캠은 앞줄 선수가
+// 60m라 번호가 큼직하게 보이는데, 탑뷰는 카메라가 90m 상공이라 같은 1.6이 훨씬 작게 나온다.
+// 그래서 탑뷰에서만 "방송캠 앞줄에서 보이던 크기"가 되도록 환산했다 — 1.6 × 90 / 60 = 2.4.
+// 방송캠 경로는 값이 예전과 완전히 같아서 화면이 달라지지 않는다.
+const BADGE_SCALE = 1.6;
+const BADGE_SCALE_TOP = 2.4;
+
 /** 등번호 + 체력 링을 그린 스프라이트 (머리 위 표식) */
 function badgeSprite(num, color) {
   const c = document.createElement('canvas');
-  c.width = c.height = 128;
+  // 탑뷰에서 1.5배로 커지므로 해상도를 올려 둔다. 크기는 안 변하고 선명도만 좋아진다.
+  c.width = c.height = 256;
   const g = c.getContext('2d');
   g.fillStyle = `#${color.toString(16).padStart(6, '0')}`;
   g.beginPath();
-  g.arc(64, 64, 56, 0, Math.PI * 2);
+  g.arc(128, 128, 112, 0, Math.PI * 2);
   g.fill();
   g.fillStyle = '#fff';
-  g.font = 'bold 70px sans-serif';
+  g.font = 'bold 140px sans-serif';
   g.textAlign = 'center';
   g.textBaseline = 'middle';
-  g.fillText(String(num), 64, 68);
+  g.fillText(String(num), 128, 136);
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false }));
-  sp.scale.set(1.6, 1.6, 1);
+  sp.scale.set(BADGE_SCALE, BADGE_SCALE, 1);
   sp.position.y = 4.0;
   return sp;
 }
@@ -101,7 +111,8 @@ export function makePlayerRig({ color, skin, num, isCaptain = false }) {
   const armR = arm(-1);
   const legL = leg(1);
   const legR = leg(-1);
-  g.add(badgeSprite(num, color));
+  const badge = badgeSprite(num, color);
+  g.add(badge);
 
   const bar = energyBar();
   g.add(bar.group);
@@ -116,7 +127,7 @@ export function makePlayerRig({ color, skin, num, isCaptain = false }) {
     g.add(band);
   }
 
-  g.userData = { armL, armR, legL, legR, torso, head, bar, phase: Math.random() * 6.28 };
+  g.userData = { armL, armR, legL, legR, torso, head, bar, badge, phase: Math.random() * 6.28 };
   return g;
 }
 
@@ -156,8 +167,11 @@ function celebratePose(rig, t) {
 /**
  * 선수 상태(pure)를 리그에 반영 + 달리기 애니메이션.
  * @param {number|null} celebrateT null이 아니면 달리기 대신 골 세리머니를 그린다(초 단위 경과 시간)
+ * @param {boolean} topView 탑뷰면 등번호만 키운다(방송캠은 영향 없음)
  */
-export function animateRig(rig, p, dt, camera, celebrateT = null) {
+export function animateRig(rig, p, dt, camera, celebrateT = null, topView = false) {
+  // 탑뷰에서만 등번호를 키운다. 다른 카메라는 예전 값(BADGE_SCALE) 그대로다.
+  rig.userData.badge.scale.setScalar(topView ? BADGE_SCALE_TOP : BADGE_SCALE);
   const ud = rig.userData;
 
   if (celebrateT !== null) {
