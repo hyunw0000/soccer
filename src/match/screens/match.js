@@ -422,6 +422,18 @@ export default function matchScreen(root, ctx) {
       lastPhase = sim.phase;
       updateBanners();
     }
+    // 방어선 — 복원된 상태가 '경기 중'이 아니면 재개 버튼(setPaused)이 조용히 막혀서
+    // 화면이 통째로 굳는다. 위 두 수정(rewind.js의 phase 필터 + 기간 시작 스냅샷)으로
+    // 여기 걸릴 일은 없어야 하지만, 굳는 것보다는 안내 모달을 띄워 빠져나갈 수 있게 둔다.
+    const restoredBreak = PERIOD_BREAKS[sim.phase];
+    if (restoredBreak) {
+      lastPhase = sim.phase;
+      setPaused(true);
+      view.sync(0);
+      updateRewindButton();
+      openKickoffBriefing(restoredBreak);
+      return;
+    }
     view.sync(0);
     setPaused(true);
     updateRewindButton();
@@ -1401,6 +1413,11 @@ export default function matchScreen(root, ctx) {
     // 승부차기는 sim이 이미 시작해 둔 상태(첫 키커까지 배치돼 있다)라 여기서 할 일이 없다.
     if (briefingKind === 'secondHalf' || briefingKind === 'extraFirst' || briefingKind === 'extraSecond') {
       sim.startNextPeriod({ swapEnds:true });
+      // 새 기간의 첫 상태를 되감기 버퍼에 반드시 남긴다. startNextPeriod()는 tick을 올리지
+      // 않으므로, 이걸 안 하면 그 틱에 남는 스냅샷은 "직전 기간이 끝난 순간"(phase가
+      // halftime 등)뿐이다. getRewindTargetTick()은 되감기를 기간 시작 틱으로 잘라 주는데,
+      // 거기 착지하면 phase가 'playing'이 아니라서 재개가 조용히 막혔다(rewind.js 주석 참고).
+      rewind.record(sim);
       updateScoreboard();
       view.sync(0);
     }
