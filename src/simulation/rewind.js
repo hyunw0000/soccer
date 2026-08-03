@@ -31,10 +31,29 @@ export class RewindBuffer {
 
   /** 매 스텝 뒤에 호출. 간격에 걸릴 때만 실제로 저장한다. */
   maybeRecord(sim) {
-    // 승부차기는 되감기 대상이 아니다(sim.canRewind()도 막는다). 스냅샷에 승부차기 상태가
-    // 없으므로 여기 담아 두면 나중에 복원할 때 오히려 어긋난 상태가 만들어진다.
-    if (sim.phase === 'shootout') return;
+    // 'playing'이 아닌 상태는 되감기 착지점이 될 수 없다.
+    //
+    // 승부차기는 애초에 되감기 대상이 아니고(sim.canRewind()도 막는다) 스냅샷에 승부차기
+    // 상태가 없어서, 담아 두면 복원할 때 어긋난 상태가 만들어진다.
+    //
+    // 하프·연장 사이의 대기 상태(halftime / extratime-break / extratime-halftime)는 더 나빴다.
+    // 기간이 끝나는 틱(후반 2700 · 연장 5400 · 연장후반 6300)에서 updatePhase()가 phase를
+    // 바꾼 **직후에** 스냅샷이 찍히는데, startNextPeriod()는 tick을 올리지 않으므로 그 틱에
+    // 'playing' 스냅샷이 새로 생기지 않는다. 그래서 그 틱이 유일하게 남고, 되감기가 거기
+    // 착지하면 phase가 'halftime'인 채로 복원돼 재개 버튼(setPaused)이 조용히 막힌다 —
+    // 화면이 굳는다. 실측: 60경기에서 되감기 45회 중 19회(42%)가 이 상태였다.
+    if (sim.phase !== 'playing') return;
     if (sim.tick % this.intervalTicks !== 0) return;
+    this.record(sim);
+  }
+
+  /**
+   * 간격과 무관하게 지금 상태를 저장한다.
+   * 기간 시작처럼 "되감기가 반드시 여기로 돌아올 수 있어야 하는 순간"에 쓴다 —
+   * getRewindTargetTick()이 기간 시작 틱으로 잘라 주는데, 그 틱에 유효한 스냅샷이
+   * 없으면 되감기가 갈 곳을 잃는다.
+   */
+  record(sim) {
     this.buf[this.head] = sim.snapshot();
     this.head = (this.head + 1) % this.capacity;
     this.size = Math.min(this.size + 1, this.capacity);
