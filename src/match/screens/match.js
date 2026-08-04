@@ -1193,7 +1193,14 @@ export default function matchScreen(root, ctx) {
   }
 
   const onKey = (e) => {
-    if (matchPhase === 'kickoffBriefing') return;
+    // 안내 모달이 떠 있는 동안에는 단축키를 전부 막는다.
+    //
+    // 예전에는 첫 킥오프 브리핑('kickoffBriefing')만 막아서, 하프타임·연장·승부차기 안내가
+    // 떠 있는 동안에는 R(되감기)·T(전술)·스페이스(일시정지)가 그대로 먹혔다. 모달 뒤에서
+    // 되감기가 실행되면 시계가 이전 하프로 돌아가는데 모달의 "시작"은 여전히
+    // startNextPeriod()를 불러서 기간이 한 번 더 넘어가고, 전술 창은 모달 뒤에 열려
+    // 클릭이 안 된다.
+    if (matchPhase !== 'playing') return;
     if (e.key === " ") {
       e.preventDefault();
       setPaused(!paused);
@@ -1422,10 +1429,13 @@ export default function matchScreen(root, ctx) {
       view.sync(0);
     }
     matchPhase = 'playing';
-    paused = false;
     kickoffDialog.close();
     last = performance.now();
-    updateBanners();
+    // paused를 직접 대입하면 안 된다 — 버튼 라벨·상태 클래스를 갱신하는 건 setPaused()뿐이라,
+    // 경기는 흐르는데 버튼은 "▶ 재개"에 묶인 채로 남는다. 그 상태에서 버튼을 누르면
+    // setPaused(!paused)가 오히려 경기를 **멈춰** 버려서, 감독 눈에는 "재개를 눌렀더니
+    // 안 움직인다"로 보인다. 안내를 넘긴 직후가 정확히 그 상황이었다.
+    setPaused(false); // updateBanners()도 여기서 같이 불린다
     pauseBtn.focus();
   });
 
