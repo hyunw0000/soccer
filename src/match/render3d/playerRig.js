@@ -9,6 +9,10 @@ import * as THREE from 'three';
 const BADGE_SCALE = 1.6;
 const BADGE_SCALE_TOP = 2.4;
 
+// 제자리에 선 선수의 미세한 무게중심 이동 폭(라디안). 크게 잡으면 가만히 선 선수가
+// 흐느적거려 보인다 — 눈에 "살아 있다"만 전할 정도로 작게 둔다.
+const IDLE_SWAY = 0.06;
+
 /**
  * 배경색 위에서 읽히는 글자색. WCAG 상대휘도로 밝기를 재서 밝은 배경엔 검은 글씨를 쓴다.
  *
@@ -223,15 +227,27 @@ export function animateRig(rig, p, dt, camera, celebrateT = null, topView = fals
   const swing = Math.min(1, (sp / p.maxSpeed) * 1.3);
   const a = Math.sin(ud.phase) * swing;
 
-  ud.legL.hip.rotation.x = a * 0.9;
-  ud.legR.hip.rotation.x = -a * 0.9;
-  ud.legL.knee.rotation.x = Math.max(0, -Math.cos(ud.phase)) * swing * 1.1;
-  ud.legR.knee.rotation.x = Math.max(0, Math.cos(ud.phase)) * swing * 1.1;
-  ud.armL.rotation.x = -a * 0.7;
-  ud.armR.rotation.x = a * 0.7;
-  ud.torso.rotation.x = swing * 0.18;
+  // 제자리에 선 선수가 완전히 굳어 있으면 조각상처럼 보인다. 시뮬레이션에서 멈춰 있는 것
+  // 자체는 정상이지만(자기 자리에 도달하면 스티어링이 힘을 안 준다), 화면에서 12초 넘게
+  // 미동도 없으면 "이유도 없이 멍하니 서 있다"로 읽힌다 — 실측으로 한 번 멈추면 최장 738틱
+  // 동안 속도가 0.3m/s 미만이었다.
+  //
+  // 달리기 애니메이션이 꺼지는 구간(swing≈0)에서만 아주 작은 무게중심 이동을 넣는다.
+  // 달릴 때는 idle이 0이라 예전 동작과 완전히 같다.
+  const idle = (1 - Math.min(1, swing * 4)) * IDLE_SWAY;
+  const sway = Math.sin(ud.phase * 0.35);
+  const bob = Math.sin(ud.phase * 0.7);
+
+  ud.legL.hip.rotation.x = a * 0.9 + idle * sway;
+  ud.legR.hip.rotation.x = -a * 0.9 - idle * sway;
+  ud.legL.knee.rotation.x = Math.max(0, -Math.cos(ud.phase)) * swing * 1.1 + idle * Math.max(0, sway);
+  ud.legR.knee.rotation.x = Math.max(0, Math.cos(ud.phase)) * swing * 1.1 + idle * Math.max(0, -sway);
+  ud.armL.rotation.x = -a * 0.7 - idle * sway * 0.8;
+  ud.armR.rotation.x = a * 0.7 + idle * sway * 0.8;
+  ud.torso.rotation.x = swing * 0.18 + idle * 0.5;
   ud.head.position.z = swing * 0.05;
-  rig.position.y = Math.abs(Math.sin(ud.phase)) * 0.08 * swing;
+  rig.rotation.z = bank + idle * sway * 0.6;
+  rig.position.y = Math.abs(Math.sin(ud.phase)) * 0.08 * swing + idle * bob * 0.4;
 
   // 체력 바: 항상 카메라를 바라보고, 남은 비율만큼 왼쪽 정렬로 줄어든다
   const e = p.energy;
