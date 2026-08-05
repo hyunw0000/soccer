@@ -827,22 +827,36 @@
   letter-spacing: 0.06em;
 }
 
-/* 점수 + 경기 시간 한 줄. .hud .score의 margin-bottom은 base.css(공유)에 있어서
-   안 건드리고, 여기서 줄 단위로만 감싼다. */
+/* 점수 + 경기 시간 한 줄.
+   빨간 밑줄과 아래 여백은 base.css(공유)에서 .hud .score에 걸려 있다. 시계까지 한 덩어리로
+   보이게 그 둘을 감싸는 줄로 옮기고, 점수 쪽 값만 여기서 눌러 준다(공유 파일은 안 건드린다). */
 .hud .hud-head {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
+  padding-bottom: 10px;
   margin-bottom: 6px;
+  border-bottom: 2px solid var(--kor);
 }
 .hud .hud-head .score {
+  padding-bottom: 0;
   margin-bottom: 0;
+  border-bottom: none;
 }
+/* 시계는 아래 지표 값들과 확실히 구분되어야 한다 — 예전엔 같은 굵기·같은 하늘색이라
+   데이터 한 줄처럼 읽혔다. 흰색 알약으로 빼서 스코어보드 쪽 요소로 보이게 한다.
+   tabular-nums는 숫자 폭을 고정해 초가 바뀔 때 글자가 밀리지 않게 한다. */
 .hud .hud-clock {
-  color: #64dff5;
+  flex: none;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.09);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #fff;
   font-size: 15px;
   font-weight: 800;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.08em;
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
