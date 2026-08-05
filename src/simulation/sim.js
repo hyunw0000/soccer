@@ -186,15 +186,20 @@ export class Sim {
       }
     }
 
+    // 점유율은 **마지막으로 건드린 팀** 기준이다. ownerKey로 세면 안 된다 — 느슨한 볼일 때는
+    // 소유자가 없어서 표본이 듬성듬성해지고, 그래서 경기 초반에 92% : 8% 같은 값이 튄다.
+    // 마지막 터치는 첫 터치 이후 항상 채워져 있어서 매 틱 세어지고, 값이 천천히 움직인다.
+    const toucher = this.playerByKey(this.ball.lastTouchKey);
+    if (toucher) this.stats[toucher.team].possessionTicks++;
+
+    // 볼 탈취는 그대로 소유(ownerKey) 기준이다 — "실제로 발밑에 넣었다"가 되찾음이지
+    // 스쳐 건드린 건 아니다.
     const owner = this.playerByKey(this.ball.ownerKey);
     if (!owner) {
       this.lastOwnerTeam = null;
       return;
     }
-    const s = this.stats[owner.team];
-    s.possessionTicks++;
-    // 볼 탈취 = 소유가 상대 팀에서 이 팀으로 넘어온 순간. 같은 팀 안에서 주고받는 건 세지 않는다.
-    if (this.lastOwnerTeam && this.lastOwnerTeam !== owner.team) s.recoveries++;
+    if (this.lastOwnerTeam && this.lastOwnerTeam !== owner.team) this.stats[owner.team].recoveries++;
     this.lastOwnerTeam = owner.team;
   }
 

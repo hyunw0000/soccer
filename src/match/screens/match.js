@@ -9,6 +9,9 @@ import { createLiveTacticsPanel } from "../../tactics/index.js";
 import { createMatchView, CAM_MODES } from "../render3d/index.js";
 import { getMatchSides } from "../matchSides.js";
 
+// 점유율을 보여 주기 시작하는 최소 표본(틱). 게임 시간 10분치 — 그 전에는 상대가 볼을
+// 한 번도 안 건드려서 100%가 뜨는 구간이라 판단 근거가 못 된다.
+const POSSESSION_MIN_TICKS = 600;
 const REWIND_LIMIT = 2; // 감독의 '되감기'는 유한한 자원이다 — 이 서비스의 규칙
 const REWIND_IDLE_LABEL = "↶ 실점 시에만 되감기 가능"; // 겨냥할 실점이 없을 때(대기 상태)
 // 골 세리머니 길이(초). 이 동안 경기는 멈추고 득점 팀이 환호하며, 끝나야 배너(킥오프·되돌리기
@@ -115,36 +118,29 @@ export default function matchScreen(root, ctx) {
   const fpsEl = el("b", { text: "-" });
   const rewindEl = el("b", { text: `${REWIND_LIMIT}회` });
 
-  // 경기 지표 — 값 하나가 전술 축 하나에 대응한다. 어느 손잡이를 당길지가 바로 보여야
-  // "보고 고친다"가 성립하므로, 라벨 옆에 그 축 이름을 작게 같이 적는다.
+  // 경기 지표는 세 개만 둔다 — 점유율·슈팅·평균 체력.
+  //
+  // 처음엔 볼 탈취와 좌·중·우 배치까지 넣고 라벨마다 "이 지표는 이 축"이라는 꼬리표를
+  // 붙였는데, 지시 슬라이더 바로 위에 놓으니 같은 말을 두 번 하는 꼴이라 화면만 어지러웠다.
+  // 자리도 지시 패널이 아니라 좌상단 HUD로 옮겼다 — 전술 패널이 열려도 안 가리는 자리다.
+  // (탈취·좌중우는 sim.stats에 그대로 쌓이고 있으니 필요해지면 꺼내 쓰면 된다.)
   const statPossEl = el("b", { text: "-" });
-  const statPossFill = el("i", {});
-  const statPossBar = el("div", { class: "statbar" }, [statPossFill]);
   const statShotEl = el("b", { text: "-" });
-  const statRecovEl = el("b", { text: "-" });
-  const statLaneEl = el("b", { text: "-" });
   const statEnergyEl = el("b", { text: "-" });
-  const statRow = (label, axis, valueEl) =>
-    el("div", { class: "row stat-row" }, [
-      el("span", {}, [el("span", { text: label }), el("em", { class: "stat-axis", text: axis })]),
-      valueEl,
-    ]);
 
   /** 지표를 매 프레임 갱신한다. 값은 전부 sim.stats(누적 카운터)에서 온다. */
   function updateStatsPanel(avgEnergy) {
     const h = sim.stats.home;
     const a = sim.stats.away;
     const possTotal = h.possessionTicks + a.possessionTicks;
-    // 아직 아무도 볼을 잡은 적 없으면 50:50으로 둔다(0으로 나누지 않는다).
-    const hp = possTotal ? Math.round((h.possessionTicks / possTotal) * 100) : 50;
-    statPossEl.textContent = `${hp} : ${100 - hp}`;
-    statPossFill.style.width = `${hp}%`;
+    // 누적 점유율은 경기 초반에 의미가 없다 — 상대가 아직 볼을 한 번도 안 건드렸으면 100%가
+    // 뜬다(실측: 6경기 전부 5분 시점에 100%). 틀린 값은 아니지만 감독이 보고 판단할 근거는
+    // 못 되므로, 표본이 쌓일 때까지는 아예 안 보여 준다. 중계 화면도 초반엔 점유율을 안 띄운다.
+    statPossEl.textContent =
+      possTotal < POSSESSION_MIN_TICKS
+        ? "집계 중"
+        : `${Math.round((h.possessionTicks / possTotal) * 100)}% : ${Math.round((a.possessionTicks / possTotal) * 100)}%`;
     statShotEl.textContent = `${h.shots}(${h.onTarget}) : ${a.shots}(${a.onTarget})`;
-    statRecovEl.textContent = `${h.recoveries} : ${a.recoveries}`;
-    const lanes = h.left + h.center + h.right;
-    statLaneEl.textContent = lanes
-      ? `${Math.round((h.left / lanes) * 100)} / ${Math.round((h.center / lanes) * 100)} / ${Math.round((h.right / lanes) * 100)}`
-      : "- / - / -";
     statEnergyEl.textContent = `${Math.round(avgEnergy * 100)}%`;
   }
   const feed = el("ul", { class: "feed" });
@@ -1487,6 +1483,12 @@ export default function matchScreen(root, ctx) {
           el("span", { text: "경기 시간" }),
           clockEl,
         ]),
+        // 경기 지표 셋(우리 : 상대)은 시계 바로 밑에 둔다. 전술 패널이 열리면 HUD 아래쪽이
+        // 가려지므로(패널이 y=258부터 덮는다) 지표가 그 밑에 있으면 정작 전술을 고치는
+        // 순간에 안 보인다.
+        el("div", { class: "row" }, [el("span", { text: "점유율" }), statPossEl]),
+        el("div", { class: "row" }, [el("span", { text: "슈팅 (유효)" }), statShotEl]),
+        el("div", { class: "row" }, [el("span", { text: "평균 체력" }), statEnergyEl]),
         el("div", { class: "row" }, [el("span", { text: "공 소유" }), possEl]),
         el("div", { class: "row" }, [el("span", { text: "평균 주행거리" }), distEl]),
         el("div", { class: "row" }, [el("span", { text: "카메라" }), camEl]),
@@ -1497,17 +1499,6 @@ export default function matchScreen(root, ctx) {
         el("div", { class: "row" }, [el("span", { text: "FPS" }), fpsEl]),
       ]),
       el("div", { class: "sidepanel" }, [
-        // 지표를 지시 슬라이더 **바로 위**에 둔다. 좌상단 HUD에 두면 전술 패널이 열릴 때
-        // 통째로 가려져서, 정작 전술을 고치는 순간에 근거가 안 보인다.
-        el("b", { class: "panel-title", text: "경기 지표" }),
-        el("div", { class: "statblock" }, [
-          statRow("점유율", "템포", statPossEl),
-          statPossBar,
-          statRow("슈팅 (유효)", "라인·템포", statShotEl),
-          statRow("볼 탈취", "압박", statRecovEl),
-          statRow("좌·중·우 배치", "폭", statLaneEl),
-          statRow("평균 체력", "압박", statEnergyEl),
-        ]),
         el("b", {
           class: "panel-title",
           text: `${state.managerName || "감독"}의 지시`,
