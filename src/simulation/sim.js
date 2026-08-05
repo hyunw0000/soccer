@@ -413,6 +413,24 @@ export class Sim {
     return raw * scale;
   }
 
+  /**
+   * 좌우 블록 이동 — 볼이 있는 쪽으로 팀 전체가 통째로 미끄러진다.
+   *
+   * 앞뒤(blockShift)는 있었는데 좌우가 없었다. 개인이 볼 쪽으로 15%만 당겨지는 항 하나뿐이라,
+   * 볼이 오른쪽 터치라인에 있어도 왼쪽 풀백은 9m만 움직이고 22m 떨어진 반대편에 혼자 남았다 —
+   * "공은 반대편에 있고 마크할 사람도 없는데 혼자 저 멀리 서 있는" 그림이 여기서 나온다.
+   * 실제 축구의 수비 블록은 볼 쪽으로 통째로 슬라이드하고, 반대편 풀백은 중앙으로 좁혀 든다.
+   *
+   * blockShift와 달리 팀 전체에 같은 비율을 곱해 줄이지 않는다. 대형이 이미 좌우로 거의
+   * 꽉 차 있어서(풀백이 ±31.3m) 그 방식을 쓰면 여유가 0이라 이동량이 통째로 사라진다.
+   * 대신 선수마다 경기장 안으로 자르게 둔다 — 그러면 볼 쪽 선수는 터치라인에서 멈추고
+   * 반대편 선수만 좁혀 들어와서, 실제 블록 슬라이드와 같은 모양이 된다.
+   */
+  lateralShift(team) {
+    const tactics = team === 'home' ? this.tactics : this.oppTactics;
+    return this.ball.z * (PARAMS.lateralShiftBase + tactics.pressing * PARAMS.lateralShiftPress);
+  }
+
   get clockSeconds() {
     return this.tick * PARAMS.dt;
   }
@@ -691,6 +709,9 @@ export class Sim {
     // 대형 이동은 팀 단위 값이라 선수마다 다시 계산하지 않는다.
     const homeShift = this.blockShift('home');
     const awayShift = this.blockShift('away');
+    // 좌우 블록 이동도 팀 단위 값이라 선수마다 다시 계산하지 않는다.
+    const homeSide = this.lateralShift('home');
+    const awaySide = this.lateralShift('away');
 
     for (const p of this.all) {
       if (p.sentOff || p.injured) continue; // 퇴장·부상 선수는 경기장 밖에 멈춰 선 채로 다시 움직이지 않는다
@@ -800,8 +821,10 @@ export class Sim {
         // 진짜 원인은 대형 계산 쪽이었고(coordinates.js의 등급형 확산 주석 참고) 이 보정은
         // 오히려 폭을 올릴수록 팀을 중앙으로 모아서 폭 축 자체를 죽였다 —
         // 실측: 폭 1.0의 좌우 폭이 54.1m(보정 없음)에서 44.2m로 줄어 중립(53.3m)보다 좁아졌다.
+        // 블록 전체가 볼 쪽으로 미끄러지고(side), 그 위에 개인의 활동량(roaming)만큼 더 붙는다.
+        const side = mine ? homeSide : awaySide;
         let tz = clamp(
-          baseZ + (this.ball.z - baseZ) * (0.08 + press * 0.14) * (0.15 + p.ins.roaming * 1.7),
+          baseZ + side + (this.ball.z - baseZ - side) * (0.08 + press * 0.14) * (0.15 + p.ins.roaming * 1.7),
           -HALF.W + margin,
           HALF.W - margin
         );

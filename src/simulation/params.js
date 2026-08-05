@@ -329,6 +329,10 @@ export const PARAMS = {
   // 결과를 더 크게 가른다. 네 값 모두 "전술 0.5 = 예전 동작"이 되도록 식을 맞춰 두었으니,
   // 밸런스를 만질 때는 이 상수만 움직이면 된다(scripts/validate-tactics-impact.mjs가 감시한다).
   lineHeightBasePush: 36, // 라인 높이가 대형 전체를 앞뒤로 미는 거리(m) — 0↔1이면 ±18m
+  // 좌우 블록 이동 — 볼의 z에 이 비율을 곱한 만큼 팀 전체가 볼 쪽으로 미끄러진다.
+  // 앞뒤(lineHeightBasePush)의 좌우 짝이다. 0이면 예전처럼 블록이 옆으로 안 움직인다.
+  lateralShiftBase: 0.35,
+  lateralShiftPress: 0.3, // 압박이 셀수록 볼 쪽으로 더 바짝 붙는다(압박 0.5에서 총 0.50)
   playerLineInset: 0.6, // 선수가 터치라인·골라인에서 최소한 떨어져 서는 거리(m)
   // "열린 동료에게 준다"의 무게. 이 값이 0이면 판단이 다시 드리블 일변도로 돌아간다.
   openPassWeight: 0.55,
