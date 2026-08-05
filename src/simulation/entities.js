@@ -13,6 +13,8 @@ export class Player {
     this.num = meta.num;
     this.name = meta.name;
     this.role = slot.role;
+    // 라인업이 준 원래 자리. 급조 골키퍼를 원래대로 돌려놓을 때만 쓴다(경기 중 안 바뀐다).
+    this.baseRole = slot.role;
     // 감독이 이 선수에게만 준 지시 8축(0..1). 경기 중에도 바뀌지 않으므로 스냅샷에 담지 않는다.
     this.ins = slot.instruction ?? { ...INSTRUCTION_FALLBACK };
     this.pace = meta.pace;
@@ -59,6 +61,10 @@ export class Player {
     // 부상 여부 — sentOff와 마찬가지로 경기장 밖으로 빠지지만, 교체로 자리를 채울 수 있다는
     // 점이 다르다(퇴장은 그 자리를 영원히 못 채운다).
     this.injured = false;
+    // 정식 골키퍼가 부상·퇴장으로 빠져서 대신 골문에 들어간 필드 플레이어인지.
+    // role은 refreshHomeSlots()가 라인업에서 매번 다시 써 넣으므로(전술을 바꿀 때마다,
+    // 되감기로 복원할 때마다) 역할만 바꿔 두면 곧 풀린다. 이 플래그가 그 사이에도 남는다.
+    this.actingKeeper = false;
   }
 
   /** 공격 방향 골라인의 x좌표 */

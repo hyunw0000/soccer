@@ -364,6 +364,8 @@ export class Sim {
     this.all = [...this.homeP, ...this.awayP];
     bench.delete(inPlayerId);
     this.subsUsed[team]++;
+    // 정식 골키퍼가 다시 생겼으면 급조 골키퍼는 원래 자리로 돌아간다.
+    this.demoteActingKeeper(team);
     this.pushEvent('substitution', team, `${meta.name} 투입 ↔ ${outPlayer.name} 교체 아웃`);
     return true;
   }
@@ -378,7 +380,9 @@ export class Sim {
       p.home.x = s.x * halfTurn;
       p.home.z = s.z * halfTurn;
       p.attackDirection = halfTurn;
-      p.role = s.role;
+      // 급조 골키퍼는 라인업의 역할보다 우선한다 — 안 그러면 전술을 바꾸거나 되감을 때마다
+      // 골문에 들어가 있던 선수가 원래 자리로 돌아가 골문이 다시 빈다.
+      p.role = p.actingKeeper ? 'GK' : s.role;
       // 경기 중 지시 변경도 여기로 들어온다. 다음 스텝부터 바로 반영된다.
       p.ins = s.instruction;
     });
@@ -507,6 +511,15 @@ export class Sim {
       p.vx = 0;
       p.vz = 0;
       p.kc = 0;
+    }
+    // 급조 골키퍼는 대형 자리가 아니라 골문에서 시작한다. 라인업상 그 자리는 아직 필드
+    // 플레이어의 것이라, 그대로 두면 킥오프마다 골문을 비우고 30~40m를 뛰어 돌아와야 한다
+    // (실측: 자기 골문에서 10m 넘게 떨어진 시간 29.1%, 최대 42.9m).
+    for (const p of this.all) {
+      if (!p.actingKeeper || p.sentOff || p.injured) continue;
+      const [gx, gz] = this.goalkeeperTarget(p);
+      p.x = gx;
+      p.z = gz;
     }
     const team = kickoffTeam === 'home' ? this.homeP : this.awayP;
     const taker = closest(team, this.ball); // GK 제외, 센터(볼)에 가장 가까운 선수
@@ -1147,6 +1160,39 @@ export class Sim {
     }
   }
 
+  /**
+   * 골키퍼가 빠진 팀에 대신 골문을 지킬 사람을 세운다.
+   *
+   * 실제 축구에서도 골키퍼가 퇴장·부상으로 나가면 필드 플레이어 한 명이 장갑을 낀다.
+   * 이게 없으면 그 팀은 남은 경기를 **빈 골문**으로 치른다 — 실측(20경기, 10분에 홈
+   * 골키퍼를 부상 처리): 자기 골문 10m 안에 아무도 없는 시간이 81.7%(정상 0.2%),
+   * 남은 경기 실점이 0.85에서 2.20으로 뛰었다.
+   *
+   * 고르는 기준은 수비력이고, 동점이면 idx로 갈라 같은 seed에서 같은 선수가 나오게 한다.
+   */
+  promoteKeeperIfNeeded(team) {
+    const side = team === 'home' ? this.homeP : this.awayP;
+    if (side.some((p) => p.role === 'GK' && !p.sentOff && !p.injured)) return;
+    const next = side
+      .filter((p) => !p.sentOff && !p.injured)
+      .sort((a, b) => b.defenseSkill - a.defenseSkill || a.idx - b.idx)[0];
+    if (!next) return; // 뛸 수 있는 선수가 아무도 없다
+    next.actingKeeper = true;
+    next.role = 'GK';
+    this.pushEvent('keeper', team, `${next.name} 골키퍼 대신 투입`);
+  }
+
+  /** 정식 골키퍼가 다시 생기면 급조 골키퍼를 원래 자리로 되돌린다. */
+  demoteActingKeeper(team) {
+    const side = team === 'home' ? this.homeP : this.awayP;
+    if (!side.some((p) => p.role === 'GK' && !p.actingKeeper && !p.sentOff && !p.injured)) return;
+    for (const p of side) {
+      if (!p.actingKeeper) continue;
+      p.actingKeeper = false;
+      p.role = p.baseRole;
+    }
+  }
+
   /** 퇴장 — 경기장 밖으로 완전히 빼서(터치라인 밖 고정 좌표) 다시는 판단·이동에 끼지 않게 한다. */
   sendOff(p, reason) {
     p.sentOff = true;
@@ -1155,6 +1201,7 @@ export class Sim {
     p.vx = 0;
     p.vz = 0;
     this.pushEvent('red-card', p.team, `${p.name} 퇴장 (${reason})`);
+    this.promoteKeeperIfNeeded(p.team);
   }
 
   /**
@@ -1172,6 +1219,7 @@ export class Sim {
     if (this.ball.carrierKey === key) this.ball.carrierKey = null;
     if (this.ball.ownerKey === key) this.ball.ownerKey = null;
     this.pushEvent('injury', p.team, `${p.name} 부상`);
+    this.promoteKeeperIfNeeded(p.team);
   }
 
   /** 캐리어를 드리블 중에 노리는 상대. 사거리 안에 실제로 붙어야 다툰다. */
@@ -2461,6 +2509,9 @@ export class Sim {
       // maxSubsPerTeam을 우회해 교체를 더 쓸 수 있게 된다(선수 객체 자체가 아니라 이 숫자만
       // 정확해도 "규정 위반"은 막을 수 있다 — substitute() 클래스 위 comment 참고).
       injured: this.all.map((p) => p.injured),
+      // 급조 골키퍼도 되감기 대상이다. 안 담으면 골키퍼가 다치기 전으로 되감아도 필드
+      // 플레이어가 골문에 들어간 채로 남아 골키퍼가 둘이 된다.
+      actingKeeper: this.all.map((p) => p.actingKeeper),
       subsUsed: { ...this.subsUsed },
     };
   }
@@ -2557,5 +2608,10 @@ export class Sim {
     if (s.subsUsed) {
       this.subsUsed = { ...s.subsUsed };
     }
+    // 옛 스냅샷 호환: 급조 골키퍼가 없던 시절이면 전원 false가 그 시점의 정확한 상태다.
+    this.all.forEach((p, i) => {
+      p.actingKeeper = s.actingKeeper ? s.actingKeeper[i] : false;
+      p.role = p.actingKeeper ? 'GK' : p.baseRole;
+    });
   }
 }
