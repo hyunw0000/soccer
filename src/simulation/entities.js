@@ -113,6 +113,8 @@ export class Ball {
     this.ownerKey = null;
     this.carrierKey = null; // 패스/슛/클리어 — 어느 쪽이든 킥하면 드리블이 끝난다
     this.shotBy = null; // 새 킥이 이전 슛을 대체한다 — 슛인 경우 호출부가 다시 세팅한다
+    // 이 킥이 이미 유효슈팅으로 집계됐는지. 골이 들어갔을 때 같은 슛을 두 번 세지 않으려고 둔다.
+    this.onTargetCounted = false;
     if (byKey) this.lastTouchKey = byKey;
   }
 

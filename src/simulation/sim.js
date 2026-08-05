@@ -208,9 +208,39 @@ export class Sim {
     this.stats[team].shots++;
   }
 
-  /** 골문으로 향한 슛 — 득점과 선방이 여기 해당한다. */
+  /** 골문으로 향한 슛. */
   recordShotOnTarget(team) {
     this.stats[team].onTarget++;
+  }
+
+  /**
+   * 지금 볼의 속도로 날아가면 골문 안으로 들어가는가. 슛을 찬 **그 순간** 판정한다.
+   *
+   * 예전에는 "골키퍼가 건드렸으면 유효"로 셌는데, 키퍼 사거리(2.2m)를 스치는 빗나간 슛까지
+   * 전부 유효로 잡혀서 사실상 모든 슛이 유효슈팅이 됐다(실측 87%, 실제 축구는 35% 안팎).
+   * 키퍼가 어디 서 있느냐와 무관하게, 궤적이 골대 사이로 가는지만 본다 — 그게 유효슈팅의 정의다.
+   *
+   * 공기저항은 빼고 중력만 넣은 근사다. 슛은 골문까지 0.3~1초라 그 사이 감쇠는 작다.
+   */
+  shotOnTarget(shooter) {
+    const b = this.ball;
+    const goalX = shooter.attackDirection * HALF.L;
+    const dx = goalX - b.x;
+    if (dx * b.vx <= 0) return false; // 골문 반대쪽으로 가는 볼
+    const t = dx / b.vx;
+    const z = b.z + b.vz * t;
+    const y = b.y + b.vy * t - 0.5 * PARAMS.gravity * t * t;
+    return Math.abs(z) < GOAL_W / 2 && y > 0 && y < GOAL_H;
+  }
+
+  /** 슛 하나를 기록한다 — 시도는 항상, 유효는 궤적이 골문 안으로 갈 때만. */
+  recordShotAttempt(shooter) {
+    this.recordShot(shooter.team);
+    if (this.shotOnTarget(shooter)) {
+      this.recordShotOnTarget(shooter.team);
+      // 골로 이어져도 같은 슛을 두 번 세지 않게 표시해 둔다(checkGoal이 이 값을 본다).
+      this.ball.onTargetCounted = true;
+    }
   }
 
   buildBench(team) {
@@ -1242,7 +1272,7 @@ export class Sim {
     this.ball.kick(edx, edz, PARAMS.shootForce, `${p.team}:${p.idx}`, loft);
     this.ball.shotBy = `${p.team}:${p.idx}`; // GK가 이 볼을 잡으면 tryKick()에서 "선방"으로 기록한다
     p.kc = PARAMS.kickCooldownTicks; // 패스와 같은 이유 — 슛한 직후 본인이 바로 재줍는 걸 막는다
-    this.recordShot(p.team);
+    this.recordShotAttempt(p);
     this.pushEvent('shot', p.team, `${p.name} 슈팅`);
   }
 
@@ -1298,7 +1328,7 @@ export class Sim {
       // 문전 헤딩은 실제 축구에서도 슈팅으로 집계된다. 이걸 안 세면 헤딩 골이 유효슈팅에는
       // 잡히는데 슈팅에는 안 잡혀서 "유효슈팅 > 슈팅"이라는 말이 안 되는 숫자가 나온다
       // (실측으로 중립 전술에서 슈팅 2.7 · 유효 2.6, 폭 0에서 3.3 · 3.4로 역전됐다).
-      this.recordShot(p.team);
+      this.recordShotAttempt(p);
       this.ball.shotBy = key; // 키퍼가 막으면 유효슈팅·선방으로 이어지게 한다
     }
     // 공중볼 경합은 혼자 하는 게 아니다 — 옆에 붙어 있던 선수들도 같이 뛰어올랐다가 같이
@@ -1370,7 +1400,6 @@ export class Sim {
     const worthLogging = speed >= PARAMS.gkSaveEventSpeed;
     // 골키퍼가 건드렸다는 건 볼이 골문으로 향하고 있었다는 뜻이다 — 유효슈팅으로 센다.
     // 기록 여부(worthLogging)와 무관하게 세야 느린 슛도 통계에 남는다.
-    const shooterTeam = b.shotBy && b.shotBy.split(":")[0] !== gk.team ? b.shotBy.split(":")[0] : null;
 
     if (roll < catchProb) {
       // 캐치 — 손에 넣었다. 볼을 죽여 발밑에 붙이고 다음 판단(골킥/패스)까지 들고 있는다.
@@ -1382,7 +1411,6 @@ export class Sim {
       b.carrierKey = gkKey;
       b.lastTouchKey = gkKey;
       gk.kc = PARAMS.gkHoldTicks;
-      if (shooterTeam) this.recordShotOnTarget(shooterTeam);
       if (worthLogging) this.pushEvent("save", gk.team, `${gk.name} 선방`);
       return true;
     }
@@ -1432,7 +1460,6 @@ export class Sim {
       // 손끝에 걸린 볼일수록 위로 뜬다 — 크로스바를 넘기면 그것도 코너킥이다.
       const loftDeg = PARAMS.gkPunchLoftDeg + (1 - control) * PARAMS.gkTipLoftBonus;
       b.kick(edx, edz, force, gkKey, loftDeg);
-      if (shooterTeam) this.recordShotOnTarget(shooterTeam);
       if (worthLogging) this.pushEvent("save", gk.team, `${gk.name} 선방`);
       return true;
     }
@@ -1588,8 +1615,10 @@ export class Sim {
       this.score[scoringTeam]++;
       // 슈팅으로 아직 안 센 골(크로스가 그대로 들어가거나 굴절된 경우)은 여기서 센다 —
       // 안 그러면 "유효슈팅 > 슈팅"이라는 말이 안 되는 숫자가 나온다.
-      if (!(b.shotBy && b.shotBy.startsWith(scoringTeam))) this.recordShot(scoringTeam);
-      this.recordShotOnTarget(scoringTeam); // 골은 정의상 유효슈팅이다
+      const countedShot = b.shotBy && b.shotBy.startsWith(scoringTeam);
+      if (!countedShot) this.recordShot(scoringTeam);
+      // 골은 정의상 유효슈팅이다. 다만 찰 때 이미 유효로 센 슛이면 두 번 세지 않는다.
+      if (!countedShot || !b.onTargetCounted) this.recordShotOnTarget(scoringTeam);
       const scorer = this.playerByKey(b.lastTouchKey);
       this.pushEvent('goal', scoringTeam, scoringTeam === 'home' && scorer ? `${scorer.name} 득점` : scoringTeam === 'home' ? '득점' : '실점');
       this.kickoff({ kickoffTeam: concedingTeam });
@@ -1600,8 +1629,10 @@ export class Sim {
       this.score[scoringTeam]++;
       // 슈팅으로 아직 안 센 골(크로스가 그대로 들어가거나 굴절된 경우)은 여기서 센다 —
       // 안 그러면 "유효슈팅 > 슈팅"이라는 말이 안 되는 숫자가 나온다.
-      if (!(b.shotBy && b.shotBy.startsWith(scoringTeam))) this.recordShot(scoringTeam);
-      this.recordShotOnTarget(scoringTeam); // 골은 정의상 유효슈팅이다
+      const countedShot = b.shotBy && b.shotBy.startsWith(scoringTeam);
+      if (!countedShot) this.recordShot(scoringTeam);
+      // 골은 정의상 유효슈팅이다. 다만 찰 때 이미 유효로 센 슛이면 두 번 세지 않는다.
+      if (!countedShot || !b.onTargetCounted) this.recordShotOnTarget(scoringTeam);
       const scorer = this.playerByKey(b.lastTouchKey);
       this.pushEvent('goal', scoringTeam, scoringTeam === 'home' && scorer ? `${scorer.name} 득점` : scoringTeam === 'home' ? '득점' : '실점');
       this.kickoff({ kickoffTeam: concedingTeam });
@@ -1991,7 +2022,7 @@ export class Sim {
     // 슛으로 표시해야 키퍼가 막았을 때 "선방"으로 기록된다(일반 슛과 같은 경로).
     this.ball.shotBy = kickerKey;
     kicker.kc = PARAMS.kickCooldownTicks;
-    this.recordShot(kicker.team);
+    this.recordShotAttempt(kicker);
     if (log) this.pushEvent('shot', kicker.team, `${kicker.name} 페널티킥`);
   }
 
@@ -2180,7 +2211,7 @@ export class Sim {
     b.kick(edx, edz, force, takerKey, PARAMS.freeKickShotLoftDeg);
     b.shotBy = takerKey;
     taker.kc = PARAMS.kickCooldownTicks;
-    this.recordShot(taker.team);
+    this.recordShotAttempt(taker);
     this.pushEvent('shot', taker.team, `${taker.name} 프리킥 슛`);
   }
 
