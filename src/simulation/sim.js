@@ -706,7 +706,24 @@ export class Sim {
         const tz = clamp(p.z + (p.ins.roaming - 0.5) * ROAM_WOBBLE, -HALF.W, HALF.W);
         [fx, fz] = arrive(p, tx, tz);
       } else if (p === chaser) {
-        [fx, fz] = pursuit(p, this.ball);
+        // 압박이 낮으면 곧바로 달려들지 않고 살짝 못 미친 자리에서 길을 막는다(내려앉는 수비).
+        //
+        // 압박 축의 **아래 절반이 통째로 죽어 있었다**. 협위 반경이 clamp((press-0.5)*2,0,1)라
+        // 0.5 이하에서는 0이고, 볼을 쫓는 첫 번째 선수는 압박과 무관하게 항상 전력으로
+        // 달려들었다. 실측으로 압박 0.0과 0.5가 사실상 같았다 — 되찾은 위치 -7.8m vs -8.1m,
+        // 상대가 잡고 있던 시간 324틱 vs 317틱, 볼 10m 안 인원 1.14 vs 1.17.
+        //
+        // standoff는 압박 0.5에서 정확히 0이다. 즉 중립과 고압박(0.5~1.0)은 이 항의 영향을
+        // 전혀 안 받고 예전 동작 그대로다 — 손대는 건 죽어 있던 아래 절반뿐이다.
+        const standoff = holding ? 0 : Math.max(0, 0.5 - press) * 2 * PARAMS.pressStandoff;
+        if (standoff > 0) {
+          const bdx = this.ball.x - p.x;
+          const bdz = this.ball.z - p.z;
+          const bd = vlen(bdx, bdz) || 1;
+          [fx, fz] = arrive(p, this.ball.x - (bdx / bd) * standoff, this.ball.z - (bdz / bd) * standoff);
+        } else {
+          [fx, fz] = pursuit(p, this.ball);
+        }
       } else if (
         // 협위 압박 — 우리가 볼을 갖고 있지 않을 때, 압박 지시가 센 팀의 두 번째 선수가
         // 볼로 함께 달려든다. 반경은 압박 0.5에서 0, 1.0에서 pressSupportRadius다.
