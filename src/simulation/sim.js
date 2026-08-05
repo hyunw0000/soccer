@@ -171,6 +171,21 @@ export class Sim {
    *   점유율 -> 템포 · 슈팅 -> 라인/템포 · 볼 탈취 -> 압박 · 좌중우 분포 -> 폭
    */
   updateStats() {
+    // 좌·중·우는 **볼이 아니라 선수가 어디 서 있는지**를 센다.
+    //
+    // 처음엔 소유 중인 볼의 z로 쟀는데 폭 지시에 전혀 반응하지 않았다 — 실측으로 중립 94%
+    // 중앙, 폭 0에서 83%, 폭 1에서 87%로 오히려 역전됐다. 볼은 대형이 어떻든 중앙으로
+    // 모이기 때문이다. 감독이 폭 손잡이로 실제로 움직이는 건 선수의 자리이므로 그걸 센다.
+    // 좌우는 공격 방향 기준이라 진영이 바뀌어도 감독이 보는 "왼쪽"이 그대로다.
+    for (const team of ['home', 'away']) {
+      const s = this.stats[team];
+      for (const p of team === 'home' ? this.homeP : this.awayP) {
+        if (p.role === 'GK' || p.sentOff || p.injured) continue;
+        const side = p.z * p.attackDirection;
+        s[side < -PARAMS.statLaneHalfWidth ? 'left' : side > PARAMS.statLaneHalfWidth ? 'right' : 'center']++;
+      }
+    }
+
     const owner = this.playerByKey(this.ball.ownerKey);
     if (!owner) {
       this.lastOwnerTeam = null;
@@ -181,12 +196,6 @@ export class Sim {
     // 볼 탈취 = 소유가 상대 팀에서 이 팀으로 넘어온 순간. 같은 팀 안에서 주고받는 건 세지 않는다.
     if (this.lastOwnerTeam && this.lastOwnerTeam !== owner.team) s.recoveries++;
     this.lastOwnerTeam = owner.team;
-
-    // 좌·중·우는 **공격 방향 기준**이다. 진영이 바뀌어도 감독이 보는 "왼쪽"이 그대로여야
-    // 하므로 z에 공격 방향을 곱해 준다(폭 지시의 효과를 확인하는 유일한 지표라 중요하다).
-    const side = this.ball.z * owner.attackDirection;
-    const lane = side < -PARAMS.statLaneHalfWidth ? 'left' : side > PARAMS.statLaneHalfWidth ? 'right' : 'center';
-    s[lane]++;
   }
 
   /** 슛을 쐈다. onTarget은 골이 되거나 골키퍼가 막았을 때 별도로 올린다. */
@@ -734,6 +743,11 @@ export class Sim {
         const baseX = p.home.x + p.homeOffset.x;
         const baseZ = p.home.z + p.homeOffset.z;
         let tx = clamp(baseX + shift + run, -HALF.L + margin, HALF.L - margin);
+        // NOTE: 폭이 넓을수록 볼 쪽으로 더 따라붙게 하는 항을 여기 넣었다가 뺐다.
+        // 폭 1.0에서 팀이 무너지는 원인을 "벌려서 볼에서 멀어진다"로 보고 보정했는데,
+        // 진짜 원인은 대형 계산 쪽이었고(coordinates.js의 등급형 확산 주석 참고) 이 보정은
+        // 오히려 폭을 올릴수록 팀을 중앙으로 모아서 폭 축 자체를 죽였다 —
+        // 실측: 폭 1.0의 좌우 폭이 54.1m(보정 없음)에서 44.2m로 줄어 중립(53.3m)보다 좁아졌다.
         let tz = clamp(
           baseZ + (this.ball.z - baseZ) * (0.08 + press * 0.14) * (0.15 + p.ins.roaming * 1.7),
           -HALF.W + margin,

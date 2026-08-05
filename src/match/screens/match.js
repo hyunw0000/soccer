@@ -1505,7 +1505,7 @@ export default function matchScreen(root, ctx) {
           statPossBar,
           statRow("슈팅 (유효)", "라인·템포", statShotEl),
           statRow("볼 탈취", "압박", statRecovEl),
-          statRow("좌·중·우", "폭", statLaneEl),
+          statRow("좌·중·우 배치", "폭", statLaneEl),
           statRow("평균 체력", "압박", statEnergyEl),
         ]),
         el("b", {

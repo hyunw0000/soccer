@@ -161,7 +161,11 @@ export function scorePassCandidates(sim, p) {
     // 넓게(+)/좁게(-) 방향과 세기를 갖고 있으므로 여기서 다시 wWidth를 곱하지 않는다
     // (곱하면 중립일 때도 wideness가 커서 이상하게 감산/가산되는 이중 반영이 생긴다).
     const wideness = clamp(Math.abs(m.z) / HALF.W, 0, 1); // 0=중앙, 1=터치라인
-    const widthFit = widthBias * wideness;
+    // 폭 지시는 "측면을 쓰라"는 성향이지 "무조건 측면으로 줘라"가 아니다. 가중치 없이
+    // 그대로 더하면 이 항 하나가 다른 항(전진이득·성공확률·열림)을 전부 눌러서, 폭 1에서
+    // 고립된 터치라인 선수에게만 패스가 몰리고 그대로 뺏긴다(실측: 폭 1 점유율 19%,
+    // 이 항을 0으로 두면 31%까지 회복). 다른 항과 같은 자릿수로 낮춰 "밀어 주는" 역할만 시킨다.
+    const widthFit = widthBias * wideness * PARAMS.widthBiasWeight;
     const lengthPenalty = Math.abs(d - preferredPassLength) / PARAMS.maxPass;
     const captainBonus = m.isCaptain ? 0.15 : 0;
     // 동료가 얼마나 열려 있는지 — 붙어 있는 동료에게 주는 건 그냥 볼을 넘겨주는 짓이다.

@@ -38,6 +38,9 @@ const WIDTH_RANGE = 1.1; // 0.45배(중앙) … 1.55배(측면)
  * 전술을 어떻게 밀어도 자리는 경기장 안에 있어야 한다 — 폭·전진성·팀 전술을 곱한 **뒤에**
  * 이 한계로 자르기 때문에, 값을 끝까지 올려도 선수가 터치라인·골라인 밖에 서지 않는다.
  */
+// 측면 자리로 보는 정규화 z. 포메이션의 풀백·윙어가 대략 이 값이고, 이보다 안쪽 자리는
+// 팀 폭을 그만큼 덜 받는다(중앙 척추 유지).
+const WIDE_SLOT_Z = 0.28;
 const PITCH_MARGIN = 0.04; // 길이 기준 약 4m, 폭 기준 약 2.7m
 const LIMIT = 0.5 - PITCH_MARGIN;
 const clampToPitch = (n) => Math.min(LIMIT, Math.max(-LIMIT, n));
@@ -70,7 +73,14 @@ export function normalizedToWorld({ x, z }, { side = 'home', width = 0.5, instru
   // 팀 폭(spread)까지 곱한 뒤에 한 번만 자른다 — 곱하기 전에 자르면 폭을 올렸을 때
   // 자리가 터치라인 밖으로 나가 버린다(예전에 실제로 그랬다).
   const px = x + (ins.forwardness - 0.5) * FORWARD_RANGE;
-  const pz = z * (1 + (ins.width - 0.5) * WIDTH_RANGE) * spread;
+  // 팀 폭은 **측면 선수일수록 더 세게** 적용한다. 전원에 같은 배수를 곱하면 중앙 척추까지
+  // 밖으로 밀려서 중앙이 통째로 빈다 — 폭 1.0에서 기본 대형 z가 ±16.3m 안쪽으로는 아무도
+  // 없는 상태가 됐다. 볼은 중앙에서 78~91%의 시간을 보내므로(좌·중·우 실측) 그 순간 팀은
+  // 볼 근처에 아무도 못 둔다: 볼까지 최단거리 6.5m→7.6m, 점유율 52%→19%로 무너졌다.
+  // 실제 축구의 "넓게 쓴다"도 윙어·풀백을 벌리는 것이지 중앙 미드필더를 터치라인으로
+  // 보내는 게 아니다.
+  const lateral = Math.min(1, Math.abs(z) / WIDE_SLOT_Z); // 0=중앙 척추, 1=측면 자리
+  const pz = z * (1 + (ins.width - 0.5) * WIDTH_RANGE) * (1 + (spread - 1) * lateral);
 
   return {
     x: clampToPitch(px) * FIELD.L * direction,
