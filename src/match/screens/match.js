@@ -961,26 +961,26 @@ export default function matchScreen(root, ctx) {
   }
 
   /**
-   * 숫자키로 "내 전술 N"을 그 자리에서 적용한다.
+   * 숫자키로 전술 프리셋을 그 자리에서 적용한다.
    *
    * 전술 값을 여기서 직접 계산하지 않고 **패널이 이미 갖고 있는 프리셋 버튼을 그대로 누른다.**
    * 그 버튼 하나가 저장(localStorage)·표시 갱신·onApply(시뮬레이션 반영)를 한 경로에서
    * 처리하므로, 따로 구현하면 생길 "화면은 A인데 그라운드는 B" 같은 어긋남이 없다.
    * 패널이 닫혀 있어도 버튼은 DOM에 있으므로 click()이 그대로 동작한다.
    *
-   * 프리셋은 앞쪽이 내장 전술(기본·역습·강한 압박·점유율·롱 볼)이고 감독이 만드는
-   * "내 전술"은 **뒤쪽 다섯 개**다. 그래서 뒤에서부터 센다 — 내장 전술 개수가 바뀌어도 따라간다.
+   * 키는 **패널에 보이는 순서 그대로** 1,2,…,9,0 이다(기본 전술이 1, 마지막 내 전술이 0).
+   * 처음엔 1~5를 뒤쪽 "내 전술"에만 붙였는데, 감독이 화면에서 보는 첫 번째 전술과 1번 키가
+   * 어긋나서 "눌러도 안 먹는다"로 느껴졌다.
    */
-  const MY_PRESET_SLOTS = 5;
+  const PRESET_KEYS = "1234567890";
   function applyPresetSlot(slot) {
-    const buttons = tacticsPanel.node.querySelectorAll(".lt-preset");
-    const btn = buttons[buttons.length - MY_PRESET_SLOTS + slot];
+    const btn = tacticsPanel.node.querySelectorAll(".lt-preset")[slot];
     if (!btn) return;
     btn.click();
-    pathStatusEl.textContent = `전술 ${slot + 1} — ${btn.textContent} 적용`;
+    pathStatusEl.textContent = `${PRESET_KEYS[slot]} — ${btn.textContent} 적용`;
     clearTimeout(applyPresetSlot.timer);
     applyPresetSlot.timer = setTimeout(() => {
-      if (pathStatusEl.textContent.startsWith(`전술 ${slot + 1} —`)) pathStatusEl.textContent = "";
+      if (pathStatusEl.textContent.startsWith(`${PRESET_KEYS[slot]} —`)) pathStatusEl.textContent = "";
     }, 2200);
   }
 
@@ -1265,9 +1265,9 @@ export default function matchScreen(root, ctx) {
       if (e.target instanceof HTMLInputElement) return;
       tacticsPanel.isOpen ? closeTacticsPanel() : openTacticsPanel();
     }
-    // 숫자 1~5 = 전술 화면에서 저장해 둔 "내 전술 1~5"를 그 자리에서 적용한다.
+    // 숫자 1~0 = 전술 패널에 보이는 순서대로 프리셋 열 개를 그 자리에서 적용한다.
     // 전술 창을 열지 않고도 갈아탈 수 있어야 경기 흐름이 안 끊긴다.
-    const slot = "12345".indexOf(e.key);
+    const slot = PRESET_KEYS.indexOf(e.key);
     if (slot >= 0 && !(e.target instanceof HTMLInputElement)) applyPresetSlot(slot);
   };
   window.addEventListener("keydown", onKey);
@@ -1543,7 +1543,7 @@ export default function matchScreen(root, ctx) {
         pathStatusEl,
         el("p", { class: "hint" }, [
           el("span", {
-            text: "탑뷰에서 드래그=회전 / 휠=줌 · Space=일시정지 · T=전술 · 1~5=내 전술 적용 · R=되감기 · 일시정지+탑뷰에서 우리 선수 드래그=경로 지시",
+            text: "탑뷰에서 드래그=회전 / 휠=줌 · Space=일시정지 · T=전술 · 1~0=전술 적용 · R=되감기 · 일시정지+탑뷰에서 우리 선수 드래그=경로 지시",
           }),
         ]),
         el("div", { class: "controls" }, [
