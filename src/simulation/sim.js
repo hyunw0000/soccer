@@ -1971,9 +1971,20 @@ export class Sim {
     const opponents = kicker.team === 'home' ? this.awayP : this.homeP;
     const gk = opponents.find((p) => p.role === 'GK' && !p.sentOff && !p.injured) ?? null;
 
-    // 키커와 키퍼를 뺀 전원은 박스 밖에 선다(실제 규칙). 표를 두지 않고 폭에 고르게
+    // 차는 팀의 골키퍼는 대기 줄에 세우지 않고 **자기 골문**으로 보낸다.
+    //
+    // 예전에는 이 골키퍼가 others에 섞여 들어가서, 두 골키퍼가 같은 골문 앞에 나란히 서고
+    // 차는 팀 골문은 통째로 비어 있었다. 실제 축구에서도 페널티킥을 차는 동안 상대 골키퍼는
+    // 자기 골문을 지킨다 — 막히고 역습이 나오면 그 자리에 있어야 한다.
+    const kickerGk = (kicker.team === 'home' ? this.homeP : this.awayP).find(
+      (p) => p.role === 'GK' && !p.sentOff && !p.injured
+    );
+
+    // 키커와 두 골키퍼를 뺀 전원은 박스 밖에 선다(실제 규칙). 표를 두지 않고 폭에 고르게
     // 늘어세운다 — 퇴장·부상으로 인원이 줄어도 그대로 동작한다.
-    const others = this.all.filter((p) => p !== kicker && p !== gk && !p.sentOff && !p.injured);
+    const others = this.all.filter(
+      (p) => p !== kicker && p !== gk && p !== kickerGk && !p.sentOff && !p.injured
+    );
     others.forEach((p, i) => {
       const t = others.length > 1 ? i / (others.length - 1) : 0.5;
       p.x = goalX - dir * (PENALTY_AREA.depth + 2.5 + (i % 3) * 3);
@@ -1996,6 +2007,16 @@ export class Sim {
       gk.vx = 0;
       gk.vz = 0;
       gk.kc = 0;
+    }
+    if (kickerGk) {
+      // 반대편 골문 정면. 승부차기처럼 양 팀이 같은 골대로 찰 때도 이 골키퍼는 자기 골문에
+      // 남으므로, 두 골키퍼가 한 자리에 겹치는 일이 없다.
+      const ownGoalX = -dir * HALF.L;
+      kickerGk.x = ownGoalX + dir * PARAMS.penaltyGkLineOffset;
+      kickerGk.z = 0;
+      kickerGk.vx = 0;
+      kickerGk.vz = 0;
+      kickerGk.kc = 0;
     }
     return gk;
   }
