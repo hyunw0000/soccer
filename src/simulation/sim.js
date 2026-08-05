@@ -2039,19 +2039,30 @@ export class Sim {
   setCornerFormation(taker) {
     const dir = taker.attackDirection;
     const goalX = dir * HALF.L;
+    // 문전에 세울 사람은 **이미 그쪽에 가까이 있던 선수**로 고른다. 나머지는 손대지 않는다.
+    //
+    // 예전에는 순서대로 스무 명 중 열여섯을 박스로 순간이동시켰다. 그러면 코너가 끝난 뒤
+    // 그 열여섯이 자기 자리까지 60m를 걸어 돌아가는데, 12게임초쯤 걸리는 그 구간 내내
+    // 화면에는 큰 덩어리가 통째로 이동하는 모양이 남는다 — 실측으로 "선수 16명이 35m 구간
+    // 안에 몰려 있는 시간"이 경기의 17%였고, 코너가 생기기 전에는 0%였다.
+    // 가까운 순으로 뽑으면 이동 거리도, 복귀 꼬리도 같이 줄고, 멀리 있던 선수는 자연스럽게
+    // 뒤에 남아 역습 대비까지 저절로 된다(예전에는 그걸 별도 좌표로 억지로 만들어 뒀다).
     const place = (players, spots) => {
-      let i = 0;
-      for (const p of players) {
-        if (p === taker || p.role === 'GK' || p.sentOff || p.injured) continue;
-        const spot = spots[i++ % spots.length];
-        p.x = goalX - dir * spot[0];
-        p.z = spot[1];
+      const aim = goalX - dir * PARAMS.cornerAimDepth;
+      const near = players
+        .filter((p) => p !== taker && p.role !== 'GK' && !p.sentOff && !p.injured)
+        // 동점이면 idx로 갈라 같은 seed에서 항상 같은 배치가 나오게 한다(되감기 재현).
+        .sort((a, b) => vlen(a.x - aim, a.z) - vlen(b.x - aim, b.z) || a.idx - b.idx)
+        .slice(0, spots.length);
+      near.forEach((p, i) => {
+        p.x = goalX - dir * spots[i][0];
+        p.z = spots[i][1];
         p.vx = 0;
         p.vz = 0;
         // 세트피스 배치는 그 자리에서 다시 판단하게 한다 — 안 그러면 직전 판단의 쿨다운이
         // 남아 코너가 올라오는 동안 아무도 볼에 반응하지 못한다.
         p.kc = 0;
-      }
+      });
     };
     const attackers = taker.team === 'home' ? this.homeP : this.awayP;
     const defenders = taker.team === 'home' ? this.awayP : this.homeP;
@@ -2379,6 +2390,11 @@ export class Sim {
       // 그대로 남아서, 감독이 보는 숫자와 실제 경기가 어긋난다.
       stats: { home: { ...this.stats.home }, away: { ...this.stats.away } },
       lastOwnerTeam: this.lastOwnerTeam ?? null,
+      // 날아가는 중인 슛의 표식. 예전에는 안 담아도 됐지만 이제 이 둘이 누적 지표(슈팅·유효)를
+      // 좌우하므로 반드시 복원해야 한다 — 안 담으면 되감은 뒤 같은 골을 두 번 세거나 아예
+      // 안 세서, 되감기 전후로 숫자가 어긋난다(실측으로 seed 4242에서 실제로 깨졌다).
+      shotBy: this.ball.shotBy,
+      onTargetCounted: this.ball.onTargetCounted,
       lastRewindTick: this.lastRewindTick,
       // 경로 지시는 좌표 배열이라 SNAP_STRIDE 숫자 배열에 안 들어간다 — 선수 순서(this.all)와
       // 나란한 별도 배열로 얕은 구조 복제한다. 되감기 후 안 바꾸면 그대로 재현돼야 하므로
@@ -2451,6 +2467,9 @@ export class Sim {
     if (s.stats) {
       this.stats = { home: { ...emptyStats(), ...s.stats.home }, away: { ...emptyStats(), ...s.stats.away } };
       this.lastOwnerTeam = s.lastOwnerTeam ?? null;
+      // 옛 스냅샷에는 없던 값들이다. 없으면 "날아가는 슛이 없었다"로 두는 게 안전하다.
+      this.ball.shotBy = s.shotBy ?? null;
+      this.ball.onTargetCounted = s.onTargetCounted ?? false;
     }
     if ('lastRewindTick' in s) this.lastRewindTick = s.lastRewindTick;
     // 옛 스냅샷 호환: commands가 없으면 현재 지시 상태를 그대로 둔다(건드리지 않음).
