@@ -826,3 +826,56 @@
   font-weight: 800;
   letter-spacing: 0.06em;
 }
+
+/* 경기 지표 — 지시 슬라이더 바로 위. 값 하나에 전술 축 하나가 붙는다. */
+.sidepanel .statblock {
+  display: grid;
+  gap: 2px;
+  margin-bottom: 10px;
+}
+/* .row의 좌우 배치는 base.css에서 `.hud .row`에만 걸려 있다(공유 스타일이라 안 건드린다).
+   사이드패널에서도 라벨-왼쪽 / 값-오른쪽이 되도록 여기서 직접 잡는다. */
+.sidepanel .stat-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 2px 0;
+  color: var(--dim);
+}
+.sidepanel .stat-row b {
+  color: #64dff5;
+  white-space: nowrap;
+}
+.sidepanel .stat-row > span:first-child {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+.sidepanel .stat-axis {
+  font-style: normal;
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  padding: 1px 5px;
+  border-radius: 999px;
+  color: var(--muted, #8b98a8);
+  background: rgba(255, 255, 255, 0.06);
+  white-space: nowrap;
+}
+/* 점유율 막대 — 왼쪽이 우리, 나머지가 상대. 숫자보다 추세가 먼저 눈에 들어온다. */
+.sidepanel .statbar {
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+  margin: 1px 0 5px;
+}
+.sidepanel .statbar > i {
+  display: block;
+  height: 100%;
+  width: 50%;
+  border-radius: 999px;
+  background: var(--accent, #4cc9f0);
+  transition: width 0.3s ease;
+}

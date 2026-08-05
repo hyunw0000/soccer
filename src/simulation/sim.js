@@ -35,6 +35,10 @@ const RESTART_EXECUTORS = {
   'free-kick': (sim, taker) => sim.executeFreeKick(taker),
 };
 
+/** 감독에게 보여 줄 누적 지표 한 팀분. 전부 숫자라 스냅샷에 그대로 담긴다. */
+const STAT_KEYS = ['possessionTicks', 'shots', 'onTarget', 'recoveries', 'left', 'center', 'right'];
+const emptyStats = () => Object.fromEntries(STAT_KEYS.map((k) => [k, 0]));
+
 const inCoordRange = (n) => Number.isFinite(n) && n >= -COORD_LIMIT && n <= COORD_LIMIT;
 
 /**
@@ -151,7 +155,48 @@ export class Sim {
     // substitute()가 여기서 지운다(같은 선수를 두 번 투입할 수 없다).
     this.homeBench = this.buildBench(this.setup.homeTeam);
     this.awayBench = this.buildBench(this.setup.awayTeam);
+    this.lastOwnerTeam = null; // 볼 탈취(소유권이 상대에서 넘어온 순간)를 세려고 직전 소유 팀을 들고 있는다
     this.subsUsed = { home: 0, away: 0 };
+    this.stats = { home: emptyStats(), away: emptyStats() };
+  }
+
+  /**
+   * 감독에게 보여 줄 누적 지표를 갱신한다. 매 스텝 끝에서 한 번 불린다.
+   *
+   * 이벤트(this.events)로 세면 안 된다 — 링버퍼가 50개라 경기 중반부터 앞이 밀려 나가서
+   * 누적 횟수가 실제보다 적게 잡힌다. 그래서 별도 카운터를 둔다.
+   *
+   * 지표는 전술 네 축과 하나씩 짝을 이루도록 골랐다. 감독이 "이 숫자가 나쁘니 이 축을
+   * 만진다"로 이어지지 않는 지표는 화면만 복잡하게 만든다.
+   *   점유율 -> 템포 · 슈팅 -> 라인/템포 · 볼 탈취 -> 압박 · 좌중우 분포 -> 폭
+   */
+  updateStats() {
+    const owner = this.playerByKey(this.ball.ownerKey);
+    if (!owner) {
+      this.lastOwnerTeam = null;
+      return;
+    }
+    const s = this.stats[owner.team];
+    s.possessionTicks++;
+    // 볼 탈취 = 소유가 상대 팀에서 이 팀으로 넘어온 순간. 같은 팀 안에서 주고받는 건 세지 않는다.
+    if (this.lastOwnerTeam && this.lastOwnerTeam !== owner.team) s.recoveries++;
+    this.lastOwnerTeam = owner.team;
+
+    // 좌·중·우는 **공격 방향 기준**이다. 진영이 바뀌어도 감독이 보는 "왼쪽"이 그대로여야
+    // 하므로 z에 공격 방향을 곱해 준다(폭 지시의 효과를 확인하는 유일한 지표라 중요하다).
+    const side = this.ball.z * owner.attackDirection;
+    const lane = side < -PARAMS.statLaneHalfWidth ? 'left' : side > PARAMS.statLaneHalfWidth ? 'right' : 'center';
+    s[lane]++;
+  }
+
+  /** 슛을 쐈다. onTarget은 골이 되거나 골키퍼가 막았을 때 별도로 올린다. */
+  recordShot(team) {
+    this.stats[team].shots++;
+  }
+
+  /** 골문으로 향한 슛 — 득점과 선방이 여기 해당한다. */
+  recordShotOnTarget(team) {
+    this.stats[team].onTarget++;
   }
 
   buildBench(team) {
@@ -797,6 +842,7 @@ export class Sim {
       // 그대로 진행되는 버그가 났다(실전에서 확인).
       this.checkOutOfBounds();
     }
+    this.updateStats();
     this.tick++;
     this.updatePhase();
   }
@@ -1160,6 +1206,7 @@ export class Sim {
     this.ball.kick(edx, edz, PARAMS.shootForce, `${p.team}:${p.idx}`, loft);
     this.ball.shotBy = `${p.team}:${p.idx}`; // GK가 이 볼을 잡으면 tryKick()에서 "선방"으로 기록한다
     p.kc = PARAMS.kickCooldownTicks; // 패스와 같은 이유 — 슛한 직후 본인이 바로 재줍는 걸 막는다
+    this.recordShot(p.team);
     this.pushEvent('shot', p.team, `${p.name} 슈팅`);
   }
 
@@ -1207,9 +1254,17 @@ export class Sim {
       baseDeg: PARAMS.headerBaseErrorDeg,
     });
     const [edx, edz] = this.rotateXZ(hdx, hdz, errDeg);
-    const loft =
-      vlen(hdx, hdz) <= PARAMS.headerShotRange ? PARAMS.headerShotLoftDeg : PARAMS.headerClearLoftDeg;
-    this.ball.kick(edx, edz, PARAMS.headerForce, `${p.team}:${p.idx}`, loft);
+    const shooting = vlen(hdx, hdz) <= PARAMS.headerShotRange;
+    const loft = shooting ? PARAMS.headerShotLoftDeg : PARAMS.headerClearLoftDeg;
+    const key = `${p.team}:${p.idx}`;
+    this.ball.kick(edx, edz, PARAMS.headerForce, key, loft);
+    if (shooting) {
+      // 문전 헤딩은 실제 축구에서도 슈팅으로 집계된다. 이걸 안 세면 헤딩 골이 유효슈팅에는
+      // 잡히는데 슈팅에는 안 잡혀서 "유효슈팅 > 슈팅"이라는 말이 안 되는 숫자가 나온다
+      // (실측으로 중립 전술에서 슈팅 2.7 · 유효 2.6, 폭 0에서 3.3 · 3.4로 역전됐다).
+      this.recordShot(p.team);
+      this.ball.shotBy = key; // 키퍼가 막으면 유효슈팅·선방으로 이어지게 한다
+    }
     // 공중볼 경합은 혼자 하는 게 아니다 — 옆에 붙어 있던 선수들도 같이 뛰어올랐다가 같이
     // 내려온다. 그래서 헤딩한 사람뿐 아니라 사거리 안의 **전원**이 같은 쿨다운을 받는다.
     // 느슨한 볼 경합(tryKick)에서 이긴 쪽·진 쪽 모두 kc를 거는 것과 같은 이유다.
@@ -1277,6 +1332,9 @@ export class Sim {
     const gkKey = `${gk.team}:${gk.idx}`;
     // 세게 날아온 볼을 막아냈을 때만 "선방"으로 남긴다 — 굴러온 볼까지 기록하면 이벤트 창이 도배된다.
     const worthLogging = speed >= PARAMS.gkSaveEventSpeed;
+    // 골키퍼가 건드렸다는 건 볼이 골문으로 향하고 있었다는 뜻이다 — 유효슈팅으로 센다.
+    // 기록 여부(worthLogging)와 무관하게 세야 느린 슛도 통계에 남는다.
+    const shooterTeam = b.shotBy && b.shotBy.split(":")[0] !== gk.team ? b.shotBy.split(":")[0] : null;
 
     if (roll < catchProb) {
       // 캐치 — 손에 넣었다. 볼을 죽여 발밑에 붙이고 다음 판단(골킥/패스)까지 들고 있는다.
@@ -1288,7 +1346,8 @@ export class Sim {
       b.carrierKey = gkKey;
       b.lastTouchKey = gkKey;
       gk.kc = PARAMS.gkHoldTicks;
-      if (worthLogging) this.pushEvent('save', gk.team, `${gk.name} 선방`);
+      if (shooterTeam) this.recordShotOnTarget(shooterTeam);
+      if (worthLogging) this.pushEvent("save", gk.team, `${gk.name} 선방`);
       return true;
     }
 
@@ -1337,7 +1396,8 @@ export class Sim {
       // 손끝에 걸린 볼일수록 위로 뜬다 — 크로스바를 넘기면 그것도 코너킥이다.
       const loftDeg = PARAMS.gkPunchLoftDeg + (1 - control) * PARAMS.gkTipLoftBonus;
       b.kick(edx, edz, force, gkKey, loftDeg);
-      if (worthLogging) this.pushEvent('save', gk.team, `${gk.name} 선방`);
+      if (shooterTeam) this.recordShotOnTarget(shooterTeam);
+      if (worthLogging) this.pushEvent("save", gk.team, `${gk.name} 선방`);
       return true;
     }
 
@@ -1490,6 +1550,10 @@ export class Sim {
       const scoringTeam = this.homeP[0]?.attackDirection === -1 ? 'home' : 'away';
       const concedingTeam = scoringTeam === 'home' ? 'away' : 'home';
       this.score[scoringTeam]++;
+      // 슈팅으로 아직 안 센 골(크로스가 그대로 들어가거나 굴절된 경우)은 여기서 센다 —
+      // 안 그러면 "유효슈팅 > 슈팅"이라는 말이 안 되는 숫자가 나온다.
+      if (!(b.shotBy && b.shotBy.startsWith(scoringTeam))) this.recordShot(scoringTeam);
+      this.recordShotOnTarget(scoringTeam); // 골은 정의상 유효슈팅이다
       const scorer = this.playerByKey(b.lastTouchKey);
       this.pushEvent('goal', scoringTeam, scoringTeam === 'home' && scorer ? `${scorer.name} 득점` : scoringTeam === 'home' ? '득점' : '실점');
       this.kickoff({ kickoffTeam: concedingTeam });
@@ -1498,6 +1562,10 @@ export class Sim {
       const scoringTeam = this.homeP[0]?.attackDirection === 1 ? 'home' : 'away';
       const concedingTeam = scoringTeam === 'home' ? 'away' : 'home';
       this.score[scoringTeam]++;
+      // 슈팅으로 아직 안 센 골(크로스가 그대로 들어가거나 굴절된 경우)은 여기서 센다 —
+      // 안 그러면 "유효슈팅 > 슈팅"이라는 말이 안 되는 숫자가 나온다.
+      if (!(b.shotBy && b.shotBy.startsWith(scoringTeam))) this.recordShot(scoringTeam);
+      this.recordShotOnTarget(scoringTeam); // 골은 정의상 유효슈팅이다
       const scorer = this.playerByKey(b.lastTouchKey);
       this.pushEvent('goal', scoringTeam, scoringTeam === 'home' && scorer ? `${scorer.name} 득점` : scoringTeam === 'home' ? '득점' : '실점');
       this.kickoff({ kickoffTeam: concedingTeam });
@@ -1887,6 +1955,7 @@ export class Sim {
     // 슛으로 표시해야 키퍼가 막았을 때 "선방"으로 기록된다(일반 슛과 같은 경로).
     this.ball.shotBy = kickerKey;
     kicker.kc = PARAMS.kickCooldownTicks;
+    this.recordShot(kicker.team);
     if (log) this.pushEvent('shot', kicker.team, `${kicker.name} 페널티킥`);
   }
 
@@ -2075,6 +2144,7 @@ export class Sim {
     b.kick(edx, edz, force, takerKey, PARAMS.freeKickShotLoftDeg);
     b.shotBy = takerKey;
     taker.kc = PARAMS.kickCooldownTicks;
+    this.recordShot(taker.team);
     this.pushEvent('shot', taker.team, `${taker.name} 프리킥 슛`);
   }
 
@@ -2238,6 +2308,10 @@ export class Sim {
       phase: this.phase,
       kickoffLock: this.kickoffLock ? { ...this.kickoffLock } : null,
       setPieceHold: this.setPieceHold ? { ...this.setPieceHold } : null,
+      // 누적 지표도 되감기 대상이다. 안 담으면 되감은 뒤에도 "없던 일이 된" 슛·점유가
+      // 그대로 남아서, 감독이 보는 숫자와 실제 경기가 어긋난다.
+      stats: { home: { ...this.stats.home }, away: { ...this.stats.away } },
+      lastOwnerTeam: this.lastOwnerTeam ?? null,
       lastRewindTick: this.lastRewindTick,
       // 경로 지시는 좌표 배열이라 SNAP_STRIDE 숫자 배열에 안 들어간다 — 선수 순서(this.all)와
       // 나란한 별도 배열로 얕은 구조 복제한다. 되감기 후 안 바꾸면 그대로 재현돼야 하므로
@@ -2306,6 +2380,11 @@ export class Sim {
     // 옛 스냅샷 호환: setPieceHold가 없던 시절엔 홀드 자체가 없었으므로 null이 그 시점의
     // 정확한 상태다(현재 값을 남기면 되감은 뒤에 있지도 않던 홀드가 걸린다).
     this.setPieceHold = s.setPieceHold ? { ...s.setPieceHold } : null;
+    // 옛 스냅샷 호환: 지표가 없던 시절이면 현재 값을 그대로 둔다(0으로 밀면 오히려 어긋난다).
+    if (s.stats) {
+      this.stats = { home: { ...emptyStats(), ...s.stats.home }, away: { ...emptyStats(), ...s.stats.away } };
+      this.lastOwnerTeam = s.lastOwnerTeam ?? null;
+    }
     if ('lastRewindTick' in s) this.lastRewindTick = s.lastRewindTick;
     // 옛 스냅샷 호환: commands가 없으면 현재 지시 상태를 그대로 둔다(건드리지 않음).
     if (s.commands) {

@@ -114,6 +114,39 @@ export default function matchScreen(root, ctx) {
   const camEl = el("b", { text: CAM_MODES.broadcast });
   const fpsEl = el("b", { text: "-" });
   const rewindEl = el("b", { text: `${REWIND_LIMIT}회` });
+
+  // 경기 지표 — 값 하나가 전술 축 하나에 대응한다. 어느 손잡이를 당길지가 바로 보여야
+  // "보고 고친다"가 성립하므로, 라벨 옆에 그 축 이름을 작게 같이 적는다.
+  const statPossEl = el("b", { text: "-" });
+  const statPossFill = el("i", {});
+  const statPossBar = el("div", { class: "statbar" }, [statPossFill]);
+  const statShotEl = el("b", { text: "-" });
+  const statRecovEl = el("b", { text: "-" });
+  const statLaneEl = el("b", { text: "-" });
+  const statEnergyEl = el("b", { text: "-" });
+  const statRow = (label, axis, valueEl) =>
+    el("div", { class: "row stat-row" }, [
+      el("span", {}, [el("span", { text: label }), el("em", { class: "stat-axis", text: axis })]),
+      valueEl,
+    ]);
+
+  /** 지표를 매 프레임 갱신한다. 값은 전부 sim.stats(누적 카운터)에서 온다. */
+  function updateStatsPanel(avgEnergy) {
+    const h = sim.stats.home;
+    const a = sim.stats.away;
+    const possTotal = h.possessionTicks + a.possessionTicks;
+    // 아직 아무도 볼을 잡은 적 없으면 50:50으로 둔다(0으로 나누지 않는다).
+    const hp = possTotal ? Math.round((h.possessionTicks / possTotal) * 100) : 50;
+    statPossEl.textContent = `${hp} : ${100 - hp}`;
+    statPossFill.style.width = `${hp}%`;
+    statShotEl.textContent = `${h.shots}(${h.onTarget}) : ${a.shots}(${a.onTarget})`;
+    statRecovEl.textContent = `${h.recoveries} : ${a.recoveries}`;
+    const lanes = h.left + h.center + h.right;
+    statLaneEl.textContent = lanes
+      ? `${Math.round((h.left / lanes) * 100)} / ${Math.round((h.center / lanes) * 100)} / ${Math.round((h.right / lanes) * 100)}`
+      : "- / - / -";
+    statEnergyEl.textContent = `${Math.round(avgEnergy * 100)}%`;
+  }
   const feed = el("ul", { class: "feed" });
   const pathStatusEl = el("span", { class: "path-status" });
   // 골 순간 화면 전체에 한 번 번지는 팀 색 글로우. 클릭을 막으면 안 되니 pointer-events는 CSS에서 끈다.
@@ -1179,6 +1212,7 @@ export default function matchScreen(root, ctx) {
     const outfield = sim.homeP.filter((p) => p.role !== "GK" && !p.sentOff);
     const avgDistanceM = outfield.reduce((s, p) => s + p.distanceRun, 0) / Math.max(1, outfield.length);
     distEl.textContent = `${(avgDistanceM / 1000).toFixed(1)}km`;
+    updateStatsPanel(outfield.reduce((s, p) => s + p.energy, 0) / Math.max(1, outfield.length));
 
     for (const ev of newEvents) appendFeedEvent(ev);
     if (newEvents.length) lastRenderedEventId = newEvents[newEvents.length - 1].id;
@@ -1463,6 +1497,17 @@ export default function matchScreen(root, ctx) {
         el("div", { class: "row" }, [el("span", { text: "FPS" }), fpsEl]),
       ]),
       el("div", { class: "sidepanel" }, [
+        // 지표를 지시 슬라이더 **바로 위**에 둔다. 좌상단 HUD에 두면 전술 패널이 열릴 때
+        // 통째로 가려져서, 정작 전술을 고치는 순간에 근거가 안 보인다.
+        el("b", { class: "panel-title", text: "경기 지표" }),
+        el("div", { class: "statblock" }, [
+          statRow("점유율", "템포", statPossEl),
+          statPossBar,
+          statRow("슈팅 (유효)", "라인·템포", statShotEl),
+          statRow("볼 탈취", "압박", statRecovEl),
+          statRow("좌·중·우", "폭", statLaneEl),
+          statRow("평균 체력", "압박", statEnergyEl),
+        ]),
         el("b", {
           class: "panel-title",
           text: `${state.managerName || "감독"}의 지시`,
