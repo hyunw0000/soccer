@@ -960,6 +960,30 @@ export default function matchScreen(root, ctx) {
     }
   }
 
+  /**
+   * 숫자키로 "내 전술 N"을 그 자리에서 적용한다.
+   *
+   * 전술 값을 여기서 직접 계산하지 않고 **패널이 이미 갖고 있는 프리셋 버튼을 그대로 누른다.**
+   * 그 버튼 하나가 저장(localStorage)·표시 갱신·onApply(시뮬레이션 반영)를 한 경로에서
+   * 처리하므로, 따로 구현하면 생길 "화면은 A인데 그라운드는 B" 같은 어긋남이 없다.
+   * 패널이 닫혀 있어도 버튼은 DOM에 있으므로 click()이 그대로 동작한다.
+   *
+   * 프리셋은 앞쪽이 내장 전술(기본·역습·강한 압박·점유율·롱 볼)이고 감독이 만드는
+   * "내 전술"은 **뒤쪽 다섯 개**다. 그래서 뒤에서부터 센다 — 내장 전술 개수가 바뀌어도 따라간다.
+   */
+  const MY_PRESET_SLOTS = 5;
+  function applyPresetSlot(slot) {
+    const buttons = tacticsPanel.node.querySelectorAll(".lt-preset");
+    const btn = buttons[buttons.length - MY_PRESET_SLOTS + slot];
+    if (!btn) return;
+    btn.click();
+    pathStatusEl.textContent = `전술 ${slot + 1} — ${btn.textContent} 적용`;
+    clearTimeout(applyPresetSlot.timer);
+    applyPresetSlot.timer = setTimeout(() => {
+      if (pathStatusEl.textContent.startsWith(`전술 ${slot + 1} —`)) pathStatusEl.textContent = "";
+    }, 2200);
+  }
+
   const tacticsBtn = el("button", {
     class: "ctl",
     text: "⚙ 전술 지시",
@@ -1241,6 +1265,10 @@ export default function matchScreen(root, ctx) {
       if (e.target instanceof HTMLInputElement) return;
       tacticsPanel.isOpen ? closeTacticsPanel() : openTacticsPanel();
     }
+    // 숫자 1~5 = 전술 화면에서 저장해 둔 "내 전술 1~5"를 그 자리에서 적용한다.
+    // 전술 창을 열지 않고도 갈아탈 수 있어야 경기 흐름이 안 끊긴다.
+    const slot = "12345".indexOf(e.key);
+    if (slot >= 0 && !(e.target instanceof HTMLInputElement)) applyPresetSlot(slot);
   };
   window.addEventListener("keydown", onKey);
   window.addEventListener("pointerdown", onWindowPointerDown);
@@ -1515,7 +1543,7 @@ export default function matchScreen(root, ctx) {
         pathStatusEl,
         el("p", { class: "hint" }, [
           el("span", {
-            text: "탑뷰에서 드래그=회전 / 휠=줌 · Space=일시정지 · T=전술 · R=되감기 · 일시정지+탑뷰에서 우리 선수 드래그=경로 지시",
+            text: "탑뷰에서 드래그=회전 / 휠=줌 · Space=일시정지 · T=전술 · 1~5=내 전술 적용 · R=되감기 · 일시정지+탑뷰에서 우리 선수 드래그=경로 지시",
           }),
         ]),
         el("div", { class: "controls" }, [
