@@ -826,3 +826,23 @@
   font-weight: 800;
   letter-spacing: 0.06em;
 }
+
+/* 점수 + 경기 시간 한 줄. .hud .score의 margin-bottom은 base.css(공유)에 있어서
+   안 건드리고, 여기서 줄 단위로만 감싼다. */
+.hud .hud-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+.hud .hud-head .score {
+  margin-bottom: 0;
+}
+.hud .hud-clock {
+  color: #64dff5;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}

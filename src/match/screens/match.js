@@ -111,7 +111,7 @@ export default function matchScreen(root, ctx) {
       ? `${awayCode} ${sim.score.away} : ${sim.score.home} ${homeCode}`
       : `${homeCode} ${sim.score.home} : ${sim.score.away} ${awayCode}`;
   }
-  const clockEl = el("b", { text: "00:00" });
+  const clockEl = el("b", { class: "hud-clock", text: "00:00" });
   const possEl = el("b", { text: "-" });
   const distEl = el("b", { text: "0.0km" }); // 팀 평균 주행거리 — 전술(특히 압박)의 체력 대가를 감독이 직접 확인하는 지표
   const camEl = el("b", { text: CAM_MODES.broadcast });
@@ -1478,18 +1478,14 @@ export default function matchScreen(root, ctx) {
       concedeBanner,
       shootoutBoard,
       el("div", { class: "hud" }, [
-        scoreEl,
-        el("div", { class: "row" }, [
-          el("span", { text: "경기 시간" }),
-          clockEl,
-        ]),
-        // 경기 지표 셋(우리 : 상대)은 시계 바로 밑에 둔다. 전술 패널이 열리면 HUD 아래쪽이
-        // 가려지므로(패널이 y=258부터 덮는다) 지표가 그 밑에 있으면 정작 전술을 고치는
-        // 순간에 안 보인다.
+        // 시계는 점수 옆에 붙인다 — 중계 스코어보드와 같은 모양이고, 아래 목록은 지표만 남는다.
+        el("div", { class: "hud-head" }, [scoreEl, clockEl]),
+        // 경기 지표는 HUD 위쪽에 모아 둔다. 전술 패널이 열리면 HUD 아래쪽이 가려지므로
+        // (패널이 y=258부터 덮는다) 그 밑에 있으면 정작 전술을 고치는 순간에 안 보인다.
+        el("div", { class: "row" }, [el("span", { text: "공 소유" }), possEl]),
         el("div", { class: "row" }, [el("span", { text: "점유율" }), statPossEl]),
         el("div", { class: "row" }, [el("span", { text: "슈팅 (유효)" }), statShotEl]),
         el("div", { class: "row" }, [el("span", { text: "평균 체력" }), statEnergyEl]),
-        el("div", { class: "row" }, [el("span", { text: "공 소유" }), possEl]),
         el("div", { class: "row" }, [el("span", { text: "평균 주행거리" }), distEl]),
         el("div", { class: "row" }, [el("span", { text: "카메라" }), camEl]),
         el("div", { class: "row" }, [
