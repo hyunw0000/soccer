@@ -109,3 +109,7 @@ public/
 ## 보안
 
 공개 저장소·공개 배포를 전제로 점검한 내용은 [`SECURITY.md`](./SECURITY.md)에 정리했습니다. 요약하면 **비밀값이 존재하지 않는 구조**이고, 사용자 입력은 `textContent`로만 렌더링합니다.
+
+## 📮 문의
+
+GitHub: [@hyunw0000](https://github.com/hyunw0000)
